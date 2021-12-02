@@ -82,17 +82,22 @@ fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
     value(ArgumentType::Float, tag("float"))(input)
 }
 
+fn single_bracket<'a, T: Clone, F: Fn(&'a str) -> IResult<&'a str, T>>(
+    p: F,
+    input: &'a str,
+) -> IResult<&'a str, T> {
+    let (rest, _) = char('[')(input)?;
+    let (rest, t) = preceded(sp, p)(rest)?;
+    let (rest, _) = value((), preceded(sp, char(',')))(rest).unwrap_or((rest, ()));
+    value(t, preceded(sp, char(']')))(rest)
+}
+
 impl ArgumentType {
     fn parse_value(self, input: &str) -> IResult<&str, Value> {
         match self {
             ArgumentType::Float => alt((
                 |i| float(i).map(|(rest, f)| (rest, Value::Float(f))),
-                |i| {
-                    let (rest, _) = char('[')(i)?;
-                    let (rest, f) = preceded(sp, float)(rest)?;
-                    let (rest, _) = value((), preceded(sp, char(',')))(rest).unwrap_or((rest, ()));
-                    value(Value::Float(f), preceded(sp, char(']')))(rest)
-                },
+                |i| single_bracket(float, i).map(|(rest, f)| (rest, Value::Float(f))),
             ))(input),
         }
     }
