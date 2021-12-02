@@ -53,14 +53,18 @@ fn space(input: &str) -> IResult<&str, &str> {
     take_while1(move |c| chars.contains(c))(input)
 }
 
-fn sp(input: &str) -> IResult<&str, ()> {
+fn sp1(input: &str) -> IResult<&str, ()> {
     value((), many1(alt((space, comment))))(input)
 }
 
+fn sp0(input: &str) -> IResult<&str, ()> {
+    value((), many0(alt((space, comment))))(input)
+}
+
 fn parse_vec3(input: &str) -> IResult<&str, Vec3> {
-    let (rest, x1) = preceded(sp, float)(input)?;
-    let (rest, x2) = preceded(sp, float)(rest)?;
-    let (rest, x3) = preceded(sp, float)(rest)?;
+    let (rest, x1) = preceded(sp0, float)(input)?;
+    let (rest, x2) = preceded(sp0, float)(rest)?;
+    let (rest, x3) = preceded(sp0, float)(rest)?;
 
     Ok((rest, Vec3::new(x1, x2, x3)))
 }
@@ -104,7 +108,7 @@ fn parse_argument_type_name(input: &str) -> IResult<&str, (ArgumentType, &str)> 
 
 fn parse_argument(input: &str) -> IResult<&str, Argument> {
     let (rest, (ty, name)) = parse_argument_type_name(input)?;
-    let (rest, value) = preceded(sp, |i| ty.parse_value(i))(rest)?;
+    let (rest, value) = preceded(sp1, |i| ty.parse_value(i))(rest)?;
 
     Ok((rest, Argument { name, value }))
 }
@@ -124,8 +128,8 @@ fn parse_scene_object_type(input: &str) -> IResult<&str, SceneObjectType> {
 
 fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
     let (rest, ty) = parse_scene_object_type(input)?;
-    let (rest, t) = preceded(sp, parse_str)(rest)?;
-    let (rest, arguments) = preceded(sp, many0(parse_argument))(rest)?;
+    let (rest, t) = preceded(sp1, parse_str)(rest)?;
+    let (rest, arguments) = preceded(sp0, many0(parse_argument))(rest)?;
 
     Ok((
         rest,
@@ -155,7 +159,7 @@ mod test {
 
     #[test]
     fn test_sp() {
-        assert_eq!(sp("    # aaaaa"), Ok(("", ())));
+        assert_eq!(sp1("    # aaaaa"), Ok(("", ())));
     }
 
     #[test]
