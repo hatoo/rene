@@ -21,6 +21,7 @@ struct LookAt {
     up: Vec3,
 }
 
+#[derive(Clone, Copy)]
 enum Value {
     Float(f32),
     Integer(i32),
@@ -84,10 +85,15 @@ fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
 impl ArgumentType {
     fn parse_value(self, input: &str) -> IResult<&str, Value> {
         match self {
-            ArgumentType::Float => {
-                let (rest, f) = float(input)?;
-                Ok((rest, Value::Float(f)))
-            }
+            ArgumentType::Float => alt((
+                |i| float(i).map(|(rest, f)| (rest, Value::Float(f))),
+                |i| {
+                    let (rest, _) = char('[')(i)?;
+                    let (rest, f) = preceded(sp, float)(rest)?;
+                    let (rest, _) = value((), preceded(sp, char(',')))(rest).unwrap_or((rest, ()));
+                    value(Value::Float(f), preceded(sp, char(']')))(rest)
+                },
+            ))(input),
         }
     }
 }
@@ -177,16 +183,22 @@ mod test {
 
     #[test]
     fn test_parse_scene_object() {
-        let (rest, camera) = parse_scene_object(r#"Camera "perspective" "float fov" 45"#).unwrap();
-        assert_eq!(rest, "");
+        for q in [
+            r#"Camera "perspective" "float fov" 45"#,
+            r#"Camera "perspective" "float fov" [45]"#,
+            r#"Camera "perspective" "float fov" [45,]"#,
+        ] {
+            let (rest, camera) = parse_scene_object(q).unwrap();
+            assert_eq!(rest, "");
 
-        assert_eq!(camera.object_type, SceneObjectType::Camera);
-        assert_eq!(camera.t, "perspective");
-        assert_eq!(camera.arguments.len(), 1);
-        assert_eq!(camera.arguments[0].name, "fov");
-        match camera.arguments[0].value {
-            Value::Float(f) => assert!(abs_diff_eq!(f, 45.0)),
-            _ => panic!(),
+            assert_eq!(camera.object_type, SceneObjectType::Camera);
+            assert_eq!(camera.t, "perspective");
+            assert_eq!(camera.arguments.len(), 1);
+            assert_eq!(camera.arguments[0].name, "fov");
+            match camera.arguments[0].value {
+                Value::Float(f) => assert!(abs_diff_eq!(f, 45.0)),
+                _ => panic!(),
+            }
         }
     }
 }
