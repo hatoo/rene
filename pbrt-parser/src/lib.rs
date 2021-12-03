@@ -95,10 +95,8 @@ fn single_bracket<'a, T: Clone, F: Fn(&'a str) -> IResult<&'a str, T>>(
 impl ArgumentType {
     fn parse_value(self, input: &str) -> IResult<&str, Value> {
         match self {
-            ArgumentType::Float => alt((
-                |i| float(i).map(|(rest, f)| (rest, Value::Float(f))),
-                |i| single_bracket(float, i).map(|(rest, f)| (rest, Value::Float(f))),
-            ))(input),
+            ArgumentType::Float => alt((float, |i| single_bracket(float, i)))(input)
+                .map(|(rest, f)| (rest, Value::Float(f))),
         }
     }
 }
