@@ -3,56 +3,64 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{alphanumeric1, char, one_of},
-    combinator::{cut, map, map_res, opt, value},
+    combinator::{cut, map, opt, value},
+    error::{Error, ErrorKind},
     multi::many0,
     number::complete::float,
     sequence::{preceded, terminated},
-    AsChar, IResult,
+    AsChar, Err, IResult,
 };
 
-enum Scene<'a> {
+pub enum Scene<'a> {
     LookAt(LookAt),
     SceneObject(SceneObject<'a>),
+    World(Vec<World<'a>>),
 }
 
-struct LookAt {
-    eye: Vec3,
-    look_at: Vec3,
-    up: Vec3,
+pub enum World<'a> {
+    WorldObject(WorldObject<'a>),
+    Attribute(Vec<World<'a>>),
+}
+
+pub struct LookAt {
+    pub eye: Vec3,
+    pub look_at: Vec3,
+    pub up: Vec3,
 }
 
 #[derive(Clone, Debug)]
-enum Value {
+pub enum Value {
     Float(Vec<f32>),
-    Integer(Vec<f32>),
     Rgb(Vec<f32>),
 }
 
-struct Argument<'a> {
-    name: &'a str,
-    value: Value,
+pub struct Argument<'a> {
+    pub name: &'a str,
+    pub value: Value,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum SceneObjectType {
+pub enum SceneObjectType {
     Camera,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum WorldObjectType {
+pub enum WorldObjectType {
     LightSource,
+    Material,
+    Shape,
 }
 
-struct SceneObject<'a> {
-    object_type: SceneObjectType,
-    t: &'a str,
-    arguments: Vec<Argument<'a>>,
+pub struct SceneObject<'a> {
+    pub object_type: SceneObjectType,
+    pub t: &'a str,
+    pub arguments: Vec<Argument<'a>>,
 }
 
-struct WorldObject<'a> {
-    object_type: WorldObjectType,
-    t: &'a str,
-    arguments: Vec<Argument<'a>>,
+pub struct WorldObject<'a> {
+    pub object_type: WorldObjectType,
+    pub t: &'a str,
+    pub arguments: Vec<Argument<'a>>,
 }
 
 fn comment(input: &str) -> IResult<&str, &str> {
@@ -151,7 +159,11 @@ fn parse_scene_object_type(input: &str) -> IResult<&str, SceneObjectType> {
 }
 
 fn parse_world_object_type(input: &str) -> IResult<&str, WorldObjectType> {
-    alt((value(WorldObjectType::LightSource, tag("LightSource")),))(input)
+    alt((
+        value(WorldObjectType::LightSource, tag("LightSource")),
+        value(WorldObjectType::Material, tag("Material")),
+        value(WorldObjectType::Shape, tag("Shape")),
+    ))(input)
 }
 
 fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
@@ -182,6 +194,51 @@ fn parse_world_object(input: &str) -> IResult<&str, WorldObject> {
             arguments,
         },
     ))
+}
+
+fn parse_attribute_statement(input: &str) -> IResult<&str, Vec<World>> {
+    let (rest, _) = tag("AttributeBegin")(input)?;
+    let (rest, worlds) = many0(preceded(sp, parse_world))(rest)?;
+    let (rest, _) = preceded(sp, tag("AttributeEnd"))(rest)?;
+
+    Ok((rest, worlds))
+}
+
+fn parse_world(input: &str) -> IResult<&str, World> {
+    alt((
+        map(parse_world_object, |w| World::WorldObject(w)),
+        map(parse_attribute_statement, |w| World::Attribute(w)),
+    ))(input)
+}
+
+fn parse_world_statement(input: &str) -> IResult<&str, Vec<World>> {
+    let (rest, _) = tag("WorldBegin")(input)?;
+    let (rest, worlds) = many0(preceded(sp, parse_world))(rest)?;
+    let (rest, _) = preceded(sp, tag("WorldEnd"))(rest)?;
+
+    Ok((rest, worlds))
+}
+
+fn parse_scene(input: &str) -> IResult<&str, Vec<Scene>> {
+    many0(preceded(
+        sp,
+        alt((
+            map(parse_look_at, |l| Scene::LookAt(l)),
+            map(parse_scene_object, |o| Scene::SceneObject(o)),
+            map(parse_world_statement, |w| Scene::World(w)),
+        )),
+    ))(input)
+}
+
+pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, Err<Error<&str>>> {
+    let (rest, scene) = parse_scene(input)?;
+    let (rest, _) = opt(sp)(rest)?;
+
+    if rest != "" {
+        Err(Err::Error(Error::new(rest, ErrorKind::Fail)))
+    } else {
+        Ok(scene)
+    }
 }
 
 #[cfg(test)]
