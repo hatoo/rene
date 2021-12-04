@@ -84,7 +84,7 @@ enum ArgumentType {
 fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
     alt((
         value(ArgumentType::Float, tag("float")),
-        value(ArgumentType::Rgb, tag("rgb")),
+        value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
     ))(input)
 }
 
