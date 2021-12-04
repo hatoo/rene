@@ -36,11 +36,21 @@ struct Argument<'a> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum SceneObjectType {
     Camera,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum WorldObjectType {
     LightSource,
 }
 
 struct SceneObject<'a> {
     object_type: SceneObjectType,
+    t: &'a str,
+    arguments: Vec<Argument<'a>>,
+}
+
+struct WorldObject<'a> {
+    object_type: WorldObjectType,
     t: &'a str,
     arguments: Vec<Argument<'a>>,
 }
@@ -137,10 +147,11 @@ fn parse_look_at(input: &str) -> IResult<&str, LookAt> {
 }
 
 fn parse_scene_object_type(input: &str) -> IResult<&str, SceneObjectType> {
-    alt((
-        value(SceneObjectType::Camera, tag("Camera")),
-        value(SceneObjectType::LightSource, tag("LightSource")),
-    ))(input)
+    alt((value(SceneObjectType::Camera, tag("Camera")),))(input)
+}
+
+fn parse_world_object_type(input: &str) -> IResult<&str, WorldObjectType> {
+    alt((value(WorldObjectType::LightSource, tag("LightSource")),))(input)
 }
 
 fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
@@ -151,6 +162,21 @@ fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
     Ok((
         rest,
         SceneObject {
+            object_type: ty,
+            t,
+            arguments,
+        },
+    ))
+}
+
+fn parse_world_object(input: &str) -> IResult<&str, WorldObject> {
+    let (rest, ty) = parse_world_object_type(input)?;
+    let (rest, t) = preceded(sp, parse_str)(rest)?;
+    let (rest, arguments) = preceded(sp, many0(parse_argument))(rest)?;
+
+    Ok((
+        rest,
+        WorldObject {
             object_type: ty,
             t,
             arguments,
@@ -214,12 +240,15 @@ mod test {
                 _ => panic!(),
             }
         }
+    }
 
+    #[test]
+    fn test_parse_world_object() {
         let (rest, light_source) =
-            parse_scene_object(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#).unwrap();
+            parse_world_object(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#).unwrap();
         assert_eq!(rest, "");
 
-        assert_eq!(light_source.object_type, SceneObjectType::LightSource);
+        assert_eq!(light_source.object_type, WorldObjectType::LightSource);
         assert_eq!(light_source.t, "infinite");
         assert_eq!(light_source.arguments.len(), 1);
         assert_eq!(light_source.arguments[0].name, "L");
