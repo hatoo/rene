@@ -314,4 +314,29 @@ mod test {
             _ => panic!(),
         }
     }
+
+    #[test]
+    fn test_parse_pbrt() {
+        parse_pbrt(
+            r#"
+        LookAt 3 4 1.5  # eye
+            .0 .0 0  # look at point
+            0 0 1    # up vector
+        Camera "perspective" "float fov" 45
+
+        WorldBegin
+
+        # uniform blue-ish illumination from all directions
+        LightSource "infinite" "rgb L" [.4 .45 .5]
+
+        AttributeBegin
+        Material "matte" "rgb Kd" [ .7 .2 .2 ]
+        Shape "sphere" "float radius" 1
+        AttributeEnd
+
+        WorldEnd
+        "#,
+        )
+        .unwrap();
+    }
 }
