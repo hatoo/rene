@@ -21,11 +21,11 @@ struct LookAt {
     up: Vec3,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum Value {
-    Float(f32),
-    Integer(i32),
-    Vec3(Vec3),
+    Float(Vec<f32>),
+    Integer(Vec<f32>),
+    Rgb(Vec<f32>),
 }
 
 struct Argument<'a> {
@@ -88,34 +88,24 @@ fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
     ))(input)
 }
 
-fn bracket_single<'a, T: Clone, F: Fn(&'a str) -> IResult<&'a str, T>>(
+fn bracket<'a, T: Clone, F: Fn(&'a str) -> IResult<&'a str, T>>(
     p: F,
     input: &'a str,
-) -> IResult<&'a str, T> {
+) -> IResult<&'a str, Vec<T>> {
     let (rest, _) = char('[')(input)?;
-    let (rest, t) = preceded(sp, p)(rest)?;
-    value(t, preceded(sp, char(']')))(rest)
+    let (rest, v) = many0(preceded(sp, p))(rest)?;
+    value(v, preceded(sp, char(']')))(rest)
 }
 
-fn bracket_triple<'a, T: Clone, F: Fn(&'a str) -> IResult<&'a str, T>>(
-    p: &F,
-    input: &'a str,
-) -> IResult<&'a str, [T; 3]> {
-    let (rest, _) = char('[')(input)?;
-    let (rest, x1) = preceded(sp, p)(rest)?;
-    let (rest, x2) = preceded(sp, p)(rest)?;
-    let (rest, x3) = preceded(sp, p)(rest)?;
-    value([x1, x2, x3], preceded(sp, char(']')))(rest)
+fn floats(input: &str) -> IResult<&str, Vec<f32>> {
+    alt((map(float, |f| vec![f]), |i| bracket(float, i)))(input)
 }
 
 impl ArgumentType {
     fn parse_value(self, input: &str) -> IResult<&str, Value> {
         match self {
-            ArgumentType::Float => alt((float, |i| bracket_single(float, i)))(input)
-                .map(|(rest, f)| (rest, Value::Float(f))),
-            ArgumentType::Rgb => {
-                bracket_triple(&float, input).map(|(rest, v)| (rest, Value::Vec3(v.into())))
-            }
+            ArgumentType::Float => floats(input).map(|(rest, f)| (rest, Value::Float(f))),
+            ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
         }
     }
 }
@@ -132,9 +122,7 @@ fn parse_argument_type_name(input: &str) -> IResult<&str, (ArgumentType, &str)> 
 
 fn parse_argument(input: &str) -> IResult<&str, Argument> {
     let (rest, (ty, name)) = parse_argument_type_name(input)?;
-    dbg!(ty, name);
     let (rest, value) = preceded(sp, |i| ty.parse_value(i))(rest)?;
-    dbg!(ty, value);
 
     Ok((rest, Argument { name, value }))
 }
@@ -209,13 +197,6 @@ mod test {
     }
 
     #[test]
-    fn test_bracket_triple() {
-        let (rest, v3) = bracket_triple(&float, "[.4 .45 .5]").unwrap();
-        assert_eq!(rest, "");
-        assert!(abs_diff_eq!(v3[..], [0.4, 0.45, 0.5]));
-    }
-
-    #[test]
     fn test_parse_scene_object() {
         for q in [
             r#"Camera "perspective" "float fov" 45"#,
@@ -229,12 +210,11 @@ mod test {
             assert_eq!(camera.arguments.len(), 1);
             assert_eq!(camera.arguments[0].name, "fov");
             match camera.arguments[0].value {
-                Value::Float(f) => assert!(abs_diff_eq!(f, 45.0)),
+                Value::Float(ref f) => assert!(abs_diff_eq!(f[..], [45.0])),
                 _ => panic!(),
             }
         }
 
-        dbg!("here");
         let (rest, light_source) =
             parse_scene_object(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#).unwrap();
         assert_eq!(rest, "");
@@ -244,7 +224,7 @@ mod test {
         assert_eq!(light_source.arguments.len(), 1);
         assert_eq!(light_source.arguments[0].name, "L");
         match light_source.arguments[0].value {
-            Value::Vec3(v3) => assert!(abs_diff_eq!(v3.to_array()[..], [0.4, 0.45, 0.5])),
+            Value::Rgb(ref v) => assert!(abs_diff_eq!(v[..], [0.4, 0.45, 0.5])),
             _ => panic!(),
         }
     }
