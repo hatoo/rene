@@ -1,4 +1,4 @@
-use spirv_std::glam::Vec3;
+use spirv_std::glam::Vec3A;
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -8,12 +8,12 @@ use crate::Ray;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
-    origin: Vec3,
-    lower_left_corner: Vec3,
-    horizontal: Vec3,
-    vertical: Vec3,
-    u: Vec3,
-    v: Vec3,
+    origin: Vec3A,
+    lower_left_corner: Vec3A,
+    horizontal: Vec3A,
+    vertical: Vec3A,
+    u: Vec3A,
+    v: Vec3A,
     // w: Vec3,
     lens_radius: f32,
 }
@@ -21,9 +21,9 @@ pub struct Camera {
 impl Camera {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        look_from: Vec3,
-        look_at: Vec3,
-        vup: Vec3,
+        look_from: Vec3A,
+        look_at: Vec3A,
+        vup: Vec3A,
         vfov: f32,
         aspect_ratio: f32,
         aperture: f32,

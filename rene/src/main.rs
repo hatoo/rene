@@ -13,9 +13,9 @@ use ash::{
     vk::{self},
 };
 
-use glam::vec3;
+use glam::vec3a;
 use rand::prelude::*;
-use rene_shader::material::EnumMaterial;
+use rene_shader::{material::EnumMaterial, LookAt, Uniform};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -653,6 +653,31 @@ fn main() {
         material_buffer
     };
 
+    let uniform_buffer = {
+        let uniform = Uniform {
+            look_at: LookAt {
+                eye: vec3a(0.0, 0.0, 0.0),
+                look_at: vec3a(13.0, 3.0, 4.0),
+                up: vec3a(0.0, 1.0, 0.0),
+            },
+        };
+
+        let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
+
+        let mut uniform_buffer = BufferResource::new(
+            buffer_size,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE
+                | vk::MemoryPropertyFlags::HOST_COHERENT
+                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &device,
+            device_memory_properties,
+        );
+        uniform_buffer.store(&[uniform], &device);
+
+        uniform_buffer
+    };
+
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_groups_len) = {
         let descriptor_set_layout = unsafe {
             device.create_descriptor_set_layout(
@@ -660,21 +685,27 @@ fn main() {
                     .bindings(&[
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
-                            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+                            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(0)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
-                            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(1)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
-                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(2)
+                            .build(),
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .binding(3)
                             .build(),
                     ])
                     .build(),
@@ -781,6 +812,10 @@ fn main() {
 
     let descriptor_sizes = [
         vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 1,
+        },
+        vk::DescriptorPoolSize {
             ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
             descriptor_count: 1,
         },
@@ -820,6 +855,19 @@ fn main() {
 
     let descriptor_set = descriptor_sets[0];
 
+    let uniform_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(uniform_buffer.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
+
+    let uniform_buffers_write = vk::WriteDescriptorSet::builder()
+        .dst_set(descriptor_set)
+        .dst_binding(0)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .buffer_info(&uniform_buffer_info)
+        .build();
+
     let accel_structs = [top_as];
     let mut accel_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
         .acceleration_structures(&accel_structs)
@@ -827,7 +875,7 @@ fn main() {
 
     let mut accel_write = vk::WriteDescriptorSet::builder()
         .dst_set(descriptor_set)
-        .dst_binding(0)
+        .dst_binding(1)
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
         .push_next(&mut accel_info)
@@ -843,7 +891,7 @@ fn main() {
 
     let image_write = vk::WriteDescriptorSet::builder()
         .dst_set(descriptor_set)
-        .dst_binding(1)
+        .dst_binding(2)
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
         .image_info(&image_info)
@@ -856,14 +904,22 @@ fn main() {
 
     let buffers_write = vk::WriteDescriptorSet::builder()
         .dst_set(descriptor_set)
-        .dst_binding(2)
+        .dst_binding(3)
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
         .buffer_info(&buffer_info)
         .build();
 
     unsafe {
-        device.update_descriptor_sets(&[accel_write, image_write, buffers_write], &[]);
+        device.update_descriptor_sets(
+            &[
+                uniform_buffers_write,
+                accel_write,
+                image_write,
+                buffers_write,
+            ],
+            &[],
+        );
     }
 
     let shader_binding_table_buffer = {
@@ -1403,6 +1459,7 @@ fn main() {
     }
 
     unsafe {
+        uniform_buffer.destroy(&device);
         material_buffer.destroy(&device);
         instance_buffer.destroy(&device);
     }
@@ -1629,7 +1686,7 @@ unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) ->
 }
 
 fn create_sphere_instance(
-    pos: glam::Vec3,
+    pos: glam::Vec3A,
     size: f32,
     sphere_accel_handle: u64,
 ) -> vk::AccelerationStructureInstanceKHR {
@@ -1655,13 +1712,13 @@ fn sample_scene(
     let mut world = Vec::new();
 
     world.push((
-        create_sphere_instance(vec3(0.0, -1000.0, 0.0), 1000.0, sphere_accel_handle),
-        EnumMaterial::new_lambertian(vec3(0.5, 0.5, 0.5)),
+        create_sphere_instance(vec3a(0.0, -1000.0, 0.0), 1000.0, sphere_accel_handle),
+        EnumMaterial::new_lambertian(vec3a(0.5, 0.5, 0.5)),
     ));
 
     for a in -11..11 {
         for b in -11..11 {
-            let center = vec3(
+            let center = vec3a(
                 a as f32 + 0.9 * rng.gen::<f32>(),
                 0.2,
                 b as f32 + 0.9 * rng.gen::<f32>(),
@@ -1669,11 +1726,11 @@ fn sample_scene(
 
             let choose_mat: f32 = rng.gen();
 
-            if (center - vec3(4.0, 0.2, 0.0)).length() > 0.9 {
+            if (center - vec3a(4.0, 0.2, 0.0)).length() > 0.9 {
                 match choose_mat {
                     x if x < 0.8 => {
-                        let albedo = vec3(rng.gen(), rng.gen(), rng.gen())
-                            * vec3(rng.gen(), rng.gen(), rng.gen());
+                        let albedo = vec3a(rng.gen(), rng.gen(), rng.gen())
+                            * vec3a(rng.gen(), rng.gen(), rng.gen());
 
                         world.push((
                             create_sphere_instance(center, 0.3, sphere_accel_handle),
@@ -1681,7 +1738,7 @@ fn sample_scene(
                         ));
                     }
                     x if x < 0.95 => {
-                        let albedo = vec3(
+                        let albedo = vec3a(
                             rng.gen_range(0.5..1.0),
                             rng.gen_range(0.5..1.0),
                             rng.gen_range(0.5..1.0),
@@ -1703,18 +1760,18 @@ fn sample_scene(
     }
 
     world.push((
-        create_sphere_instance(vec3(0.0, 1.0, 0.0), 1.0, sphere_accel_handle),
+        create_sphere_instance(vec3a(0.0, 1.0, 0.0), 1.0, sphere_accel_handle),
         EnumMaterial::new_dielectric(1.5),
     ));
 
     world.push((
-        create_sphere_instance(vec3(-4.0, 1.0, 0.0), 1.0, sphere_accel_handle),
-        EnumMaterial::new_lambertian(vec3(0.4, 0.2, 0.1)),
+        create_sphere_instance(vec3a(-4.0, 1.0, 0.0), 1.0, sphere_accel_handle),
+        EnumMaterial::new_lambertian(vec3a(0.4, 0.2, 0.1)),
     ));
 
     world.push((
-        create_sphere_instance(vec3(4.0, 1.0, 0.0), 1.0, sphere_accel_handle),
-        EnumMaterial::new_metal(vec3(0.7, 0.6, 0.5), 0.0),
+        create_sphere_instance(vec3a(4.0, 1.0, 0.0), 1.0, sphere_accel_handle),
+        EnumMaterial::new_metal(vec3a(0.7, 0.6, 0.5), 0.0),
     ));
 
     let mut spheres = Vec::new();

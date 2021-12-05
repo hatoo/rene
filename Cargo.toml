@@ -5,3 +5,11 @@ members = [
     "rene",
     "rene-shader",
 ]
+
+# Compile build-dependencies in release mode with
+# the same settings as regular dependencies.
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 16
+[profile.dev.build-override]
+opt-level = 3

@@ -15,7 +15,7 @@ use spirv_std::macros::spirv;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::{report_intersection, IndexUnchecked},
-    glam::{uvec2, vec3, UVec3, Vec3, Vec4},
+    glam::{uvec2, vec3a, UVec3, Vec3A, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
 };
@@ -27,20 +27,20 @@ pub mod rand;
 
 #[derive(Clone, Copy, Default)]
 pub struct Ray {
-    pub origin: Vec3,
-    pub direction: Vec3,
+    pub origin: Vec3A,
+    pub direction: Vec3A,
 }
 #[derive(Clone, Default)]
 pub struct RayPayload {
     pub is_miss: u32,
-    pub position: Vec3,
-    pub normal: Vec3,
+    pub position: Vec3A,
+    pub normal: Vec3A,
     pub material: u32,
     pub front_face: u32,
 }
 
 impl RayPayload {
-    pub fn new_miss(color: Vec3) -> Self {
+    pub fn new_miss(color: Vec3A) -> Self {
         Self {
             is_miss: 1,
             position: color,
@@ -49,9 +49,9 @@ impl RayPayload {
     }
 
     pub fn new_hit(
-        position: Vec3,
-        outward_normal: Vec3,
-        ray_direction: Vec3,
+        position: Vec3A,
+        outward_normal: Vec3A,
+        ray_direction: Vec3A,
         material: u32,
     ) -> Self {
         let front_face = ray_direction.dot(outward_normal) < 0.0;
@@ -71,18 +71,32 @@ impl RayPayload {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LookAt {
+    pub eye: Vec3A,
+    pub look_at: Vec3A,
+    pub up: Vec3A,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Uniform {
+    pub look_at: LookAt,
+}
+
 pub struct PushConstants {
     seed: u32,
 }
 
 #[spirv(miss)]
 pub fn main_miss(
-    #[spirv(world_ray_direction)] world_ray_direction: Vec3,
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
 ) {
     let unit_direction = world_ray_direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
-    let color = vec3(1.0, 1.0, 1.0).lerp(vec3(0.5, 0.7, 1.0), t);
+    let color = vec3a(1.0, 1.0, 1.0).lerp(vec3a(0.5, 0.7, 1.0), t);
 
     *out = RayPayload::new_miss(color);
 }
@@ -92,18 +106,19 @@ pub fn main_ray_generation(
     #[spirv(launch_id)] launch_id: UVec3,
     #[spirv(launch_size)] launch_size: UVec3,
     #[spirv(push_constant)] constants: &PushConstants,
-    #[spirv(descriptor_set = 0, binding = 0)] top_level_as: &AccelerationStructure,
-    #[spirv(descriptor_set = 0, binding = 1)] image: &Image!(2D, format=rgba32f, sampled=false),
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] materials: &[EnumMaterial],
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] uniform: &Uniform,
+    #[spirv(descriptor_set = 0, binding = 1)] top_level_as: &AccelerationStructure,
+    #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false),
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] materials: &[EnumMaterial],
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
 
     let camera = Camera::new(
-        vec3(13.0, 2.0, 3.0),
-        vec3(0.0, 0.0, 0.0),
-        vec3(0.0, 1.0, 0.0),
+        uniform.look_at.look_at,
+        uniform.look_at.eye,
+        uniform.look_at.up,
         20.0 / 180.0 * core::f32::consts::PI,
         launch_size.x as f32 / launch_size.y as f32,
         0.1,
@@ -117,7 +132,7 @@ pub fn main_ray_generation(
     let tmin = 0.001;
     let tmax = 100000.0;
 
-    let mut color = vec3(1.0, 1.0, 1.0);
+    let mut color = vec3a(1.0, 1.0, 1.0);
 
     let mut ray = camera.get_ray(u, v, &mut rng);
 
@@ -167,8 +182,8 @@ pub fn main_ray_generation(
 
 #[spirv(intersection)]
 pub fn sphere_intersection(
-    #[spirv(object_ray_origin)] ray_origin: Vec3,
-    #[spirv(object_ray_direction)] ray_direction: Vec3,
+    #[spirv(object_ray_origin)] ray_origin: Vec3A,
+    #[spirv(object_ray_direction)] ray_direction: Vec3A,
     #[spirv(ray_tmin)] t_min: f32,
     #[spirv(ray_tmax)] t_max: f32,
 ) {
@@ -205,18 +220,18 @@ pub fn sphere_intersection(
 #[spirv(matrix)]
 #[repr(C)]
 pub struct Affine3 {
-    pub x: Vec3,
-    pub y: Vec3,
-    pub z: Vec3,
-    pub w: Vec3,
+    pub x: Vec3A,
+    pub y: Vec3A,
+    pub z: Vec3A,
+    pub w: Vec3A,
 }
 
 #[spirv(closest_hit)]
 pub fn sphere_closest_hit(
     #[spirv(ray_tmax)] t: f32,
     #[spirv(object_to_world)] object_to_world: Affine3,
-    #[spirv(world_ray_origin)] world_ray_origin: Vec3,
-    #[spirv(world_ray_direction)] world_ray_direction: Vec3,
+    #[spirv(world_ray_origin)] world_ray_origin: Vec3A,
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
 ) {

@@ -1,4 +1,4 @@
-use spirv_std::glam::{vec3, vec4, Vec3, Vec4, Vec4Swizzles};
+use spirv_std::glam::{vec3a, vec4, Vec3A, Vec4, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -10,7 +10,7 @@ use crate::{
 
 #[derive(Clone, Default)]
 pub struct Scatter {
-    pub color: Vec3,
+    pub color: Vec3A,
     pub ray: Ray,
 }
 
@@ -51,11 +51,11 @@ struct Dielectric<'a> {
     data: &'a EnumMaterialData,
 }
 
-fn reflect(v: Vec3, n: Vec3) -> Vec3 {
+fn reflect(v: Vec3A, n: Vec3A) -> Vec3A {
     v - 2.0 * v.dot(n) * n
 }
 
-fn refract(uv: Vec3, n: Vec3, etai_over_etat: f32) -> Vec3 {
+fn refract(uv: Vec3A, n: Vec3A, etai_over_etat: f32) -> Vec3A {
     let cos_theta = (-uv).dot(n).min(1.0);
     let r_out_perp = etai_over_etat * (uv + cos_theta * n);
     let r_out_parallel = -(1.0 - r_out_perp.length_squared()).abs().sqrt() * n;
@@ -69,8 +69,8 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
 }
 
 impl<'a> Lambertian<'a> {
-    fn albedo(&self) -> Vec3 {
-        self.data.v0.xyz()
+    fn albedo(&self) -> Vec3A {
+        self.data.v0.xyz().into()
     }
 }
 
@@ -104,8 +104,8 @@ impl<'a> Material for Lambertian<'a> {
 }
 
 impl<'a> Metal<'a> {
-    fn albedo(&self) -> Vec3 {
-        self.data.v0.xyz()
+    fn albedo(&self) -> Vec3A {
+        self.data.v0.xyz().into()
     }
 
     fn fuzz(&self) -> f32 {
@@ -171,7 +171,7 @@ impl<'a> Material for Dielectric<'a> {
             };
 
         *scatter = Scatter {
-            color: vec3(1.0, 1.0, 1.0),
+            color: vec3a(1.0, 1.0, 1.0),
             ray: Ray {
                 origin: ray_payload.position,
                 direction,
@@ -182,7 +182,7 @@ impl<'a> Material for Dielectric<'a> {
 }
 
 impl EnumMaterial {
-    pub fn new_lambertian(albedo: Vec3) -> Self {
+    pub fn new_lambertian(albedo: Vec3A) -> Self {
         Self {
             t: 0,
             data: EnumMaterialData {
@@ -191,7 +191,7 @@ impl EnumMaterial {
         }
     }
 
-    pub fn new_metal(albedo: Vec3, fuzz: f32) -> Self {
+    pub fn new_metal(albedo: Vec3A, fuzz: f32) -> Self {
         Self {
             t: 1,
             data: EnumMaterialData {
