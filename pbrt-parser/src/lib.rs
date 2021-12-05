@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::Vec3A;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
@@ -23,9 +23,9 @@ pub enum World<'a> {
 }
 
 pub struct LookAt {
-    pub eye: Vec3,
-    pub look_at: Vec3,
-    pub up: Vec3,
+    pub eye: Vec3A,
+    pub look_at: Vec3A,
+    pub up: Vec3A,
 }
 
 #[derive(Clone, Debug)]
@@ -78,12 +78,12 @@ fn sp(input: &str) -> IResult<&str, ()> {
     value((), many0(alt((space, comment))))(input)
 }
 
-fn parse_vec3(input: &str) -> IResult<&str, Vec3> {
+fn parse_vec3(input: &str) -> IResult<&str, Vec3A> {
     let (rest, x1) = preceded(sp, float)(input)?;
     let (rest, x2) = preceded(sp, float)(rest)?;
     let (rest, x3) = preceded(sp, float)(rest)?;
 
-    Ok((rest, Vec3::new(x1, x2, x3)))
+    Ok((rest, Vec3A::new(x1, x2, x3)))
 }
 
 fn parse_str(i: &str) -> IResult<&str, &str> {
