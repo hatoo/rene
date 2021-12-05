@@ -2,4 +2,6 @@
 
 members = [
     "pbrt-parser",
+    "rene",
+    "rene-shader",
 ]

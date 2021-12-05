@@ -1,0 +1,27 @@
+[package]
+name = "rene"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ash = "0.33.3"
+png = "0.17.2"
+bytemuck = "1.7.2"
+rand = "0.8.4"
+glam = "0.19.0"
+rene-shader = { path = "../rene-shader" }
+
+[build-dependencies]
+spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu" }
+
+# Compile build-dependencies in release mode with
+# the same settings as regular dependencies.
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 16
+[profile.dev.build-override]
+opt-level = 3
+
+
