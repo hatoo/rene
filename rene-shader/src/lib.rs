@@ -113,8 +113,8 @@ pub fn main_ray_generation(
     let mut rng = DefaultRng::new(rand_seed);
 
     let camera = Camera::new(
-        uniform.look_at.look_at,
         uniform.look_at.eye,
+        uniform.look_at.look_at,
         uniform.look_at.up,
         20.0 / 180.0 * core::f32::consts::PI,
         launch_size.x as f32 / launch_size.y as f32,

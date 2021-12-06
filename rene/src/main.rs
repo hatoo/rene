@@ -1745,12 +1745,12 @@ impl SceneBuffers {
     ) -> Self {
         let (default_blas, default_blas_buffer, default_aabb_buffer) = {
             let aabb = vk::AabbPositionsKHR::builder()
-                .min_x(-1.0)
-                .max_x(1.0)
-                .min_y(-1.0)
-                .max_y(1.0)
-                .min_z(-1.0)
-                .max_z(1.0)
+                .min_x(-0.5)
+                .max_x(0.5)
+                .min_y(-0.5)
+                .max_y(0.5)
+                .min_z(-0.5)
+                .max_z(0.5)
                 .build();
 
             let mut aabb_buffer = BufferResource::new(
