@@ -116,7 +116,7 @@ pub fn main_ray_generation(
         uniform.look_at.eye,
         uniform.look_at.look_at,
         uniform.look_at.up,
-        20.0 / 180.0 * core::f32::consts::PI,
+        45.0 / 180.0 * core::f32::consts::PI,
         launch_size.x as f32 / launch_size.y as f32,
         0.1,
         10.0,

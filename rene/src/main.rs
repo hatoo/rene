@@ -41,7 +41,7 @@ fn main() {
     const HEIGHT: u32 = 800;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
-    const N_SAMPLES: u32 = 100;
+    const N_SAMPLES: u32 = 5000;
     const N_SAMPLES_ITER: u32 = 100;
 
     let opts: Opts = Opts::from_args();
@@ -52,8 +52,6 @@ fn main() {
         .unwrap();
 
     let scene = scene::Scene::create(&pbrt_parser::parse_pbrt(&pbrt_file).unwrap());
-    dbg!(&scene.tlas);
-    dbg!(&scene.uniform.look_at.up);
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
@@ -1745,12 +1743,12 @@ impl SceneBuffers {
     ) -> Self {
         let (default_blas, default_blas_buffer, default_aabb_buffer) = {
             let aabb = vk::AabbPositionsKHR::builder()
-                .min_x(-0.5)
-                .max_x(0.5)
-                .min_y(-0.5)
-                .max_y(0.5)
-                .min_z(-0.5)
-                .max_z(0.5)
+                .min_x(-1.0)
+                .max_x(1.0)
+                .min_y(-1.0)
+                .max_y(1.0)
+                .min_z(-1.0)
+                .max_z(1.0)
                 .build();
 
             let mut aabb_buffer = BufferResource::new(
