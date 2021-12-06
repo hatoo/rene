@@ -17,6 +17,8 @@ use glam::vec3a;
 use rand::prelude::*;
 use rene_shader::{material::EnumMaterial, LookAt, Uniform};
 
+mod scene;
+
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -660,6 +662,7 @@ fn main() {
                 look_at: vec3a(13.0, 3.0, 4.0),
                 up: vec3a(0.0, 1.0, 0.0),
             },
+            background: vec3a(0.5, 0.5, 0.5),
         };
 
         let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
@@ -686,7 +689,9 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::MISS_KHR,
+                            )
                             .binding(0)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()

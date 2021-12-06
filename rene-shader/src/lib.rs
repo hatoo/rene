@@ -72,7 +72,7 @@ impl RayPayload {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct LookAt {
     pub eye: Vec3A,
     pub look_at: Vec3A,
@@ -80,9 +80,10 @@ pub struct LookAt {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Uniform {
     pub look_at: LookAt,
+    pub background: Vec3A,
 }
 
 pub struct PushConstants {
@@ -91,14 +92,10 @@ pub struct PushConstants {
 
 #[spirv(miss)]
 pub fn main_miss(
-    #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] uniform: &Uniform,
 ) {
-    let unit_direction = world_ray_direction.normalize();
-    let t = 0.5 * (unit_direction.y + 1.0);
-    let color = vec3a(1.0, 1.0, 1.0).lerp(vec3a(0.5, 0.7, 1.0), t);
-
-    *out = RayPayload::new_miss(color);
+    *out = RayPayload::new_miss(uniform.background);
 }
 
 #[spirv(ray_generation)]

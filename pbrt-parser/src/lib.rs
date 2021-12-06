@@ -1,4 +1,4 @@
-use glam::Vec3A;
+use glam::{vec3a, Vec3A};
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
@@ -61,6 +61,18 @@ pub struct WorldObject<'a> {
     pub object_type: WorldObjectType,
     pub t: &'a str,
     pub arguments: Vec<Argument<'a>>,
+}
+
+impl<'a> WorldObject<'a> {
+    pub fn get_rgb(&self, name: &str) -> Option<Vec3A> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .and_then(|a| match &a.value {
+                Value::Rgb(v) if v.len() == 3 => Some(vec3a(v[0], v[1], v[2])),
+                _ => None,
+            })
+    }
 }
 
 fn comment(input: &str) -> IResult<&str, &str> {
