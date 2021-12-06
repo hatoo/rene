@@ -41,7 +41,7 @@ fn main() {
     const HEIGHT: u32 = 800;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
-    const N_SAMPLES: u32 = 5000;
+    const N_SAMPLES: u32 = 100;
     const N_SAMPLES_ITER: u32 = 100;
 
     let opts: Opts = Opts::from_args();
@@ -52,6 +52,8 @@ fn main() {
         .unwrap();
 
     let scene = scene::Scene::create(&pbrt_parser::parse_pbrt(&pbrt_file).unwrap());
+    dbg!(&scene.tlas);
+    dbg!(&scene.uniform.look_at.up);
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
@@ -340,6 +342,7 @@ fn main() {
         }
     }
 
+    /*
     // acceleration structures
 
     // Create bottom-level acceleration structure
@@ -699,6 +702,15 @@ fn main() {
 
         uniform_buffer
     };
+    */
+    let scene_buffers = SceneBuffers::new(
+        &scene,
+        &device,
+        device_memory_properties,
+        &acceleration_structure,
+        command_pool,
+        graphics_queue,
+    );
 
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_groups_len) = {
         let descriptor_set_layout = unsafe {
@@ -880,7 +892,7 @@ fn main() {
     let descriptor_set = descriptor_sets[0];
 
     let uniform_buffer_info = [vk::DescriptorBufferInfo::builder()
-        .buffer(uniform_buffer.buffer)
+        .buffer(scene_buffers.uniform.buffer)
         .range(vk::WHOLE_SIZE)
         .build()];
 
@@ -892,7 +904,7 @@ fn main() {
         .buffer_info(&uniform_buffer_info)
         .build();
 
-    let accel_structs = [top_as];
+    let accel_structs = [scene_buffers.tlas];
     let mut accel_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
         .acceleration_structures(&accel_structs)
         .build();
@@ -922,7 +934,7 @@ fn main() {
         .build();
 
     let buffer_info = [vk::DescriptorBufferInfo::builder()
-        .buffer(material_buffer.buffer)
+        .buffer(scene_buffers.materials.buffer)
         .range(vk::WHOLE_SIZE)
         .build()];
 
@@ -1469,6 +1481,7 @@ fn main() {
     }
 
     unsafe {
+        /*
         acceleration_structure.destroy_acceleration_structure(top_as, None);
         top_as_buffer.destroy(&device);
 
@@ -1476,6 +1489,8 @@ fn main() {
         bottom_as_sphere_buffer.destroy(&device);
 
         aabb_buffer.destroy(&device);
+        */
+        scene_buffers.destroy(&device, &acceleration_structure);
 
         device.destroy_image_view(image_view, None);
         device.destroy_image(image, None);
@@ -1483,9 +1498,11 @@ fn main() {
     }
 
     unsafe {
+        /*
         uniform_buffer.destroy(&device);
         material_buffer.destroy(&device);
         instance_buffer.destroy(&device);
+        */
     }
 
     unsafe {
@@ -1939,9 +1956,10 @@ impl SceneBuffers {
                             m.y_axis.z, m.w_axis.y, m.z_axis.x, m.z_axis.y, m.z_axis.z, m.w_axis.z,
                         ],
                     },
-                    instance_custom_index_and_mask: 0xff << 24,
+                    instance_custom_index_and_mask: 0xff << 24 | instance.material_index as u32,
                     instance_shader_binding_table_record_offset_and_flags:
-                        vk::GeometryInstanceFlagsKHR::FORCE_OPAQUE.as_raw() << 24 | 0,
+                        vk::GeometryInstanceFlagsKHR::FORCE_OPAQUE.as_raw() << 24
+                            | instance.shader_offset,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                         device_handle: default_accel_handle,
                     },

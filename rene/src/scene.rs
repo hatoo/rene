@@ -1,6 +1,7 @@
 use glam::{vec3a, Affine3A};
 use rene_shader::{material::EnumMaterial, LookAt, Uniform};
 
+#[derive(Debug)]
 pub struct TlasInstance {
     pub shader_offset: u32,
     pub matrix: Affine3A,
