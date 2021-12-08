@@ -1,10 +1,10 @@
-use spirv_std::glam::Vec3A;
+use spirv_std::glam::{UVec3, Vec2, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
 use crate::math::random_in_unit_disk;
 use crate::rand::DefaultRng;
-use crate::Ray;
+use crate::{LookAt, Ray};
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -64,6 +64,42 @@ impl Camera {
             direction: (self.lower_left_corner + s * self.horizontal + t * self.vertical
                 - self.origin
                 - offset),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct PerspectiveCamera {
+    pub fov: f32,
+}
+
+impl PerspectiveCamera {
+    pub fn get_ray(&self, size: UVec3, st: Vec2, look_at: &LookAt) -> Ray {
+        let theta = self.fov / 180.0 * core::f32::consts::PI;
+        let (viewport_width, viewport_height) = if size.x < size.y {
+            let w = (theta / 2.0).tan();
+            let viewport_width = 2.0 * w;
+            let viewport_height = viewport_width * size.y as f32 / size.x as f32;
+            (viewport_width, viewport_height)
+        } else {
+            let h = (theta / 2.0).tan();
+            let viewport_height = 2.0 * h;
+            let viewport_width = viewport_height * size.x as f32 / size.y as f32;
+            (viewport_width, viewport_height)
+        };
+
+        let w = (look_at.eye - look_at.look_at).normalize();
+        let u = look_at.up.cross(w).normalize();
+        let v = w.cross(u);
+
+        let origin = look_at.eye;
+        let horizontal = viewport_width * u;
+        let vertical = viewport_height * v;
+        let lower_left_corner = -horizontal / 2.0 - vertical / 2.0 - w;
+
+        Ray {
+            origin,
+            direction: lower_left_corner + st.x * horizontal + st.y * vertical,
         }
     }
 }

@@ -57,6 +57,18 @@ pub struct SceneObject<'a> {
     pub arguments: Vec<Argument<'a>>,
 }
 
+impl<'a> SceneObject<'a> {
+    pub fn get_float(&self, name: &str) -> Option<f32> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .and_then(|a| match &a.value {
+                Value::Float(v) if v.len() == 1 => Some(v[0]),
+                _ => None,
+            })
+    }
+}
+
 pub struct WorldObject<'a> {
     pub object_type: WorldObjectType,
     pub t: &'a str,
@@ -70,6 +82,16 @@ impl<'a> WorldObject<'a> {
             .find(|a| a.name == name)
             .and_then(|a| match &a.value {
                 Value::Rgb(v) if v.len() == 3 => Some(vec3a(v[0], v[1], v[2])),
+                _ => None,
+            })
+    }
+
+    pub fn get_float(&self, name: &str) -> Option<f32> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .and_then(|a| match &a.value {
+                Value::Float(v) if v.len() == 1 => Some(v[0]),
                 _ => None,
             })
     }

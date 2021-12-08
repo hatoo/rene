@@ -17,7 +17,7 @@ use ash::{
 
 use glam::vec3a;
 use rand::prelude::*;
-use rene_shader::{material::EnumMaterial, LookAt, Uniform};
+use rene_shader::{material::EnumMaterial, Uniform};
 use scene::Scene;
 use structopt::StructOpt;
 

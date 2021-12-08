@@ -29,7 +29,11 @@ impl Scene {
                     };
                 }
                 pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
-                    pbrt_parser::SceneObjectType::Camera => {}
+                    pbrt_parser::SceneObjectType::Camera => {
+                        assert_eq!(obj.t, "perspective");
+                        scene.uniform.camera.fov = obj.get_float("fov").unwrap();
+                        dbg!(scene.uniform.camera.fov);
+                    }
                 },
                 pbrt_parser::Scene::World(worlds) => {
                     scene.append_world(&worlds);

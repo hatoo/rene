@@ -6,7 +6,7 @@
 )]
 
 use crate::rand::DefaultRng;
-use camera::Camera;
+use camera::PerspectiveCamera;
 use material::{EnumMaterial, Material, Scatter};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -15,7 +15,7 @@ use spirv_std::macros::spirv;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::{report_intersection, IndexUnchecked},
-    glam::{uvec2, vec3a, UVec3, Vec3A, Vec4},
+    glam::{uvec2, vec2, vec3a, UVec3, Vec3A, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
 };
@@ -83,6 +83,7 @@ pub struct LookAt {
 #[derive(Clone, Copy, Default)]
 pub struct Uniform {
     pub look_at: LookAt,
+    pub camera: PerspectiveCamera,
     pub background: Vec3A,
 }
 
@@ -112,16 +113,6 @@ pub fn main_ray_generation(
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
 
-    let camera = Camera::new(
-        uniform.look_at.eye,
-        uniform.look_at.look_at,
-        uniform.look_at.up,
-        45.0 / 180.0 * core::f32::consts::PI,
-        launch_size.x as f32 / launch_size.y as f32,
-        0.1,
-        10.0,
-    );
-
     let u = (launch_id.x as f32 + rng.next_f32()) / (launch_size.x - 1) as f32;
     let v = (launch_id.y as f32 + rng.next_f32()) / (launch_size.y - 1) as f32;
 
@@ -131,7 +122,9 @@ pub fn main_ray_generation(
 
     let mut color = vec3a(1.0, 1.0, 1.0);
 
-    let mut ray = camera.get_ray(u, v, &mut rng);
+    let mut ray = uniform
+        .camera
+        .get_ray(launch_size, vec2(u, v), &uniform.look_at);
 
     for _ in 0..50 {
         *payload = RayPayload::default();
