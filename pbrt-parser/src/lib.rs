@@ -22,18 +22,20 @@ pub enum World<'a> {
     Attribute(Vec<World<'a>>),
 }
 
+#[derive(PartialEq, Debug)]
 pub struct LookAt {
     pub eye: Vec3A,
     pub look_at: Vec3A,
     pub up: Vec3A,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Float(Vec<f32>),
     Rgb(Vec<f32>),
 }
 
+#[derive(PartialEq, Debug)]
 pub struct Argument<'a> {
     pub name: &'a str,
     pub value: Value,
@@ -51,6 +53,7 @@ pub enum WorldObjectType {
     Shape,
 }
 
+#[derive(PartialEq, Debug)]
 pub struct SceneObject<'a> {
     pub object_type: SceneObjectType,
     pub t: &'a str,
@@ -69,6 +72,7 @@ impl<'a> SceneObject<'a> {
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub struct WorldObject<'a> {
     pub object_type: WorldObjectType,
     pub t: &'a str,
@@ -277,8 +281,6 @@ pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, Err<Error<&str>>> {
 
 #[cfg(test)]
 mod test {
-    use approx::abs_diff_eq;
-
     use super::*;
 
     #[test]
@@ -298,19 +300,20 @@ mod test {
 
     #[test]
     fn test_parse_look_at() {
-        let (_, look_at) = parse_look_at(
-            r#"LookAt 3 4 1.5  # eye
+        assert_eq!(
+            LookAt {
+                eye: vec3a(3.0, 4.0, 1.5),
+                look_at: vec3a(0.5, 0.5, 0.0),
+                up: vec3a(0.0, 0.0, 1.0)
+            },
+            parse_look_at(
+                r#"LookAt 3 4 1.5  # eye
                             .5 .5 0  # look at point
                             0 0 1    # up vector"#,
-        )
-        .unwrap();
-
-        assert!(abs_diff_eq!(look_at.eye.to_array()[..], [3.0, 4.0, 1.5]));
-        assert!(abs_diff_eq!(
-            look_at.look_at.to_array()[..],
-            [0.5, 0.5, 0.0]
-        ));
-        assert!(abs_diff_eq!(look_at.up.to_array()[..], [0.0, 0.0, 1.0]));
+            )
+            .unwrap()
+            .1
+        );
     }
 
     #[test]
@@ -319,34 +322,39 @@ mod test {
             r#"Camera "perspective" "float fov" 45"#,
             r#"Camera "perspective" "float fov" [45]"#,
         ] {
-            let (rest, camera) = parse_scene_object(q).unwrap();
-            assert_eq!(rest, "");
-
-            assert_eq!(camera.object_type, SceneObjectType::Camera);
-            assert_eq!(camera.t, "perspective");
-            assert_eq!(camera.arguments.len(), 1);
-            assert_eq!(camera.arguments[0].name, "fov");
-            match camera.arguments[0].value {
-                Value::Float(ref f) => assert!(abs_diff_eq!(f[..], [45.0])),
-                _ => panic!(),
-            }
+            assert_eq!(
+                (
+                    "",
+                    SceneObject {
+                        object_type: SceneObjectType::Camera,
+                        t: "perspective",
+                        arguments: vec![Argument {
+                            name: "fov",
+                            value: Value::Float(vec![45.0])
+                        }]
+                    }
+                ),
+                parse_scene_object(q).unwrap()
+            );
         }
     }
 
     #[test]
     fn test_parse_world_object() {
-        let (rest, light_source) =
-            parse_world_object(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#).unwrap();
-        assert_eq!(rest, "");
-
-        assert_eq!(light_source.object_type, WorldObjectType::LightSource);
-        assert_eq!(light_source.t, "infinite");
-        assert_eq!(light_source.arguments.len(), 1);
-        assert_eq!(light_source.arguments[0].name, "L");
-        match light_source.arguments[0].value {
-            Value::Rgb(ref v) => assert!(abs_diff_eq!(v[..], [0.4, 0.45, 0.5])),
-            _ => panic!(),
-        }
+        assert_eq!(
+            (
+                "",
+                WorldObject {
+                    object_type: WorldObjectType::LightSource,
+                    t: "infinite",
+                    arguments: vec![Argument {
+                        name: "L",
+                        value: Value::Rgb(vec![0.4, 0.45, 0.5])
+                    }]
+                }
+            ),
+            parse_world_object(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#).unwrap()
+        );
     }
 
     #[test]

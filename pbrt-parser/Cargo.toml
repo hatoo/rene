@@ -8,6 +8,3 @@ edition = "2021"
 [dependencies]
 nom = "7.1.0"
 glam = "0.19"
-
-[dev-dependencies]
-approx = "0.5.0"
