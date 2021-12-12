@@ -1,5 +1,6 @@
 use glam::{vec3a, Affine3A};
 use rene_shader::{material::EnumMaterial, LookAt, Uniform};
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct TlasInstance {
@@ -16,8 +17,18 @@ pub struct Scene {
     pub materials: Vec<EnumMaterial>,
 }
 
+#[derive(Error, Debug)]
+pub enum CreateSceneError<'a> {
+    #[error("Invalid Camera type")]
+    InvalidCamera(&'a str),
+    #[error("Invalid LightSource type")]
+    InvalidLightSource(&'a str),
+}
+
 impl Scene {
-    pub fn create(scene_description: &[pbrt_parser::Scene]) -> Self {
+    pub fn create<'a>(
+        scene_description: &[pbrt_parser::Scene<'a>],
+    ) -> Result<Self, CreateSceneError<'a>> {
         let mut scene = Self::default();
         for desc in scene_description {
             match desc {
@@ -30,27 +41,33 @@ impl Scene {
                 }
                 pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                     pbrt_parser::SceneObjectType::Camera => {
-                        assert_eq!(obj.t, "perspective");
+                        if obj.t != "perspective" {
+                            return Err(CreateSceneError::InvalidCamera(obj.t));
+                        }
                         scene.uniform.camera.fov = obj.get_float("fov").unwrap();
-                        dbg!(scene.uniform.camera.fov);
                     }
                 },
                 pbrt_parser::Scene::World(worlds) => {
-                    scene.append_world(&worlds);
+                    scene.append_world(&worlds)?;
                 }
             }
         }
-        scene
+        Ok(scene)
     }
 
-    fn append_world(&mut self, worlds: &[pbrt_parser::World]) {
+    fn append_world<'a>(
+        &mut self,
+        worlds: &[pbrt_parser::World<'a>],
+    ) -> Result<(), CreateSceneError<'a>> {
         let mut current_material_index = None;
         for w in worlds {
             match w {
-                pbrt_parser::World::Attribute(worlds) => self.append_world(worlds.as_slice()),
+                pbrt_parser::World::Attribute(worlds) => self.append_world(worlds.as_slice())?,
                 pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                     pbrt_parser::WorldObjectType::LightSource => {
-                        assert_eq!(obj.t, "infinite");
+                        if obj.t != "infinite" {
+                            return Err(CreateSceneError::InvalidLightSource(obj.t));
+                        }
                         self.uniform.background += obj.get_rgb("L").unwrap();
                     }
                     pbrt_parser::WorldObjectType::Material => {
@@ -67,5 +84,6 @@ impl Scene {
                 },
             }
         }
+        Ok(())
     }
 }

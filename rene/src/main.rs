@@ -51,7 +51,7 @@ fn main() {
         .read_to_string(&mut &mut pbrt_file)
         .unwrap();
 
-    let scene = scene::Scene::create(&pbrt_parser::parse_pbrt(&pbrt_file).unwrap());
+    let scene = scene::Scene::create(&pbrt_parser::parse_pbrt(&pbrt_file).unwrap()).unwrap();
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
