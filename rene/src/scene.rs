@@ -50,7 +50,7 @@ impl Scene {
                     }
                 },
                 pbrt_parser::Scene::World(worlds) => {
-                    scene.append_world(&worlds)?;
+                    scene.append_world(None, &worlds)?;
                 }
             }
         }
@@ -59,12 +59,14 @@ impl Scene {
 
     fn append_world<'a>(
         &mut self,
+        mut current_material_index: Option<usize>,
         worlds: &[pbrt_parser::World<'a>],
     ) -> Result<(), CreateSceneError<'a>> {
-        let mut current_material_index = None;
         for w in worlds {
             match w {
-                pbrt_parser::World::Attribute(worlds) => self.append_world(worlds.as_slice())?,
+                pbrt_parser::World::Attribute(worlds) => {
+                    self.append_world(current_material_index, worlds.as_slice())?
+                }
                 pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                     pbrt_parser::WorldObjectType::LightSource => {
                         if obj.t != "infinite" {
