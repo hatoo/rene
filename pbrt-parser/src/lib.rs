@@ -20,6 +20,7 @@ pub enum Scene<'a> {
 pub enum World<'a> {
     WorldObject(WorldObject<'a>),
     Attribute(Vec<World<'a>>),
+    Translate(Vec3A),
 }
 
 #[derive(PartialEq, Debug)]
@@ -242,10 +243,16 @@ fn parse_attribute_statement(input: &str) -> IResult<&str, Vec<World>> {
     Ok((rest, worlds))
 }
 
+fn parse_transrate(input: &str) -> IResult<&str, Vec3A> {
+    let (rest, _) = tag("Translate")(input)?;
+    preceded(sp, parse_vec3)(rest)
+}
+
 fn parse_world(input: &str) -> IResult<&str, World> {
     alt((
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
+        map(parse_transrate, |v| World::Translate(v)),
     ))(input)
 }
 

@@ -75,6 +75,9 @@ impl Scene {
                 pbrt_parser::World::Attribute(worlds) => {
                     self.append_world(state, worlds.as_slice())?
                 }
+                pbrt_parser::World::Translate(v) => {
+                    state.current_matrix.w_axis += *v;
+                }
                 pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                     pbrt_parser::WorldObjectType::LightSource => {
                         if obj.t != "infinite" {
