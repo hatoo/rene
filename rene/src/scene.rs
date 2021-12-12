@@ -25,6 +25,14 @@ pub enum CreateSceneError<'a> {
     InvalidLightSource(&'a str),
     #[error("Invalid Material type")]
     InvalidMaterial(&'a str),
+    #[error("No Material")]
+    NoMaterial,
+}
+
+#[derive(Default, Clone, Copy)]
+struct WorldState {
+    current_material_index: Option<usize>,
+    current_matrix: Affine3A,
 }
 
 impl Scene {
@@ -50,7 +58,7 @@ impl Scene {
                     }
                 },
                 pbrt_parser::Scene::World(worlds) => {
-                    scene.append_world(None, &worlds)?;
+                    scene.append_world(Default::default(), &worlds)?;
                 }
             }
         }
@@ -59,13 +67,13 @@ impl Scene {
 
     fn append_world<'a>(
         &mut self,
-        mut current_material_index: Option<usize>,
+        mut state: WorldState,
         worlds: &[pbrt_parser::World<'a>],
     ) -> Result<(), CreateSceneError<'a>> {
         for w in worlds {
             match w {
                 pbrt_parser::World::Attribute(worlds) => {
-                    self.append_world(current_material_index, worlds.as_slice())?
+                    self.append_world(state, worlds.as_slice())?
                 }
                 pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                     pbrt_parser::WorldObjectType::LightSource => {
@@ -78,15 +86,17 @@ impl Scene {
                         if obj.t != "matte" {
                             return Err(CreateSceneError::InvalidMaterial(obj.t));
                         }
-                        current_material_index = Some(self.materials.len());
+                        state.current_material_index = Some(self.materials.len());
                         self.materials.push(EnumMaterial::new_lambertian(
                             obj.get_rgb("Kd").unwrap_or(vec3a(0.5, 0.5, 0.5)),
                         ));
                     }
                     pbrt_parser::WorldObjectType::Shape => self.tlas.push(TlasInstance {
                         shader_offset: 0,
-                        matrix: Default::default(),
-                        material_index: current_material_index.unwrap(),
+                        matrix: state.current_matrix,
+                        material_index: state
+                            .current_material_index
+                            .ok_or(CreateSceneError::NoMaterial)?,
                         blas_index: None,
                     }),
                 },
