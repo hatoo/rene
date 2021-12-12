@@ -46,7 +46,7 @@ impl Scene {
                         if obj.t != "perspective" {
                             return Err(CreateSceneError::InvalidCamera(obj.t));
                         }
-                        scene.uniform.camera.fov = obj.get_float("fov").unwrap();
+                        scene.uniform.camera.fov = obj.get_float("fov").unwrap_or(90.0);
                     }
                 },
                 pbrt_parser::Scene::World(worlds) => {
@@ -70,15 +70,16 @@ impl Scene {
                         if obj.t != "infinite" {
                             return Err(CreateSceneError::InvalidLightSource(obj.t));
                         }
-                        self.uniform.background += obj.get_rgb("L").unwrap();
+                        self.uniform.background += obj.get_rgb("L").unwrap_or(vec3a(1.0, 1.0, 1.0));
                     }
                     pbrt_parser::WorldObjectType::Material => {
                         if obj.t != "matte" {
                             return Err(CreateSceneError::InvalidMaterial(obj.t));
                         }
                         current_material_index = Some(self.materials.len());
-                        self.materials
-                            .push(EnumMaterial::new_lambertian(obj.get_rgb("Kd").unwrap()));
+                        self.materials.push(EnumMaterial::new_lambertian(
+                            obj.get_rgb("Kd").unwrap_or(vec3a(0.5, 0.5, 0.5)),
+                        ));
                     }
                     pbrt_parser::WorldObjectType::Shape => self.tlas.push(TlasInstance {
                         shader_offset: 0,
