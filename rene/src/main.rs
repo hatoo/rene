@@ -1496,14 +1496,6 @@ fn main() {
     }
 
     unsafe {
-        /*
-        uniform_buffer.destroy(&device);
-        material_buffer.destroy(&device);
-        instance_buffer.destroy(&device);
-        */
-    }
-
-    unsafe {
         device.destroy_device(None);
     }
 
