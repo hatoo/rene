@@ -23,6 +23,8 @@ pub enum CreateSceneError<'a> {
     InvalidCamera(&'a str),
     #[error("Invalid LightSource type")]
     InvalidLightSource(&'a str),
+    #[error("Invalid Material type")]
+    InvalidMaterial(&'a str),
 }
 
 impl Scene {
@@ -71,9 +73,12 @@ impl Scene {
                         self.uniform.background += obj.get_rgb("L").unwrap();
                     }
                     pbrt_parser::WorldObjectType::Material => {
+                        if obj.t != "matte" {
+                            return Err(CreateSceneError::InvalidMaterial(obj.t));
+                        }
                         current_material_index = Some(self.materials.len());
                         self.materials
-                            .push(EnumMaterial::new_lambertian(vec3a(0.8, 0.8, 0.8)));
+                            .push(EnumMaterial::new_lambertian(obj.get_rgb("Kd").unwrap()));
                     }
                     pbrt_parser::WorldObjectType::Shape => self.tlas.push(TlasInstance {
                         shader_offset: 0,
