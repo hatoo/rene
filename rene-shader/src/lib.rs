@@ -7,6 +7,7 @@
 
 use crate::rand::DefaultRng;
 use camera::PerspectiveCamera;
+use core::f32::consts::PI;
 use material::{EnumMaterial, Material, Scatter};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -15,7 +16,7 @@ use spirv_std::macros::spirv;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::{report_intersection, IndexUnchecked},
-    glam::{uvec2, vec2, vec3a, UVec3, Vec3A, Vec4},
+    glam::{uvec2, vec2, vec3a, UVec3, Vec2, Vec3A, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
 };
@@ -37,6 +38,7 @@ pub struct RayPayload {
     pub normal: Vec3A,
     pub material: u32,
     pub front_face: u32,
+    pub uv: Vec2,
 }
 
 impl RayPayload {
@@ -53,6 +55,7 @@ impl RayPayload {
         outward_normal: Vec3A,
         ray_direction: Vec3A,
         material: u32,
+        uv: Vec2,
     ) -> Self {
         let front_face = ray_direction.dot(outward_normal) < 0.0;
         let normal = if front_face {
@@ -67,6 +70,7 @@ impl RayPayload {
             normal,
             material,
             front_face: if front_face { 1 } else { 0 },
+            uv,
         }
     }
 }
@@ -220,12 +224,31 @@ pub struct Affine3 {
 pub fn sphere_closest_hit(
     #[spirv(ray_tmax)] t: f32,
     #[spirv(object_to_world)] object_to_world: Affine3,
+    #[spirv(object_ray_origin)] object_ray_origin: Vec3A,
     #[spirv(world_ray_origin)] world_ray_origin: Vec3A,
+    #[spirv(object_ray_direction)] object_ray_direction: Vec3A,
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
 ) {
+    const INV_PI: f32 = 1.0 / PI;
+
     let hit_pos = world_ray_origin + t * world_ray_direction;
+    let object_hit_pos = object_ray_origin + t * object_ray_direction;
+
+    let phi = object_hit_pos.y.atan2(object_hit_pos.x);
+    let phi = if phi < 0.0 { phi + 2.0 * PI } else { phi };
+    let theta = object_hit_pos.z.acos();
+
+    let u = phi * INV_PI * 0.5;
+    let v = theta * INV_PI;
+
     let normal = (hit_pos - object_to_world.w).normalize();
-    *out = RayPayload::new_hit(hit_pos, normal, world_ray_direction, instance_custom_index);
+    *out = RayPayload::new_hit(
+        hit_pos,
+        normal,
+        world_ray_direction,
+        instance_custom_index,
+        vec2(u, v),
+    );
 }
