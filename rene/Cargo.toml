@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = "0.33.3"
+ash = "0.34.0"
 png = "0.17.2"
 bytemuck = "1.7.2"
 rand = "0.8.4"
