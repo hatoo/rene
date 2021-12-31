@@ -16,6 +16,7 @@ use ash::{
 };
 
 use glam::Vec3A;
+use nom::error::convert_error;
 use rand::prelude::*;
 use rene_shader::{material::EnumMaterial, IndexData, Uniform, Vertex};
 use scene::{intermediate_scene::TriangleMesh, Scene};
@@ -55,7 +56,7 @@ fn main() {
     let parsed_scene = match pbrt_parser::parse_pbrt(&pbrt_file) {
         Ok(scene) => scene,
         Err(e) => {
-            println!("{}", e);
+            println!("{}", convert_error(pbrt_file.as_str(), e));
             return;
         }
     };

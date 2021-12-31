@@ -498,6 +498,7 @@ dependencies = [
  "ash",
  "bytemuck",
  "glam",
+ "nom",
  "pbrt-parser",
  "png",
  "rand",

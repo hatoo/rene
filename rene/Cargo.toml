@@ -15,6 +15,7 @@ rene-shader = { path = "../rene-shader" }
 pbrt-parser = { path = "../pbrt-parser" }
 structopt = "0.3.25"
 thiserror = "1.0.30"
+nom = "7.1.0"
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu" }
