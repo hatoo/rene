@@ -3,12 +3,12 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{alphanumeric1, char, digit1, one_of},
-    combinator::{cut, map, map_res, opt, recognize, value},
-    error::{Error, ErrorKind},
+    combinator::{cut, eof, map, map_res, opt, recognize, value},
+    error::Error,
     multi::many0,
     number::complete::float,
     sequence::{preceded, terminated},
-    AsChar, Err, IResult,
+    AsChar, Finish, IResult,
 };
 
 pub enum Scene<'a> {
@@ -372,15 +372,17 @@ fn parse_scene(input: &str) -> IResult<&str, Vec<Scene>> {
     ))(input)
 }
 
-pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, Err<Error<&str>>> {
+fn parse_all(input: &str) -> IResult<&str, Vec<Scene>> {
     let (rest, scene) = parse_scene(input)?;
     let (rest, _) = opt(sp)(rest)?;
+    let (rest, _) = eof(rest)?;
 
-    if rest != "" {
-        Err(Err::Error(Error::new(rest, ErrorKind::Fail)))
-    } else {
-        Ok(scene)
-    }
+    Ok((rest, scene))
+}
+
+pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, Error<&str>> {
+    let (_rest, scene) = parse_all(input).finish()?;
+    Ok(scene)
 }
 
 #[cfg(test)]
