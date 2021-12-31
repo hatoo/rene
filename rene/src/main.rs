@@ -62,7 +62,7 @@ fn main() {
         .map(|c_str| c_str.as_ptr())
         .collect();
 
-    let entry = ash::Entry::new();
+    let entry = unsafe { ash::Entry::load() }.unwrap();
 
     assert_eq!(
         check_validation_layer_support(
