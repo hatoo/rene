@@ -3,8 +3,8 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{alphanumeric1, char, digit1, one_of},
-    combinator::{cut, eof, map, map_res, opt, recognize, value},
-    error::Error,
+    combinator::{cut, eof, map, opt, recognize, value},
+    error::{ParseError, VerboseError},
     multi::many0,
     number::complete::float,
     sequence::{preceded, terminated},
@@ -148,22 +148,22 @@ impl<'a, T> Object<'a, T> {
     }
 }
 
-fn comment(input: &str) -> IResult<&str, &str> {
+fn comment<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     let (rest, _) = char('#')(input)?;
     take_while(|c| c != '\n')(rest)
 }
 
-fn space(input: &str) -> IResult<&str, &str> {
+fn space<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     let chars = " \t\r\n";
 
     take_while1(move |c| chars.contains(c))(input)
 }
 
-fn sp(input: &str) -> IResult<&str, ()> {
+fn sp<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
     value((), many0(alt((space, comment))))(input)
 }
 
-fn parse_vec3(input: &str) -> IResult<&str, Vec3A> {
+fn parse_vec3<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec3A, E> {
     let (rest, x1) = preceded(sp, float)(input)?;
     let (rest, x2) = preceded(sp, float)(rest)?;
     let (rest, x3) = preceded(sp, float)(rest)?;
@@ -171,8 +171,8 @@ fn parse_vec3(input: &str) -> IResult<&str, Vec3A> {
     Ok((rest, Vec3A::new(x1, x2, x3)))
 }
 
-fn parse_str(i: &str) -> IResult<&str, &str> {
-    fn parse(i: &str) -> IResult<&str, &str> {
+fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+    fn parse<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
         escaped(alphanumeric1, '\\', one_of("\"n\\"))(i)
     }
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(i)
@@ -187,7 +187,9 @@ enum ArgumentType {
     Normal,
 }
 
-fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
+fn parse_argument_type<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, ArgumentType, E> {
     alt((
         value(ArgumentType::Float, tag("float")),
         value(ArgumentType::Integer, tag("integer")),
@@ -197,24 +199,24 @@ fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
     ))(input)
 }
 
-fn bracket<'a, T: Clone, F: Fn(&'a str) -> IResult<&'a str, T>>(
+fn bracket<'a, T: Clone, E: ParseError<&'a str>, F: Fn(&'a str) -> IResult<&'a str, T, E>>(
     p: F,
     input: &'a str,
-) -> IResult<&'a str, Vec<T>> {
+) -> IResult<&'a str, Vec<T>, E> {
     let (rest, _) = char('[')(input)?;
     let (rest, v) = many0(preceded(sp, p))(rest)?;
     value(v, preceded(sp, char(']')))(rest)
 }
 
-fn floats(input: &str) -> IResult<&str, Vec<f32>> {
+fn floats<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<f32>, E> {
     alt((map(float, |f| vec![f]), |i| bracket(float, i)))(input)
 }
 
-fn integer(input: &str) -> IResult<&str, i32> {
-    fn plus(i: &str) -> IResult<&str, i32> {
-        map_res(recognize(digit1), str::parse)(i)
+fn integer<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {
+    fn plus<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, i32, E> {
+        map(recognize(digit1), |i| str::parse(i).unwrap())(i)
     }
-    fn minus(i: &str) -> IResult<&str, i32> {
+    fn minus<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, i32, E> {
         let (rest, _) = char('-')(i)?;
         map(plus, |i| -i)(rest)
     }
@@ -222,22 +224,24 @@ fn integer(input: &str) -> IResult<&str, i32> {
     alt((plus, minus))(input)
 }
 
-fn integers(input: &str) -> IResult<&str, Vec<i32>> {
+fn integers<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<i32>, E> {
     alt((map(integer, |f| vec![f]), |i| bracket(integer, i)))(input)
 }
 
 impl ArgumentType {
-    fn parse_value(self, input: &str) -> IResult<&str, Value> {
+    fn parse_value<'a, E: ParseError<&'a str>>(self, input: &'a str) -> IResult<&'a str, Value, E> {
         match self {
             ArgumentType::Float => floats(input).map(|(rest, f)| (rest, Value::Float(f))),
             ArgumentType::Point => {
                 let (rest, fs) = floats(input)?;
+                /*
                 if fs.len() % 3 != 0 {
                     return Err(nom::Err::Error(nom::error::Error::new(
                         input,
                         nom::error::ErrorKind::Many0,
                     )));
                 }
+                */
 
                 Ok((
                     rest,
@@ -246,12 +250,14 @@ impl ArgumentType {
             }
             ArgumentType::Normal => {
                 let (rest, fs) = floats(input)?;
+                /*
                 if fs.len() % 3 != 0 {
                     return Err(nom::Err::Error(nom::error::Error::new(
                         input,
                         nom::error::ErrorKind::Many0,
                     )));
                 }
+                */
 
                 Ok((
                     rest,
@@ -264,8 +270,12 @@ impl ArgumentType {
     }
 }
 
-fn parse_argument_type_name(input: &str) -> IResult<&str, (ArgumentType, &str)> {
-    fn parse(input: &str) -> IResult<&str, (ArgumentType, &str)> {
+fn parse_argument_type_name<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, (ArgumentType, &'a str), E> {
+    fn parse<'a, E: ParseError<&'a str>>(
+        input: &'a str,
+    ) -> IResult<&'a str, (ArgumentType, &'a str), E> {
         let (rest, ty) = parse_argument_type(input)?;
         let (rest, _) = char(' ')(rest)?;
         let (rest, ident) = take_while(|c: char| c.is_alphanum())(rest)?;
@@ -274,14 +284,14 @@ fn parse_argument_type_name(input: &str) -> IResult<&str, (ArgumentType, &str)> 
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(input)
 }
 
-fn parse_argument(input: &str) -> IResult<&str, Argument> {
+fn parse_argument<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Argument, E> {
     let (rest, (ty, name)) = parse_argument_type_name(input)?;
     let (rest, value) = preceded(sp, |i| ty.parse_value(i))(rest)?;
 
     Ok((rest, Argument { name, value }))
 }
 
-fn parse_look_at(input: &str) -> IResult<&str, LookAt> {
+fn parse_look_at<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, LookAt, E> {
     let (rest, _) = tag("LookAt")(input)?;
     let (rest, eye) = parse_vec3(rest)?;
     let (rest, look_at) = parse_vec3(rest)?;
@@ -290,11 +300,15 @@ fn parse_look_at(input: &str) -> IResult<&str, LookAt> {
     Ok((rest, LookAt { eye, look_at, up }))
 }
 
-fn parse_scene_object_type(input: &str) -> IResult<&str, SceneObjectType> {
+fn parse_scene_object_type<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, SceneObjectType, E> {
     alt((value(SceneObjectType::Camera, tag("Camera")),))(input)
 }
 
-fn parse_world_object_type(input: &str) -> IResult<&str, WorldObjectType> {
+fn parse_world_object_type<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, WorldObjectType, E> {
     alt((
         value(WorldObjectType::LightSource, tag("LightSource")),
         value(WorldObjectType::Material, tag("Material")),
@@ -302,7 +316,9 @@ fn parse_world_object_type(input: &str) -> IResult<&str, WorldObjectType> {
     ))(input)
 }
 
-fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
+fn parse_scene_object<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, SceneObject, E> {
     let (rest, ty) = parse_scene_object_type(input)?;
     let (rest, t) = preceded(sp, parse_str)(rest)?;
     let (rest, arguments) = preceded(sp, many0(preceded(sp, parse_argument)))(rest)?;
@@ -317,7 +333,9 @@ fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
     ))
 }
 
-fn parse_world_object(input: &str) -> IResult<&str, WorldObject> {
+fn parse_world_object<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, WorldObject, E> {
     let (rest, ty) = parse_world_object_type(input)?;
     let (rest, t) = preceded(sp, parse_str)(rest)?;
     let (rest, arguments) = preceded(sp, many0(preceded(sp, parse_argument)))(rest)?;
@@ -332,7 +350,9 @@ fn parse_world_object(input: &str) -> IResult<&str, WorldObject> {
     ))
 }
 
-fn parse_attribute_statement(input: &str) -> IResult<&str, Vec<World>> {
+fn parse_attribute_statement<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, Vec<World>, E> {
     let (rest, _) = tag("AttributeBegin")(input)?;
     let (rest, worlds) = many0(preceded(sp, parse_world))(rest)?;
     let (rest, _) = preceded(sp, tag("AttributeEnd"))(rest)?;
@@ -340,12 +360,12 @@ fn parse_attribute_statement(input: &str) -> IResult<&str, Vec<World>> {
     Ok((rest, worlds))
 }
 
-fn parse_transrate(input: &str) -> IResult<&str, Vec3A> {
+fn parse_transrate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec3A, E> {
     let (rest, _) = tag("Translate")(input)?;
     preceded(sp, parse_vec3)(rest)
 }
 
-fn parse_world(input: &str) -> IResult<&str, World> {
+fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
@@ -353,7 +373,9 @@ fn parse_world(input: &str) -> IResult<&str, World> {
     ))(input)
 }
 
-fn parse_world_statement(input: &str) -> IResult<&str, Vec<World>> {
+fn parse_world_statement<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, Vec<World>, E> {
     let (rest, _) = tag("WorldBegin")(input)?;
     let (rest, worlds) = many0(preceded(sp, parse_world))(rest)?;
     let (rest, _) = preceded(sp, tag("WorldEnd"))(rest)?;
@@ -361,7 +383,7 @@ fn parse_world_statement(input: &str) -> IResult<&str, Vec<World>> {
     Ok((rest, worlds))
 }
 
-fn parse_scene(input: &str) -> IResult<&str, Vec<Scene>> {
+fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
     many0(preceded(
         sp,
         alt((
@@ -372,7 +394,7 @@ fn parse_scene(input: &str) -> IResult<&str, Vec<Scene>> {
     ))(input)
 }
 
-fn parse_all(input: &str) -> IResult<&str, Vec<Scene>> {
+fn parse_all<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
     let (rest, scene) = parse_scene(input)?;
     let (rest, _) = opt(sp)(rest)?;
     let (rest, _) = eof(rest)?;
@@ -380,40 +402,44 @@ fn parse_all(input: &str) -> IResult<&str, Vec<Scene>> {
     Ok((rest, scene))
 }
 
-pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, Error<&str>> {
+pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, VerboseError<&str>> {
     let (_rest, scene) = parse_all(input).finish()?;
     Ok(scene)
 }
 
 #[cfg(test)]
 mod test {
+    use nom::error::Error;
+
     use super::*;
 
     #[test]
     fn test_parse_space() {
-        assert_eq!(space("    "), Ok(("", "    ")));
+        assert_eq!(space::<Error<&str>>("    "), Ok(("", "    ")));
     }
 
     #[test]
     fn test_parse_comment() {
-        assert_eq!(comment("#Hello"), Ok(("", "Hello")));
+        assert_eq!(comment::<Error<&str>>("#Hello"), Ok(("", "Hello")));
     }
 
     #[test]
     fn test_sp() {
-        assert_eq!(sp("    # aaaaa"), Ok(("", ())));
+        assert_eq!(sp::<Error<&str>>("    # aaaaa"), Ok(("", ())));
     }
 
     #[test]
     fn test_parse_integer() {
-        assert_eq!(integer("42"), Ok(("", 42)));
-        assert_eq!(integer("-42"), Ok(("", -42)));
+        assert_eq!(integer::<Error<&str>>("42"), Ok(("", 42)));
+        assert_eq!(integer::<Error<&str>>("-42"), Ok(("", -42)));
     }
 
     #[test]
     fn test_parse_argument() {
         assert_eq!(
-            parse_argument("\"point P\" [ -20 -20 0   20 -20 0   20 20 0   -20 20 0 ]"),
+            parse_argument::<Error<&str>>(
+                "\"point P\" [ -20 -20 0   20 -20 0   20 20 0   -20 20 0 ]"
+            ),
             Ok((
                 "",
                 Argument {
@@ -437,7 +463,7 @@ mod test {
                 look_at: vec3a(0.5, 0.5, 0.0),
                 up: vec3a(0.0, 0.0, 1.0)
             },
-            parse_look_at(
+            parse_look_at::<Error<&str>>(
                 r#"LookAt 3 4 1.5  # eye
                             .5 .5 0  # look at point
                             0 0 1    # up vector"#,
@@ -465,7 +491,7 @@ mod test {
                         }]
                     }
                 ),
-                parse_scene_object(q).unwrap()
+                parse_scene_object::<Error<&str>>(q).unwrap()
             );
         }
     }
@@ -484,7 +510,8 @@ mod test {
                     }]
                 }
             ),
-            parse_world_object(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#).unwrap()
+            parse_world_object::<Error<&str>>(r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#)
+                .unwrap()
         );
     }
 
