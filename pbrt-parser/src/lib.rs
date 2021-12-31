@@ -384,26 +384,30 @@ fn parse_world_statement<'a, E: ParseError<&'a str>>(
 }
 
 fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
-    many0(preceded(
+    let mut parser = preceded(
         sp,
         alt((
             map(parse_look_at, |l| Scene::LookAt(l)),
             map(parse_scene_object, |o| Scene::SceneObject(o)),
             map(parse_world_statement, |w| Scene::World(w)),
         )),
-    ))(input)
-}
+    );
 
-fn parse_all<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
-    let (rest, scene) = parse_scene(input)?;
-    let (rest, _) = opt(sp)(rest)?;
-    let (rest, _) = eof(rest)?;
+    let mut scenes = Vec::new();
+    let mut rest = input;
+    loop {
+        if let (rest, Some(_)) = opt(preceded(sp, eof))(rest)? {
+            return Ok((rest, scenes));
+        }
 
-    Ok((rest, scene))
+        let (r, scene) = parser(rest)?;
+        scenes.push(scene);
+        rest = r;
+    }
 }
 
 pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, VerboseError<&str>> {
-    let (_rest, scene) = parse_all(input).finish()?;
+    let (_rest, scene) = parse_scene(input).finish()?;
     Ok(scene)
 }
 
