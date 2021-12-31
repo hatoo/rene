@@ -4,7 +4,7 @@ use nom::{
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{alphanumeric1, char, digit1, one_of},
     combinator::{cut, eof, map, opt, recognize, value},
-    error::{ParseError, VerboseError},
+    error::ParseError,
     multi::many0,
     number::complete::float,
     sequence::{preceded, terminated},
@@ -402,7 +402,7 @@ fn parse_all<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec
     Ok((rest, scene))
 }
 
-pub fn parse_pbrt(input: &str) -> Result<Vec<Scene>, VerboseError<&str>> {
+pub fn parse_pbrt<'a, E: ParseError<&'a str>>(input: &'a str) -> Result<Vec<Scene>, E> {
     let (_rest, scene) = parse_all(input).finish()?;
     Ok(scene)
 }
@@ -517,7 +517,7 @@ mod test {
 
     #[test]
     fn test_parse_pbrt() {
-        parse_pbrt(
+        parse_pbrt::<Error<&str>>(
             r#"
         LookAt 3 4 1.5  # eye
             .0 .0 0  # look at point
@@ -542,7 +542,7 @@ mod test {
 
     #[test]
     fn test_parse_pbrt2() {
-        parse_pbrt(
+        parse_pbrt::<Error<&str>>(
             r#"
         WorldBegin
 
