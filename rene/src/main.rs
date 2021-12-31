@@ -22,6 +22,12 @@ use structopt::StructOpt;
 
 mod scene;
 
+pub struct ShaderIndex {}
+
+impl ShaderIndex {
+    const SPHERE: u32 = 0;
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 struct Vertex {

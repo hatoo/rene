@@ -2,6 +2,8 @@ use glam::{vec3, Affine3A};
 use rene_shader::{material::EnumMaterial, LookAt, Uniform};
 use thiserror::Error;
 
+use crate::ShaderIndex;
+
 use self::intermediate_scene::{
     Camera, Infinite, IntermediateScene, IntermediateWorld, LightSource, Material, Matte,
     SceneObject, Shape, Sphere, WorldObject,
@@ -88,7 +90,7 @@ impl Scene {
                     },
                     WorldObject::Shape(shape) => match shape {
                         Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
-                            shader_offset: 0,
+                            shader_offset: ShaderIndex::SPHERE,
                             matrix: state.current_matrix
                                 * Affine3A::from_scale(vec3(*radius, *radius, *radius)),
                             material_index: state
