@@ -15,7 +15,7 @@ use spirv_std::macros::spirv;
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
-    arch::{report_intersection, IndexUnchecked},
+    arch::{ignore_intersection, report_intersection, IndexUnchecked},
     glam::{uvec2, vec2, vec3a, UVec3, Vec2, Vec3A, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
@@ -93,6 +93,13 @@ pub struct Uniform {
 
 pub struct PushConstants {
     seed: u32,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct IndexData {
+    pub material_index: u32,
+    pub index_offset: u32,
 }
 
 #[spirv(miss)]
@@ -230,6 +237,7 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] index_data: &[IndexData],
 ) {
     const INV_PI: f32 = 1.0 / PI;
 
@@ -249,11 +257,97 @@ pub fn sphere_closest_hit(
         world_to_object.z.dot(object_hit_pos),
     );
 
+    let material_index =
+        unsafe { index_data.index_unchecked(instance_custom_index as usize) }.material_index;
+
     *out = RayPayload::new_hit(
         hit_pos,
         normal,
         world_ray_direction,
-        instance_custom_index,
+        material_index,
         vec2(u, v),
     );
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Vertex {
+    pub position: Vec3A,
+    pub normal: Vec3A,
+}
+
+#[spirv(closest_hit)]
+pub fn triangle_closest_hit(
+    #[spirv(hit_attribute)] attribute: &Vec2,
+    #[spirv(object_to_world)] object_to_world: Affine3,
+    #[spirv(world_to_object)] world_to_object: Affine3,
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] vertices: &[Vertex],
+    #[spirv(incoming_ray_payload)] out: &mut RayPayload,
+    #[spirv(primitive_id)] primitive_id: u32,
+    #[spirv(instance_custom_index)] instance_custom_index: u32,
+) {
+    let index_data = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
+
+    let index_offset = index_data.index_offset as usize;
+    let material_index = index_data.material_index;
+
+    let v0 = *unsafe {
+        vertices.index_unchecked(
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 0) as usize,
+        )
+    };
+    let v1 = *unsafe {
+        vertices.index_unchecked(
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 1) as usize,
+        )
+    };
+    let v2 = *unsafe {
+        vertices.index_unchecked(
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 2) as usize,
+        )
+    };
+
+    let barycentrics = vec3a(1.0 - attribute.x - attribute.y, attribute.x, attribute.y);
+
+    let pos =
+        v0.position * barycentrics.x + v1.position * barycentrics.y + v2.position * barycentrics.z;
+
+    let nrm = v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z;
+
+    let hit_pos = vec3a(
+        object_to_world.x.dot(pos),
+        object_to_world.y.dot(pos),
+        object_to_world.z.dot(pos),
+    ) + object_to_world.w;
+
+    let normal = vec3a(
+        world_to_object.x.dot(nrm),
+        world_to_object.y.dot(nrm),
+        world_to_object.z.dot(nrm),
+    )
+    .normalize();
+
+    *out = RayPayload::new_hit(
+        hit_pos,
+        normal,
+        world_ray_direction,
+        material_index,
+        vec2(0.0, 0.0),
+    );
+}
+
+#[spirv(any_hit)]
+pub fn triangle_any_hit(
+    #[spirv(ray_tmax)] t: f32,
+    #[spirv(object_ray_origin)] object_ray_origin: Vec3A,
+    #[spirv(object_ray_direction)] object_ray_direction: Vec3A,
+) {
+    let pos = object_ray_origin + t * object_ray_direction;
+
+    if pos.length_squared() < 0.2 {
+        unsafe { ignore_intersection() };
+    }
 }

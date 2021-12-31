@@ -1,6 +1,6 @@
 use glam::{vec3a, Affine3A, Vec3A};
 use pbrt_parser::ArgumentError;
-use rene_shader::camera::PerspectiveCamera;
+use rene_shader::{camera::PerspectiveCamera, Vertex};
 use thiserror::Error;
 
 #[derive(PartialEq, Debug)]
@@ -48,10 +48,17 @@ pub struct Matte {
 
 pub enum Shape {
     Sphere(Sphere),
+    TriangleMesh(TriangleMesh),
 }
 
 pub struct Sphere {
     pub radius: f32,
+}
+
+#[derive(Clone)]
+pub struct TriangleMesh {
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
 }
 
 pub enum IntermediateScene {
@@ -62,16 +69,18 @@ pub enum IntermediateScene {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Invalid Camera type")]
+    #[error("Invalid Camera type {0}")]
     InvalidCamera(String),
-    #[error("Invalid LightSource type")]
+    #[error("Invalid LightSource type {0}")]
     InvalidLightSource(String),
-    #[error("Invalid Material type")]
+    #[error("Invalid Material type {0}")]
     InvalidMaterial(String),
-    #[error("Invalid Shape type")]
+    #[error("Invalid Shape type {0}")]
     InvalidShape(String),
     #[error("Invalid Argument")]
     InvalidArgument(#[from] ArgumentError),
+    #[error("Argument not found {0}")]
+    ArgumentNotFound(String),
 }
 
 impl IntermediateWorld {
@@ -101,6 +110,35 @@ impl IntermediateWorld {
                         let radius = obj.get_float("radius").unwrap_or(Ok(1.0))?;
                         Ok(Self::WorldObject(WorldObject::Shape(Shape::Sphere(
                             Sphere { radius },
+                        ))))
+                    }
+                    "trianglemesh" => {
+                        let indices = obj
+                            .get_integers("indices")
+                            .ok_or(Error::ArgumentNotFound("indices".to_string()))??;
+                        let indices: Vec<u32> = indices.into_iter().map(|&i| i as u32).collect();
+                        let vertices = obj
+                            .get_points("P")
+                            .ok_or(Error::ArgumentNotFound("P".to_string()))??;
+
+                        let normal = obj
+                            .get_normals("N")
+                            .ok_or(Error::ArgumentNotFound("N".to_string()))??;
+
+                        // TODO check length
+
+                        Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
+                            TriangleMesh {
+                                indices,
+                                vertices: vertices
+                                    .iter()
+                                    .zip(normal.iter())
+                                    .map(|(position, normal)| Vertex {
+                                        position: *position,
+                                        normal: *normal,
+                                    })
+                                    .collect(),
+                            },
                         ))))
                     }
                     t => Err(Error::InvalidShape(t.to_string())),

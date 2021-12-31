@@ -35,6 +35,8 @@ pub enum Value {
     Float(Vec<f32>),
     Integer(Vec<i32>),
     Rgb(Vec<f32>),
+    Point(Vec<Vec3A>),
+    Normal(Vec<Vec3A>),
 }
 
 #[derive(PartialEq, Debug)]
@@ -124,6 +126,26 @@ impl<'a, T> Object<'a, T> {
                 _ => Err(ArgumentError::UnmatchedType),
             })
     }
+
+    pub fn get_points(&self, name: &str) -> Option<Result<&[Vec3A], ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Point(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
+    pub fn get_normals(&self, name: &str) -> Option<Result<&[Vec3A], ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Normal(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
 }
 
 fn comment(input: &str) -> IResult<&str, &str> {
@@ -161,12 +183,16 @@ enum ArgumentType {
     Float,
     Rgb,
     Integer,
+    Point,
+    Normal,
 }
 
 fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
     alt((
         value(ArgumentType::Float, tag("float")),
         value(ArgumentType::Integer, tag("integer")),
+        value(ArgumentType::Point, tag("point")),
+        value(ArgumentType::Normal, tag("normal")),
         value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
     ))(input)
 }
@@ -190,7 +216,7 @@ fn integer(input: &str) -> IResult<&str, i32> {
     }
     fn minus(i: &str) -> IResult<&str, i32> {
         let (rest, _) = char('-')(i)?;
-        plus(rest)
+        map(plus, |i| -i)(rest)
     }
 
     alt((plus, minus))(input)
@@ -204,6 +230,34 @@ impl ArgumentType {
     fn parse_value(self, input: &str) -> IResult<&str, Value> {
         match self {
             ArgumentType::Float => floats(input).map(|(rest, f)| (rest, Value::Float(f))),
+            ArgumentType::Point => {
+                let (rest, fs) = floats(input)?;
+                if fs.len() % 3 != 0 {
+                    return Err(nom::Err::Error(nom::error::Error::new(
+                        input,
+                        nom::error::ErrorKind::Many0,
+                    )));
+                }
+
+                Ok((
+                    rest,
+                    Value::Point(fs.chunks(3).map(|v| vec3a(v[0], v[1], v[2])).collect()),
+                ))
+            }
+            ArgumentType::Normal => {
+                let (rest, fs) = floats(input)?;
+                if fs.len() % 3 != 0 {
+                    return Err(nom::Err::Error(nom::error::Error::new(
+                        input,
+                        nom::error::ErrorKind::Many0,
+                    )));
+                }
+
+                Ok((
+                    rest,
+                    Value::Normal(fs.chunks(3).map(|v| vec3a(v[0], v[1], v[2])).collect()),
+                ))
+            }
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
         }
@@ -251,7 +305,7 @@ fn parse_world_object_type(input: &str) -> IResult<&str, WorldObjectType> {
 fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
     let (rest, ty) = parse_scene_object_type(input)?;
     let (rest, t) = preceded(sp, parse_str)(rest)?;
-    let (rest, arguments) = preceded(sp, many0(parse_argument))(rest)?;
+    let (rest, arguments) = preceded(sp, many0(preceded(sp, parse_argument)))(rest)?;
 
     Ok((
         rest,
@@ -266,7 +320,7 @@ fn parse_scene_object(input: &str) -> IResult<&str, SceneObject> {
 fn parse_world_object(input: &str) -> IResult<&str, WorldObject> {
     let (rest, ty) = parse_world_object_type(input)?;
     let (rest, t) = preceded(sp, parse_str)(rest)?;
-    let (rest, arguments) = preceded(sp, many0(parse_argument))(rest)?;
+    let (rest, arguments) = preceded(sp, many0(preceded(sp, parse_argument)))(rest)?;
 
     Ok((
         rest,
@@ -349,6 +403,31 @@ mod test {
     }
 
     #[test]
+    fn test_parse_integer() {
+        assert_eq!(integer("42"), Ok(("", 42)));
+        assert_eq!(integer("-42"), Ok(("", -42)));
+    }
+
+    #[test]
+    fn test_parse_argument() {
+        assert_eq!(
+            parse_argument("\"point P\" [ -20 -20 0   20 -20 0   20 20 0   -20 20 0 ]"),
+            Ok((
+                "",
+                Argument {
+                    name: "P",
+                    value: Value::Point(vec![
+                        vec3a(-20.0, -20.0, 0.0),
+                        vec3a(20.0, -20.0, 0.0),
+                        vec3a(20.0, 20.0, 0.0),
+                        vec3a(-20.0, 20.0, 0.0)
+                    ],)
+                }
+            ))
+        )
+    }
+
+    #[test]
     fn test_parse_look_at() {
         assert_eq!(
             LookAt {
@@ -424,6 +503,27 @@ mod test {
         AttributeBegin
         Material "matte" "rgb Kd" [ .7 .2 .2 ]
         Shape "sphere" "float radius" 1
+        AttributeEnd
+
+        WorldEnd
+        "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_parse_pbrt2() {
+        parse_pbrt(
+            r#"
+        WorldBegin
+
+        AttributeBegin
+        Material "matte" "rgb Kd" [0.1 0.2 0.1]
+        Translate 0 0 -1
+        Shape "trianglemesh"
+            "integer indices" [0 1 2 0 2 3]
+            "point P" [ -20 -20 0   20 -20 0   20 20 0   -20 20 0 ]
+            "normal N" [ 0 0 1   0 0 1   0 0 1   0 0 1 ]
         AttributeEnd
 
         WorldEnd

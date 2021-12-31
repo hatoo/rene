@@ -6,10 +6,10 @@ use crate::ShaderIndex;
 
 use self::intermediate_scene::{
     Camera, Infinite, IntermediateScene, IntermediateWorld, LightSource, Material, Matte,
-    SceneObject, Shape, Sphere, WorldObject,
+    SceneObject, Shape, Sphere, TriangleMesh, WorldObject,
 };
 
-mod intermediate_scene;
+pub mod intermediate_scene;
 
 #[derive(Debug)]
 pub struct TlasInstance {
@@ -24,6 +24,7 @@ pub struct Scene {
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
     pub materials: Vec<EnumMaterial>,
+    pub blases: Vec<TriangleMesh>,
 }
 
 #[derive(Error, Debug)]
@@ -98,6 +99,19 @@ impl Scene {
                                 .ok_or(CreateSceneError::NoMaterial)?,
                             blas_index: None,
                         }),
+                        Shape::TriangleMesh(trianglemesh) => {
+                            let blass_index = self.blases.len();
+                            // TODO avoid this clone
+                            self.blases.push(trianglemesh.clone());
+                            self.tlas.push(TlasInstance {
+                                shader_offset: ShaderIndex::TRIANGLE,
+                                matrix: state.current_matrix,
+                                material_index: state
+                                    .current_material_index
+                                    .ok_or(CreateSceneError::NoMaterial)?,
+                                blas_index: Some(blass_index),
+                            })
+                        }
                     },
                 },
             }
