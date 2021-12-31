@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 nom = "7.1.0"
 glam = "0.20"
+thiserror = "1.0.30"

@@ -1,4 +1,5 @@
 use glam::{vec3a, Affine3A, Vec3A};
+use pbrt_parser::ArgumentError;
 use rene_shader::camera::PerspectiveCamera;
 use thiserror::Error;
 
@@ -69,6 +70,8 @@ pub enum Error {
     InvalidMaterial(String),
     #[error("Invalid Shape type")]
     InvalidShape(String),
+    #[error("Invalid Argument")]
+    InvalidArgument(#[from] ArgumentError),
 }
 
 impl IntermediateWorld {
@@ -77,7 +80,7 @@ impl IntermediateWorld {
             pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
                     "infinite" => {
-                        let color = obj.get_rgb("L").unwrap_or(vec3a(1.0, 1.0, 1.0));
+                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Infinite(Infinite { color }),
                         )))
@@ -86,7 +89,7 @@ impl IntermediateWorld {
                 },
                 pbrt_parser::WorldObjectType::Material => match obj.t {
                     "matte" => {
-                        let color = obj.get_rgb("Kd").unwrap_or(vec3a(0.5, 0.5, 0.5));
+                        let color = obj.get_rgb("Kd").unwrap_or(Ok(vec3a(0.5, 0.5, 0.5)))?;
                         Ok(Self::WorldObject(WorldObject::Material(Material::Matte(
                             Matte { color },
                         ))))
@@ -95,7 +98,7 @@ impl IntermediateWorld {
                 },
                 pbrt_parser::WorldObjectType::Shape => match obj.t {
                     "sphere" => {
-                        let radius = obj.get_float("radius").unwrap_or(1.0);
+                        let radius = obj.get_float("radius").unwrap_or(Ok(1.0))?;
                         Ok(Self::WorldObject(WorldObject::Shape(Shape::Sphere(
                             Sphere { radius },
                         ))))
@@ -126,7 +129,7 @@ impl IntermediateScene {
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                 pbrt_parser::SceneObjectType::Camera => match obj.t {
                     "perspective" => {
-                        let fov = obj.get_float("fov").unwrap_or(90.0);
+                        let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;
                         Ok(Self::SceneObject(SceneObject::Camera(Camera::Perspective(
                             PerspectiveCamera { fov },
                         ))))

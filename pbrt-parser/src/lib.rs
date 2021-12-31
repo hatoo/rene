@@ -2,8 +2,8 @@ use glam::{vec3a, Vec3A};
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
-    character::complete::{alphanumeric1, char, one_of},
-    combinator::{cut, map, opt, value},
+    character::complete::{alphanumeric1, char, digit1, one_of},
+    combinator::{cut, map, map_res, opt, recognize, value},
     error::{Error, ErrorKind},
     multi::many0,
     number::complete::float,
@@ -33,6 +33,7 @@ pub struct LookAt {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Float(Vec<f32>),
+    Integer(Vec<i32>),
     Rgb(Vec<f32>),
 }
 
@@ -53,51 +54,74 @@ pub enum WorldObjectType {
     Material,
     Shape,
 }
-
 #[derive(PartialEq, Debug)]
-pub struct SceneObject<'a> {
-    pub object_type: SceneObjectType,
+pub struct Object<'a, T> {
+    pub object_type: T,
     pub t: &'a str,
     pub arguments: Vec<Argument<'a>>,
 }
 
-impl<'a> SceneObject<'a> {
-    pub fn get_float(&self, name: &str) -> Option<f32> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .and_then(|a| match &a.value {
-                Value::Float(v) if v.len() == 1 => Some(v[0]),
-                _ => None,
-            })
-    }
+pub type SceneObject<'a> = Object<'a, SceneObjectType>;
+pub type WorldObject<'a> = Object<'a, WorldObjectType>;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ArgumentError {
+    #[error("unmatched value length")]
+    UnmatchedValueLength,
+    #[error("unmatched type")]
+    UnmatchedType,
 }
 
-#[derive(PartialEq, Debug)]
-pub struct WorldObject<'a> {
-    pub object_type: WorldObjectType,
-    pub t: &'a str,
-    pub arguments: Vec<Argument<'a>>,
-}
-
-impl<'a> WorldObject<'a> {
-    pub fn get_rgb(&self, name: &str) -> Option<Vec3A> {
+impl<'a, T> Object<'a, T> {
+    pub fn get_rgb(&self, name: &str) -> Option<Result<Vec3A, ArgumentError>> {
         self.arguments
             .iter()
             .find(|a| a.name == name)
-            .and_then(|a| match &a.value {
-                Value::Rgb(v) if v.len() == 3 => Some(vec3a(v[0], v[1], v[2])),
-                _ => None,
+            .map(|a| match &a.value {
+                Value::Rgb(v) => {
+                    if v.len() == 3 {
+                        Ok(vec3a(v[0], v[1], v[2]))
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
             })
     }
 
-    pub fn get_float(&self, name: &str) -> Option<f32> {
+    pub fn get_float(&self, name: &str) -> Option<Result<f32, ArgumentError>> {
         self.arguments
             .iter()
             .find(|a| a.name == name)
-            .and_then(|a| match &a.value {
-                Value::Float(v) if v.len() == 1 => Some(v[0]),
-                _ => None,
+            .map(|a| match &a.value {
+                Value::Float(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
+    pub fn get_integers(&self, name: &str) -> Option<Result<&[i32], ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Integer(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
+    pub fn get_floats(&self, name: &str) -> Option<Result<&[f32], ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Float(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
             })
     }
 }
@@ -136,11 +160,13 @@ fn parse_str(i: &str) -> IResult<&str, &str> {
 enum ArgumentType {
     Float,
     Rgb,
+    Integer,
 }
 
 fn parse_argument_type(input: &str) -> IResult<&str, ArgumentType> {
     alt((
         value(ArgumentType::Float, tag("float")),
+        value(ArgumentType::Integer, tag("integer")),
         value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
     ))(input)
 }
@@ -158,10 +184,27 @@ fn floats(input: &str) -> IResult<&str, Vec<f32>> {
     alt((map(float, |f| vec![f]), |i| bracket(float, i)))(input)
 }
 
+fn integer(input: &str) -> IResult<&str, i32> {
+    fn plus(i: &str) -> IResult<&str, i32> {
+        map_res(recognize(digit1), str::parse)(i)
+    }
+    fn minus(i: &str) -> IResult<&str, i32> {
+        let (rest, _) = char('-')(i)?;
+        plus(rest)
+    }
+
+    alt((plus, minus))(input)
+}
+
+fn integers(input: &str) -> IResult<&str, Vec<i32>> {
+    alt((map(integer, |f| vec![f]), |i| bracket(integer, i)))(input)
+}
+
 impl ArgumentType {
     fn parse_value(self, input: &str) -> IResult<&str, Value> {
         match self {
             ArgumentType::Float => floats(input).map(|(rest, f)| (rest, Value::Float(f))),
+            ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
         }
     }
