@@ -126,10 +126,14 @@ impl IntermediateWorld {
                             .map(|r| r.map(Some))
                             .unwrap_or(Ok(None))?;
 
-                        // TODO check length
+                        if let Some(normal) = normal {
+                            if normal.len() != vertices.len() {
+                                return Err(Error::InvalidArgument(
+                                    ArgumentError::UnmatchedValueLength,
+                                ));
+                            }
 
-                        Ok(if let Some(normal) = normal {
-                            Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
+                            Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
                                 TriangleMesh {
                                     indices,
                                     vertices: vertices
@@ -141,9 +145,9 @@ impl IntermediateWorld {
                                         })
                                         .collect(),
                                 },
-                            )))
+                            ))))
                         } else {
-                            Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
+                            Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
                                 TriangleMesh {
                                     indices,
                                     vertices: vertices
@@ -154,8 +158,8 @@ impl IntermediateWorld {
                                         })
                                         .collect(),
                                 },
-                            )))
-                        })
+                            ))))
+                        }
                     }
                     t => Err(Error::InvalidShape(t.to_string())),
                 },
