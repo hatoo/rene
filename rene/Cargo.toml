@@ -13,7 +13,7 @@ rand = "0.8.4"
 glam = "0.20"
 rene-shader = { path = "../rene-shader" }
 pbrt-parser = { path = "../pbrt-parser" }
-structopt = "0.3.25"
+clap = { version = "3.0.0", features = ["derive"] }
 thiserror = "1.0.30"
 nom = "7.1.0"
 

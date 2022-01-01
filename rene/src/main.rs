@@ -15,12 +15,12 @@ use ash::{
     vk::{self, AccelerationStructureKHR},
 };
 
+use clap::Parser;
 use glam::Vec3A;
 use nom::error::convert_error;
 use rand::prelude::*;
 use rene_shader::{material::EnumMaterial, IndexData, Uniform, Vertex};
 use scene::Scene;
-use structopt::StructOpt;
 
 mod scene;
 
@@ -31,9 +31,9 @@ impl ShaderIndex {
     const TRIANGLE: u32 = 1;
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Opts {
-    #[structopt(help = "pbrt file")]
+    #[clap(help = "pbrt file")]
     pbrt_path: PathBuf,
 }
 
@@ -46,7 +46,7 @@ fn main() {
     const N_SAMPLES: u32 = 5000;
     const N_SAMPLES_ITER: u32 = 100;
 
-    let opts: Opts = Opts::from_args();
+    let opts: Opts = Opts::parse();
     let mut pbrt_file = String::new();
     File::open(&opts.pbrt_path)
         .unwrap()
