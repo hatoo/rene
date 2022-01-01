@@ -127,7 +127,9 @@ impl IntermediateWorld {
                             .unwrap_or(Ok(None))?;
 
                         if indices.len() % 3 != 0 {
-                            return Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength));
+                            return Err(Error::InvalidArgument(
+                                ArgumentError::UnmatchedValueLength,
+                            ));
                         }
 
                         if let Some(normal) = normal {
@@ -173,9 +175,9 @@ impl IntermediateWorld {
                 .map(Self::from_world)
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(IntermediateWorld::Attribute),
-            pbrt_parser::World::Translate(translation) => Ok(Self::Matrix(
-                Affine3A::from_translation((*translation).into()),
-            )),
+            pbrt_parser::World::Translate(translation) => {
+                Ok(Self::Matrix(Affine3A::from_translation(translation.into())))
+            }
         }
     }
 }
