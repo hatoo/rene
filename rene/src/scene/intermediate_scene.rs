@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use glam::{vec3a, Affine3A, Vec3A};
 use pbrt_parser::ArgumentError;
 use rene_shader::{camera::PerspectiveCamera, Vertex};
@@ -123,7 +125,26 @@ impl IntermediateWorld {
 
                         let normal = obj
                             .get_normals("N")
-                            .ok_or(Error::ArgumentNotFound("N".to_string()))??;
+                            .map(|r| r.map(|v| Cow::Borrowed(v)))
+                            .unwrap_or_else(|| {
+                                let mut normal = vec![Vec3A::ZERO; vertices.len()];
+                                for prim in indices.chunks(3) {
+                                    let v0 = vertices[prim[0] as usize];
+                                    let v1 = vertices[prim[1] as usize];
+                                    let v2 = vertices[prim[2] as usize];
+
+                                    normal[prim[0] as usize] = (normal[prim[0] as usize]
+                                        + (v1 - v0).cross(v2 - v0).normalize())
+                                    .normalize();
+                                    normal[prim[1] as usize] = (normal[prim[1] as usize]
+                                        + (v2 - v1).cross(v0 - v1).normalize())
+                                    .normalize();
+                                    normal[prim[2] as usize] = (normal[prim[2] as usize]
+                                        + (v0 - v2).cross(v1 - v2).normalize())
+                                    .normalize();
+                                }
+                                Ok(Cow::Owned(normal))
+                            })?;
 
                         // TODO check length
 
