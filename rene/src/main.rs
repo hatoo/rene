@@ -27,8 +27,8 @@ mod scene;
 pub struct ShaderIndex {}
 
 impl ShaderIndex {
-    const SPHERE: u32 = 0;
-    const TRIANGLE: u32 = 1;
+    const TRIANGLE: u32 = 0;
+    const SPHERE: u32 = 1;
 }
 
 #[derive(Parser)]
@@ -450,20 +450,21 @@ fn main() {
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
-            // group2 = [ chit ]
-            vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
-                .general_shader(vk::SHADER_UNUSED_KHR)
-                .closest_hit_shader(3)
-                .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(2)
-                .build(),
+            // group2 = [ triangle ]
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
                 .general_shader(vk::SHADER_UNUSED_KHR)
                 .closest_hit_shader(4)
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build(),
+            // group2 = [ sphere ]
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
+                .general_shader(vk::SHADER_UNUSED_KHR)
+                .closest_hit_shader(3)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(2)
                 .build(),
         ];
 
