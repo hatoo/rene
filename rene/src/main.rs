@@ -621,63 +621,63 @@ fn main() {
         .image_info(&image_info)
         .build();
 
-    let material_write = {
-        let buffer_info = [vk::DescriptorBufferInfo::builder()
-            .buffer(scene_buffers.materials.buffer)
-            .range(vk::WHOLE_SIZE)
-            .build()];
+    let material_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.materials.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
 
+    let material_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
             .dst_binding(3)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&buffer_info)
+            .buffer_info(&material_buffer_info)
             .build()
     };
 
-    let index_data_write = {
-        let buffer_info = [vk::DescriptorBufferInfo::builder()
-            .buffer(scene_buffers.index_data.buffer)
-            .range(vk::WHOLE_SIZE)
-            .build()];
+    let index_data_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.index_data.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
 
+    let index_data_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
             .dst_binding(4)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&buffer_info)
+            .buffer_info(&index_data_buffer_info)
             .build()
     };
 
-    let indices_write = {
-        let buffer_info = [vk::DescriptorBufferInfo::builder()
-            .buffer(scene_buffers.indices.buffer)
-            .range(vk::WHOLE_SIZE)
-            .build()];
+    let indices_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.indices.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
 
+    let indices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
             .dst_binding(5)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&buffer_info)
+            .buffer_info(&indices_buffer_info)
             .build()
     };
 
-    let vertices_write = {
-        let buffer_info = [vk::DescriptorBufferInfo::builder()
-            .buffer(scene_buffers.vertices.buffer)
-            .range(vk::WHOLE_SIZE)
-            .build()];
+    let vertices_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.vertices.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
 
+    let vertices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
             .dst_binding(6)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&buffer_info)
+            .buffer_info(&vertices_buffer_info)
             .build()
     };
 
