@@ -1933,7 +1933,8 @@ impl SceneBuffers {
         let tlas_instances: Vec<vk::AccelerationStructureInstanceKHR> = scene
             .tlas
             .iter()
-            .map(|instance| {
+            .enumerate()
+            .map(|(index, instance)| {
                 let m = instance.matrix;
                 index_data.push(IndexData {
                     material_index: instance.material_index as u32,
@@ -1949,10 +1950,7 @@ impl SceneBuffers {
                             m.y_axis.z, m.w_axis.y, m.z_axis.x, m.z_axis.y, m.z_axis.z, m.w_axis.z,
                         ],
                     },
-                    instance_custom_index_and_mask: vk::Packed24_8::new(
-                        instance.material_index as u32,
-                        0xff,
-                    ),
+                    instance_custom_index_and_mask: vk::Packed24_8::new(index as u32, 0xff),
                     instance_shader_binding_table_record_offset_and_flags: vk::Packed24_8::new(
                         instance.shader_offset,
                         vk::GeometryInstanceFlagsKHR::FORCE_OPAQUE.as_raw() as u8,
