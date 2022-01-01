@@ -84,7 +84,7 @@ pub enum Error {
 }
 
 impl IntermediateWorld {
-    fn from_world(world: &pbrt_parser::World) -> Result<Self, Error> {
+    fn from_world(world: pbrt_parser::World) -> Result<Self, Error> {
         match world {
             pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
@@ -177,7 +177,7 @@ impl IntermediateWorld {
 }
 
 impl IntermediateScene {
-    pub fn from_scene(scene: &pbrt_parser::Scene) -> Result<Self, Error> {
+    pub fn from_scene(scene: pbrt_parser::Scene) -> Result<Self, Error> {
         match scene {
             pbrt_parser::Scene::LookAt(look_at) => Ok(Self::LookAt(LookAt {
                 eye: look_at.eye,

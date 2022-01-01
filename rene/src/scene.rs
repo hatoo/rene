@@ -42,7 +42,7 @@ struct WorldState {
 }
 
 impl Scene {
-    pub fn create(scene_description: &[pbrt_parser::Scene]) -> Result<Self, CreateSceneError> {
+    pub fn create(scene_description: Vec<pbrt_parser::Scene>) -> Result<Self, CreateSceneError> {
         let mut scene = Self::default();
         for desc in scene_description {
             match IntermediateScene::from_scene(desc)? {
@@ -57,7 +57,7 @@ impl Scene {
                     },
                 },
                 IntermediateScene::World(worlds) => {
-                    scene.append_world(Default::default(), &worlds)?;
+                    scene.append_world(Default::default(), worlds)?;
                 }
             }
         }
@@ -67,33 +67,31 @@ impl Scene {
     fn append_world(
         &mut self,
         mut state: WorldState,
-        worlds: &[IntermediateWorld],
+        worlds: Vec<IntermediateWorld>,
     ) -> Result<(), CreateSceneError> {
         for w in worlds {
             match w {
-                IntermediateWorld::Attribute(worlds) => {
-                    self.append_world(state, worlds.as_slice())?
-                }
+                IntermediateWorld::Attribute(worlds) => self.append_world(state, worlds)?,
                 IntermediateWorld::Matrix(m) => {
-                    state.current_matrix = state.current_matrix * *m;
+                    state.current_matrix = state.current_matrix * m;
                 }
                 IntermediateWorld::WorldObject(obj) => match obj {
                     WorldObject::LightSource(lightsource) => match lightsource {
                         LightSource::Infinite(Infinite { color }) => {
-                            self.uniform.background += *color;
+                            self.uniform.background += color;
                         }
                     },
                     WorldObject::Material(material) => match material {
                         Material::Matte(Matte { color }) => {
                             state.current_material_index = Some(self.materials.len());
-                            self.materials.push(EnumMaterial::new_lambertian(*color));
+                            self.materials.push(EnumMaterial::new_lambertian(color));
                         }
                     },
                     WorldObject::Shape(shape) => match shape {
                         Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
                             shader_offset: ShaderIndex::SPHERE,
                             matrix: state.current_matrix
-                                * Affine3A::from_scale(vec3(*radius, *radius, *radius)),
+                                * Affine3A::from_scale(vec3(radius, radius, radius)),
                             material_index: state
                                 .current_material_index
                                 .ok_or(CreateSceneError::NoMaterial)?,
@@ -101,8 +99,7 @@ impl Scene {
                         }),
                         Shape::TriangleMesh(trianglemesh) => {
                             let blass_index = self.blases.len();
-                            // TODO avoid this clone
-                            self.blases.push(trianglemesh.clone());
+                            self.blases.push(trianglemesh);
                             self.tlas.push(TlasInstance {
                                 shader_offset: ShaderIndex::TRIANGLE,
                                 matrix: state.current_matrix,

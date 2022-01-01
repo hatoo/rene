@@ -60,7 +60,7 @@ fn main() {
             return;
         }
     };
-    let scene = scene::Scene::create(&parsed_scene).unwrap();
+    let scene = scene::Scene::create(parsed_scene).unwrap();
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
