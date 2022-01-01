@@ -50,7 +50,7 @@ fn main() {
     let mut pbrt_file = String::new();
     File::open(&opts.pbrt_path)
         .unwrap()
-        .read_to_string(&mut &mut pbrt_file)
+        .read_to_string(&mut pbrt_file)
         .unwrap();
 
     let parsed_scene = match pbrt_parser::parse_pbrt(&pbrt_file) {
