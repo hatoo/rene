@@ -77,6 +77,7 @@ impl RayPayload {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct LookAt {
     pub eye: Vec3A,
     pub look_at: Vec3A,
@@ -85,6 +86,7 @@ pub struct LookAt {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Uniform {
     pub look_at: LookAt,
     pub camera: PerspectiveCamera,
@@ -96,6 +98,7 @@ pub struct PushConstants {
 }
 
 #[derive(Copy, Clone)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
 pub struct IndexData {
     pub material_index: u32,
@@ -220,6 +223,7 @@ pub fn sphere_intersection(
 #[derive(Clone, Copy)]
 #[spirv(matrix)]
 #[repr(C)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Affine3 {
     pub x: Vec3A,
     pub y: Vec3A,
@@ -270,6 +274,7 @@ pub fn sphere_closest_hit(
 }
 
 #[derive(Copy, Clone)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
 pub struct Vertex {
     pub position: Vec3A,

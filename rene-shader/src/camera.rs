@@ -69,6 +69,7 @@ impl Camera {
 }
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct PerspectiveCamera {
     pub fov: f32,
 }

@@ -25,12 +25,14 @@ pub trait Material {
 }
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(transparent)]
 pub struct EnumMaterialData {
     v0: Vec4,
 }
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumMaterial {
     t: u32,
     data: EnumMaterialData,
