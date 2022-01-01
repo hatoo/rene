@@ -1811,13 +1811,13 @@ impl SceneBuffers {
                 let index_offset_offset = global_vertices.len() as u32;
                 let index_offset = global_indices.len() as u32;
 
-                for v in &triangle_mesh.vertices {
-                    global_vertices.push(*v);
-                }
-
-                for i in &triangle_mesh.indices {
-                    global_indices.push(index_offset_offset + *i);
-                }
+                global_vertices.extend(triangle_mesh.vertices.iter().copied());
+                global_indices.extend(
+                    triangle_mesh
+                        .indices
+                        .iter()
+                        .map(|&i| i + index_offset_offset),
+                );
 
                 BlasArg {
                     index_offset,
