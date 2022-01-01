@@ -77,7 +77,7 @@ pub enum Error {
     InvalidMaterial(String),
     #[error("Invalid Shape type {0}")]
     InvalidShape(String),
-    #[error("Invalid Argument")]
+    #[error("Invalid Argument {0}")]
     InvalidArgument(#[from] ArgumentError),
     #[error("Argument not found {0}")]
     ArgumentNotFound(String),
