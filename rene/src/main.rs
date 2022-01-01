@@ -1814,7 +1814,7 @@ impl SceneBuffers {
 
                 BlasArg {
                     index_offset,
-                    primitive_count: triangle_mesh.indices.len() as u32,
+                    primitive_count: (triangle_mesh.indices.len() / 3) as u32,
                 }
             })
             .collect();
