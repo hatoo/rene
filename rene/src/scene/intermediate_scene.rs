@@ -126,6 +126,10 @@ impl IntermediateWorld {
                             .map(|r| r.map(Some))
                             .unwrap_or(Ok(None))?;
 
+                        if indices.len() % 3 != 0 {
+                            return Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength));
+                        }
+
                         if let Some(normal) = normal {
                             if normal.len() != vertices.len() {
                                 return Err(Error::InvalidArgument(
