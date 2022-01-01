@@ -19,7 +19,7 @@ use glam::Vec3A;
 use nom::error::convert_error;
 use rand::prelude::*;
 use rene_shader::{material::EnumMaterial, IndexData, Uniform, Vertex};
-use scene::{intermediate_scene::TriangleMesh, Scene};
+use scene::Scene;
 use structopt::StructOpt;
 
 mod scene;
@@ -1621,49 +1621,19 @@ impl SceneBuffers {
     }
 
     fn triangle_blas(
-        triangle_mesh: &TriangleMesh,
+        index_offset: u32,
+        primitive_count: u32,
+        vertices: &BufferResource,
+        vertex_len: u32,
+        indices: &BufferResource,
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (
-        AccelerationStructureKHR,
-        BufferResource,
-        BufferResource,
-        BufferResource,
-    ) {
-        let vertices = &triangle_mesh.vertices;
-        let indices = &triangle_mesh.indices;
-
+    ) -> (AccelerationStructureKHR, BufferResource) {
         let vertex_stride = std::mem::size_of::<Vertex>();
-        let vertex_buffer_size = vertex_stride * vertices.len();
-
-        let mut vertex_buffer = BufferResource::new(
-            vertex_buffer_size as vk::DeviceSize,
-            vk::BufferUsageFlags::STORAGE_BUFFER
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &device,
-            device_memory_properties,
-        );
-
-        vertex_buffer.store(&vertices, &device);
-
-        let index_buffer_size = std::mem::size_of::<u32>() * indices.len();
-
-        let mut index_buffer = BufferResource::new(
-            index_buffer_size as vk::DeviceSize,
-            vk::BufferUsageFlags::STORAGE_BUFFER
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &device,
-            device_memory_properties,
-        );
-
-        index_buffer.store(&indices, &device);
+        let index_stride = std::mem::size_of::<u32>();
 
         let geometry = vk::AccelerationStructureGeometryKHR::builder()
             .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
@@ -1671,16 +1641,16 @@ impl SceneBuffers {
                 triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
                     .vertex_data(vk::DeviceOrHostAddressConstKHR {
                         device_address: unsafe {
-                            get_buffer_device_address(&device, vertex_buffer.buffer)
+                            get_buffer_device_address(&device, vertices.buffer)
                         },
                     })
-                    .max_vertex(vertices.len() as u32 - 1)
+                    .max_vertex(vertex_len as u32 - 1)
                     .vertex_stride(vertex_stride as u64)
                     .vertex_format(vk::Format::R32G32B32_SFLOAT)
                     .index_data(vk::DeviceOrHostAddressConstKHR {
                         device_address: unsafe {
-                            get_buffer_device_address(&device, index_buffer.buffer)
-                        },
+                            get_buffer_device_address(&device, indices.buffer)
+                        } + (index_stride * index_offset as usize) as u64,
                     })
                     .index_type(vk::IndexType::UINT32)
                     .build(),
@@ -1689,7 +1659,7 @@ impl SceneBuffers {
 
         let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
             .first_vertex(0)
-            .primitive_count(indices.len() as u32)
+            .primitive_count(primitive_count)
             .primitive_offset(0)
             .transform_offset(0)
             .build();
@@ -1791,7 +1761,7 @@ impl SceneBuffers {
             device.free_command_buffers(command_pool, &[build_command_buffer]);
             scratch_buffer.destroy(&device);
         }
-        (bottom_as, bottom_as_buffer, vertex_buffer, index_buffer)
+        (bottom_as, bottom_as_buffer)
     }
 
     fn new(
@@ -1818,12 +1788,16 @@ impl SceneBuffers {
                 acceleration_structure.get_acceleration_structure_device_address(&as_addr_info)
             }
         };
+        struct BlasArg {
+            index_offset: u32,
+            primitive_count: u32,
+        }
 
         let mut buffers = Vec::new();
         let mut global_vertices: Vec<Vertex> = Vec::new();
         let mut global_indices: Vec<u32> = Vec::new();
 
-        let blases: Vec<_> = scene
+        let blas_args: Vec<BlasArg> = scene
             .blases
             .iter()
             .map(|triangle_mesh| {
@@ -1838,8 +1812,72 @@ impl SceneBuffers {
                     global_indices.push(index_offset_offset + *i);
                 }
 
-                let (blas, bottom_as_buffer, vertex_buffer, index_buffer) = Self::triangle_blas(
-                    triangle_mesh,
+                BlasArg {
+                    index_offset,
+                    primitive_count: triangle_mesh.indices.len() as u32,
+                }
+            })
+            .collect();
+
+        if global_indices.is_empty() {
+            global_indices.push(0);
+        }
+
+        if global_vertices.is_empty() {
+            global_vertices.push(Vertex {
+                position: Vec3A::ZERO,
+                normal: Vec3A::ZERO,
+            });
+        }
+
+        let indices = {
+            let buffer_size = (global_indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
+
+            let mut index_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER
+                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &device,
+                device_memory_properties,
+            );
+            index_buffer.store(&global_indices, &device);
+
+            index_buffer
+        };
+
+        let vertices = {
+            let buffer_size =
+                (global_vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
+
+            let mut vertex_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER
+                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &device,
+                device_memory_properties,
+            );
+            vertex_buffer.store(&global_vertices, &device);
+
+            vertex_buffer
+        };
+
+        let blases: Vec<_> = blas_args
+            .iter()
+            .map(|arg| {
+                let (blas, bottom_as_buffer) = Self::triangle_blas(
+                    arg.index_offset,
+                    arg.primitive_count,
+                    &vertices,
+                    global_vertices.len() as u32,
+                    &indices,
                     device,
                     device_memory_properties,
                     acceleration_structure,
@@ -1847,9 +1885,7 @@ impl SceneBuffers {
                     graphics_queue,
                 );
                 buffers.push(bottom_as_buffer);
-                buffers.push(vertex_buffer);
-                buffers.push(index_buffer);
-                (blas, index_offset)
+                blas
             })
             .collect();
 
@@ -1901,7 +1937,10 @@ impl SceneBuffers {
                 let m = instance.matrix;
                 index_data.push(IndexData {
                     material_index: instance.material_index as u32,
-                    index_offset: instance.blas_index.map(|i| blases[i].1).unwrap_or(0),
+                    index_offset: instance
+                        .blas_index
+                        .map(|i| blas_args[i].index_offset)
+                        .unwrap_or(0),
                 });
                 vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
@@ -1924,7 +1963,7 @@ impl SceneBuffers {
                             .map(|i| {
                                 let as_addr_info =
                                     vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                                        .acceleration_structure(blases[i].0)
+                                        .acceleration_structure(blases[i])
                                         .build();
                                 unsafe {
                                     acceleration_structure
@@ -2101,17 +2140,6 @@ impl SceneBuffers {
         buffers.push(instance_buffer);
         buffers.push(top_as_buffer);
 
-        if global_indices.is_empty() {
-            global_indices.push(0);
-        }
-
-        if global_vertices.is_empty() {
-            global_vertices.push(Vertex {
-                position: Vec3A::ZERO,
-                normal: Vec3A::ZERO,
-            });
-        }
-
         let index_data = {
             let buffer_size =
                 (index_data.len() * std::mem::size_of::<IndexData>()) as vk::DeviceSize;
@@ -2130,45 +2158,10 @@ impl SceneBuffers {
             index_data_buffer
         };
 
-        let indices = {
-            let buffer_size = (global_indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
-
-            let mut index_buffer = BufferResource::new(
-                buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
-                device_memory_properties,
-            );
-            index_buffer.store(&global_indices, &device);
-
-            index_buffer
-        };
-
-        let vertices = {
-            let buffer_size =
-                (global_vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
-
-            let mut vertex_buffer = BufferResource::new(
-                buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
-                device_memory_properties,
-            );
-            vertex_buffer.store(&global_vertices, &device);
-
-            vertex_buffer
-        };
-
         Self {
             tlas: top_as,
             default_blas,
-            blases: blases.into_iter().map(|t| t.0).collect(),
+            blases,
             uniform: uniform_buffer,
             materials: material_buffer,
             buffers,
