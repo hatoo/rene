@@ -315,23 +315,13 @@ pub fn triangle_closest_hit(
     let pos =
         v0.position * barycentrics.x + v1.position * barycentrics.y + v2.position * barycentrics.z;
 
-    let (n0, n1, n2) = if v0.normal == Vec3A::ZERO {
-        let n0 = (v1.position - v0.position)
+    let nrm = if v0.normal == Vec3A::ZERO && v1.normal == Vec3A::ZERO && v2.normal == Vec3A::ZERO {
+        (v1.position - v0.position)
             .cross(v2.position - v0.position)
-            .normalize();
-        let n1 = (v2.position - v1.position)
-            .cross(v0.position - v1.position)
-            .normalize();
-        let n2 = (v0.position - v2.position)
-            .cross(v1.position - v2.position)
-            .normalize();
-
-        (n0, n1, n2)
+            .normalize()
     } else {
-        (v0.normal, v1.normal, v2.normal)
+        v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z
     };
-
-    let nrm = n0 * barycentrics.x + n1 * barycentrics.y + n2 * barycentrics.z;
 
     let hit_pos = vec3a(
         object_to_world.x.dot(pos),
