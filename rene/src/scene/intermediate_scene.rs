@@ -127,33 +127,7 @@ impl IntermediateWorld {
                             .get_normals("N")
                             .map(|r| r.map(|v| Cow::Borrowed(v)))
                             .unwrap_or_else(|| {
-                                let mut normal = vec![Vec3A::ZERO; vertices.len()];
-                                let mut denom = vec![0.0; vertices.len()];
-                                for prim in indices.chunks(3) {
-                                    let v0 = vertices[prim[0] as usize];
-                                    let v1 = vertices[prim[1] as usize];
-                                    let v2 = vertices[prim[2] as usize];
-
-                                    normal[prim[0] as usize] +=
-                                        (v1 - v0).cross(v2 - v0).normalize();
-                                    denom[prim[0] as usize] += 1.0;
-
-                                    normal[prim[1] as usize] +=
-                                        (v2 - v1).cross(v0 - v1).normalize();
-                                    denom[prim[1] as usize] += 1.0;
-
-                                    normal[prim[2] as usize] +=
-                                        (v0 - v2).cross(v1 - v2).normalize();
-                                    denom[prim[2] as usize] += 1.0;
-                                }
-
-                                for (n, d) in normal.iter_mut().zip(denom.iter()) {
-                                    if *d != 0.0 {
-                                        *n /= *d;
-                                        *n = n.normalize();
-                                    }
-                                }
-
+                                let normal = vec![Vec3A::ZERO; vertices.len()];
                                 Ok(Cow::Owned(normal))
                             })?;
 
