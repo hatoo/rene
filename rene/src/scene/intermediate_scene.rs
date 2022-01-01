@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use glam::{vec3a, Affine3A, Vec3A};
 use pbrt_parser::ArgumentError;
 use rene_shader::{camera::PerspectiveCamera, Vertex};
@@ -125,27 +123,39 @@ impl IntermediateWorld {
 
                         let normal = obj
                             .get_normals("N")
-                            .map(|r| r.map(|v| Cow::Borrowed(v)))
-                            .unwrap_or_else(|| {
-                                let normal = vec![Vec3A::ZERO; vertices.len()];
-                                Ok(Cow::Owned(normal))
-                            })?;
+                            .map(|r| r.map(Some))
+                            .unwrap_or(Ok(None))?;
 
                         // TODO check length
 
-                        Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
-                            TriangleMesh {
-                                indices,
-                                vertices: vertices
-                                    .iter()
-                                    .zip(normal.iter())
-                                    .map(|(position, normal)| Vertex {
-                                        position: *position,
-                                        normal: *normal,
-                                    })
-                                    .collect(),
-                            },
-                        ))))
+                        Ok(if let Some(normal) = normal {
+                            Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
+                                TriangleMesh {
+                                    indices,
+                                    vertices: vertices
+                                        .iter()
+                                        .zip(normal.iter())
+                                        .map(|(position, normal)| Vertex {
+                                            position: *position,
+                                            normal: *normal,
+                                        })
+                                        .collect(),
+                                },
+                            )))
+                        } else {
+                            Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
+                                TriangleMesh {
+                                    indices,
+                                    vertices: vertices
+                                        .iter()
+                                        .map(|position| Vertex {
+                                            position: *position,
+                                            normal: Vec3A::ZERO,
+                                        })
+                                        .collect(),
+                                },
+                            )))
+                        })
                     }
                     t => Err(Error::InvalidShape(t.to_string())),
                 },
