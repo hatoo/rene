@@ -29,7 +29,7 @@ pub struct Scene {
 
 #[derive(Error, Debug)]
 pub enum CreateSceneError {
-    #[error("Failed to convert to intermediate type")]
+    #[error("Failed to convert pbrt scene to intermediate type: {0}")]
     IntermediateError(#[from] intermediate_scene::Error),
     #[error("No Material")]
     NoMaterial,
