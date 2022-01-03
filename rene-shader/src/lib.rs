@@ -27,6 +27,7 @@ pub mod math;
 pub mod rand;
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Ray {
     pub origin: Vec3A,
     pub direction: Vec3A,
