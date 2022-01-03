@@ -178,6 +178,9 @@ impl IntermediateWorld {
             pbrt_parser::World::Translate(translation) => {
                 Ok(Self::Matrix(Affine3A::from_translation(translation.into())))
             }
+            pbrt_parser::World::Scale(scale) => {
+                Ok(Self::Matrix(Affine3A::from_scale(scale.into())))
+            }
         }
     }
 }

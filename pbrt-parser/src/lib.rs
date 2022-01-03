@@ -23,6 +23,7 @@ pub enum World<'a> {
     WorldObject(WorldObject<'a>),
     Attribute(Vec<World<'a>>),
     Translate(Vec3A),
+    Scale(Vec3A),
 }
 
 #[derive(PartialEq, Debug)]
@@ -367,11 +368,17 @@ fn parse_transrate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     preceded(sp, parse_vec3)(rest)
 }
 
+fn parse_scale<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec3A, E> {
+    let (rest, _) = tag("Scale")(input)?;
+    preceded(sp, parse_vec3)(rest)
+}
+
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
         map(parse_transrate, |v| World::Translate(v)),
+        map(parse_scale, |v| World::Scale(v)),
     ))(input)
 }
 
