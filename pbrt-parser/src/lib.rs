@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use glam::{vec3a, Vec3A};
 use nom::{
     branch::alt,
@@ -192,7 +190,7 @@ fn parse_axis_angle<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a s
         rest,
         AxisAngle {
             axis: vec3a(x, y, z),
-            angle: a * PI / 180.0,
+            angle: a,
         },
     ))
 }

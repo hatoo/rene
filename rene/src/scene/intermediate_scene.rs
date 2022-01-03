@@ -1,6 +1,7 @@
 use glam::{vec3a, Affine3A, Vec3A};
 use pbrt_parser::ArgumentError;
 use rene_shader::{camera::PerspectiveCamera, Vertex};
+use std::f32::consts::PI;
 use thiserror::Error;
 
 #[derive(PartialEq, Debug)]
@@ -183,7 +184,7 @@ impl IntermediateWorld {
             }
             pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Affine3A::from_axis_angle(
                 axis_angle.axis.into(),
-                axis_angle.angle,
+                axis_angle.angle * PI / 180.0,
             ))),
         }
     }
