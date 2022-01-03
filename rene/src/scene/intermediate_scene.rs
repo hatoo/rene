@@ -183,8 +183,8 @@ impl IntermediateWorld {
                 Ok(Self::Matrix(Affine3A::from_scale(scale.into())))
             }
             pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Affine3A::from_axis_angle(
-                axis_angle.axis.into(),
-                axis_angle.angle * PI / 180.0,
+                axis_angle.axis.normalize().into(),
+                -axis_angle.angle * PI / 180.0,
             ))),
         }
     }
