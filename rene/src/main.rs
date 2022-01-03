@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashSet,
     ffi::{c_void, CStr, CString},
     fs::File,
@@ -18,6 +19,7 @@ use ash::{
 use clap::Parser;
 use glam::Vec3A;
 use nom::error::convert_error;
+use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{material::EnumMaterial, IndexData, Uniform, Vertex};
 use scene::Scene;
@@ -46,12 +48,19 @@ fn main() {
     const N_SAMPLES: u32 = 5000;
     const N_SAMPLES_ITER: u32 = 100;
 
-    let opts: Opts = Opts::parse();
+    let mut opts: Opts = Opts::parse();
     let mut pbrt_file = String::new();
     File::open(&opts.pbrt_path)
         .unwrap()
         .read_to_string(&mut pbrt_file)
         .unwrap();
+
+    opts.pbrt_path.pop();
+
+    match expand_include(pbrt_file.as_str(), &opts.pbrt_path).unwrap() {
+        Cow::Borrowed(_) => {}
+        Cow::Owned(s) => pbrt_file = s,
+    }
 
     let parsed_scene = match pbrt_parser::parse_pbrt(&pbrt_file) {
         Ok(scene) => scene,

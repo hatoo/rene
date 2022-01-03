@@ -2,7 +2,7 @@ use glam::{vec3a, Vec3A};
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
-    character::complete::{alphanumeric1, char, digit1, one_of},
+    character::complete::{char, digit1, none_of, one_of},
     combinator::{cut, eof, map, opt, recognize, value},
     error::ParseError,
     multi::many0,
@@ -10,6 +10,8 @@ use nom::{
     sequence::{preceded, terminated},
     AsChar, Finish, IResult,
 };
+
+pub mod include;
 
 pub enum Scene<'a> {
     LookAt(LookAt),
@@ -159,7 +161,7 @@ fn space<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str
     take_while1(move |c| chars.contains(c))(input)
 }
 
-fn sp<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
+pub(crate) fn sp<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
     value((), many0(alt((space, comment))))(input)
 }
 
@@ -171,9 +173,9 @@ fn parse_vec3<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Ve
     Ok((rest, Vec3A::new(x1, x2, x3)))
 }
 
-fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+pub(crate) fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     fn parse<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
-        escaped(alphanumeric1, '\\', one_of("\"n\\"))(i)
+        escaped(none_of("\""), '\\', one_of("\"n\\"))(i)
     }
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(i)
 }
@@ -432,6 +434,16 @@ mod test {
     fn test_parse_integer() {
         assert_eq!(integer::<Error<&str>>("42"), Ok(("", 42)));
         assert_eq!(integer::<Error<&str>>("-42"), Ok(("", -42)));
+    }
+
+    #[test]
+    fn test_parse_str() {
+        assert_eq!(parse_str::<Error<&str>>(r#""aaa""#), Ok(("", "aaa")));
+
+        assert_eq!(
+            parse_str::<Error<&str>>(r#""geometry/room-teapot.pbrt""#),
+            Ok(("", "geometry/room-teapot.pbrt"))
+        );
     }
 
     #[test]
