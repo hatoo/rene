@@ -73,7 +73,7 @@ impl Scene {
             match w {
                 IntermediateWorld::Attribute(worlds) => self.append_world(state, worlds)?,
                 IntermediateWorld::Matrix(m) => {
-                    state.current_matrix = m * state.current_matrix;
+                    state.current_matrix = state.current_matrix * m;
                 }
                 IntermediateWorld::WorldObject(obj) => match obj {
                     WorldObject::LightSource(lightsource) => match lightsource {
@@ -90,8 +90,8 @@ impl Scene {
                     WorldObject::Shape(shape) => match shape {
                         Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
                             shader_offset: ShaderIndex::SPHERE,
-                            matrix: Affine3A::from_scale(vec3(radius, radius, radius))
-                                * state.current_matrix,
+                            matrix: state.current_matrix
+                                * Affine3A::from_scale(vec3(radius, radius, radius)),
                             material_index: state
                                 .current_material_index
                                 .ok_or(CreateSceneError::NoMaterial)?,
