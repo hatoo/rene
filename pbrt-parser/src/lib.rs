@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use glam::{vec3a, Vec3A};
 use nom::{
     branch::alt,
@@ -19,11 +21,17 @@ pub enum Scene<'a> {
     World(Vec<World<'a>>),
 }
 
+pub struct AxisAngle {
+    pub axis: Vec3A,
+    pub angle: f32,
+}
+
 pub enum World<'a> {
     WorldObject(WorldObject<'a>),
     Attribute(Vec<World<'a>>),
     Translate(Vec3A),
     Scale(Vec3A),
+    Rotate(AxisAngle),
 }
 
 #[derive(PartialEq, Debug)]
@@ -172,6 +180,21 @@ fn parse_vec3<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Ve
     let (rest, x3) = preceded(sp, float)(rest)?;
 
     Ok((rest, Vec3A::new(x1, x2, x3)))
+}
+
+fn parse_axis_angle<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, AxisAngle, E> {
+    let (rest, a) = preceded(sp, float)(input)?;
+    let (rest, x) = preceded(sp, float)(rest)?;
+    let (rest, y) = preceded(sp, float)(rest)?;
+    let (rest, z) = preceded(sp, float)(rest)?;
+
+    Ok((
+        rest,
+        AxisAngle {
+            axis: vec3a(x, y, z),
+            angle: a * PI / 180.0,
+        },
+    ))
 }
 
 pub(crate) fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -373,12 +396,18 @@ fn parse_scale<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, V
     preceded(sp, parse_vec3)(rest)
 }
 
+fn parse_rotate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, AxisAngle, E> {
+    let (rest, _) = tag("Rotate")(input)?;
+    preceded(sp, parse_axis_angle)(rest)
+}
+
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
         map(parse_transrate, |v| World::Translate(v)),
         map(parse_scale, |v| World::Scale(v)),
+        map(parse_rotate, |v| World::Rotate(v)),
     ))(input)
 }
 
