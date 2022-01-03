@@ -89,14 +89,14 @@ impl PerspectiveCamera {
             (viewport_width, viewport_height)
         };
 
-        let w = (look_at.eye - look_at.look_at).normalize();
+        let w = (look_at.look_at - look_at.eye).normalize();
         let u = look_at.up.cross(w).normalize();
         let v = w.cross(u);
 
         let origin = look_at.eye;
         let horizontal = viewport_width * u;
         let vertical = viewport_height * v;
-        let lower_left_corner = -horizontal / 2.0 - vertical / 2.0 - w;
+        let lower_left_corner = -horizontal / 2.0 - vertical / 2.0 + w;
 
         Ray {
             origin,
