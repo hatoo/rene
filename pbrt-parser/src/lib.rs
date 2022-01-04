@@ -3,7 +3,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{char, digit1, none_of, one_of},
-    combinator::{cut, eof, map, opt, recognize, value},
+    combinator::{complete, cut, map, recognize, value},
     error::ParseError,
     multi::many0,
     number::complete::float,
@@ -469,11 +469,7 @@ fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, V
 }
 
 fn parse_all<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
-    let (rest, scene) = parse_scene(input)?;
-    let (rest, _) = opt(sp)(rest)?;
-    let (rest, _) = eof(rest)?;
-
-    Ok((rest, scene))
+    complete(parse_scene)(input)
 }
 
 pub fn parse_pbrt<'a, E: ParseError<&'a str>>(input: &'a str) -> Result<Vec<Scene>, E> {
