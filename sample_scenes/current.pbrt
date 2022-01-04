@@ -1,7 +1,12 @@
 LookAt 3 4 1.5  # eye
-       .0 .0 0  # look at point
+       .5 .5 0  # look at point
        0 0 1    # up vector
 Camera "perspective" "float fov" 45
+
+Sampler "halton" "integer pixelsamples" 128
+Integrator "path"
+Film "image" "string filename" "out.png"
+     "integer xresolution" [400] "integer yresolution" [400]
 
 WorldBegin
 
@@ -14,12 +19,11 @@ AttributeBegin
 AttributeEnd
 
 AttributeBegin
-  Material "matte" "rgb Kd" [0.1 0.2 0.1]
+  Material "matte" "rgb Kd" [ .1 .2 .1 ]
   Translate 0 0 -1
   Shape "trianglemesh"
       "integer indices" [0 1 2 0 2 3]
       "point P" [ -20 -20 0   20 -20 0   20 20 0   -20 20 0 ]
-      "normal N" [ 0 0 1   0 0 1   0 0 1   0 0 1 ]
 AttributeEnd
 
 WorldEnd
