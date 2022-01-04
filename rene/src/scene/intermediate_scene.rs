@@ -41,6 +41,7 @@ pub struct Infinite {
 
 pub enum Material {
     Matte(Matte),
+    Glass,
 }
 
 pub struct Matte {
@@ -127,6 +128,7 @@ impl IntermediateWorld {
                             Matte { color },
                         ))))
                     }
+                    "glass" => Ok(Self::WorldObject(WorldObject::Material(Material::Glass))),
                     t => Err(Error::InvalidMaterial(t.to_string())),
                 },
                 pbrt_parser::WorldObjectType::Shape => match obj.t {

@@ -96,6 +96,10 @@ impl Scene {
                             state.current_material_index = Some(self.materials.len());
                             self.materials.push(EnumMaterial::new_lambertian(color));
                         }
+                        Material::Glass => {
+                            state.current_material_index = Some(self.materials.len());
+                            self.materials.push(EnumMaterial::new_dielectric(1.0));
+                        }
                     },
                     WorldObject::Shape(shape) => match shape {
                         Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {

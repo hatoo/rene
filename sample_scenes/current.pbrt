@@ -14,7 +14,7 @@ WorldBegin
 LightSource "infinite" "rgb L" [.4 .45 .5]
 
 AttributeBegin
-  Material "matte" "rgb Kd" [ .7 .2 .2 ]
+  Material "glass"
   Shape "sphere" "float radius" 1
 AttributeEnd
 
