@@ -43,8 +43,6 @@ fn main() {
     simple_logger::init().unwrap();
 
     const ENABLE_VALIDATION_LAYER: bool = true;
-    const WIDTH: u32 = 1200;
-    const HEIGHT: u32 = 800;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
     const N_SAMPLES: u32 = 5000;
@@ -243,8 +241,8 @@ fn main() {
             .format(COLOR_FORMAT)
             .extent(
                 vk::Extent3D::builder()
-                    .width(WIDTH)
-                    .height(HEIGHT)
+                    .width(scene.film.xresolution)
+                    .height(scene.film.yresolution)
                     .depth(1)
                     .build(),
             )
@@ -961,8 +959,8 @@ fn main() {
                         &sbt_miss_region,
                         &sbt_hit_region,
                         &sbt_call_region,
-                        WIDTH,
-                        HEIGHT,
+                        scene.film.xresolution,
+                        scene.film.yresolution,
                         1,
                     );
                 }
@@ -998,8 +996,8 @@ fn main() {
             .format(COLOR_FORMAT)
             .extent(
                 vk::Extent3D::builder()
-                    .width(WIDTH)
-                    .height(HEIGHT)
+                    .width(scene.film.xresolution)
+                    .height(scene.film.yresolution)
                     .depth(1)
                     .build(),
             )
@@ -1092,8 +1090,8 @@ fn main() {
             )
             .extent(
                 vk::Extent3D::builder()
-                    .width(WIDTH)
-                    .height(HEIGHT)
+                    .width(scene.film.xresolution)
+                    .height(scene.film.yresolution)
                     .depth(1)
                     .build(),
             )
@@ -1187,7 +1185,11 @@ fn main() {
 
     let mut data = unsafe { data.offset(subresource_layout.offset as isize) };
 
-    let mut png_encoder = png::Encoder::new(File::create("out.png").unwrap(), WIDTH, HEIGHT);
+    let mut png_encoder = png::Encoder::new(
+        File::create(scene.film.filename).unwrap(),
+        scene.film.xresolution,
+        scene.film.yresolution,
+    );
 
     png_encoder.set_depth(png::BitDepth::Eight);
     png_encoder.set_color(png::ColorType::Rgba);
@@ -1195,12 +1197,13 @@ fn main() {
     let mut png_writer = png_encoder
         .write_header()
         .unwrap()
-        .into_stream_writer_with_size((4 * WIDTH) as usize)
+        .into_stream_writer_with_size((4 * scene.film.xresolution) as usize)
         .unwrap();
 
     let scale = 1.0 / N_SAMPLES as f32;
-    for _ in 0..HEIGHT {
-        let row = unsafe { std::slice::from_raw_parts(data, 4 * 4 * WIDTH as usize) };
+    for _ in 0..scene.film.yresolution {
+        let row =
+            unsafe { std::slice::from_raw_parts(data, 4 * 4 * scene.film.xresolution as usize) };
         let row_f32: &[f32] = bytemuck::cast_slice(row);
         let row_rgba8: Vec<u8> = row_f32
             .iter()

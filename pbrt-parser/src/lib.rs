@@ -40,18 +40,19 @@ pub struct LookAt {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Value {
+pub enum Value<'a> {
     Float(Vec<f32>),
     Integer(Vec<i32>),
     Rgb(Vec<f32>),
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
+    String(&'a str),
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Argument<'a> {
     pub name: &'a str,
-    pub value: Value,
+    pub value: Value<'a>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -59,6 +60,7 @@ pub enum SceneObjectType {
     Camera,
     Sampler,
     Integrator,
+    Film,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -114,6 +116,32 @@ impl<'a, T> Object<'a, T> {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
                 }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
+    pub fn get_integer(&self, name: &str) -> Option<Result<i32, ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Integer(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
+    pub fn get_str(&self, name: &str) -> Option<Result<&str, ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::String(str) => Ok(*str),
                 _ => Err(ArgumentError::UnmatchedType),
             })
     }
@@ -211,6 +239,7 @@ enum ArgumentType {
     Integer,
     Point,
     Normal,
+    String,
 }
 
 fn parse_argument_type<'a, E: ParseError<&'a str>>(
@@ -219,6 +248,7 @@ fn parse_argument_type<'a, E: ParseError<&'a str>>(
     alt((
         value(ArgumentType::Float, tag("float")),
         value(ArgumentType::Integer, tag("integer")),
+        value(ArgumentType::String, tag("string")),
         value(ArgumentType::Point, tag("point")),
         value(ArgumentType::Normal, tag("normal")),
         value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
@@ -290,6 +320,7 @@ impl ArgumentType {
                     Value::Normal(fs.chunks(3).map(|v| vec3a(v[0], v[1], v[2])).collect()),
                 ))
             }
+            ArgumentType::String => map(parse_str, Value::String)(input),
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
         }
@@ -333,6 +364,7 @@ fn parse_scene_object_type<'a, E: ParseError<&'a str>>(
         value(SceneObjectType::Camera, tag("Camera")),
         value(SceneObjectType::Sampler, tag("Sampler")),
         value(SceneObjectType::Integrator, tag("Integrator")),
+        value(SceneObjectType::Film, tag("Film")),
     ))(input)
 }
 

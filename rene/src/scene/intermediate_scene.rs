@@ -62,6 +62,22 @@ pub struct TriangleMesh {
     pub indices: Vec<u32>,
 }
 
+pub struct Film {
+    pub filename: String,
+    pub xresolution: u32,
+    pub yresolution: u32,
+}
+
+impl Default for Film {
+    fn default() -> Self {
+        Self {
+            filename: "out.png".to_string(),
+            xresolution: 640,
+            yresolution: 480,
+        }
+    }
+}
+
 pub enum IntermediateScene {
     LookAt(LookAt),
     SceneObject(SceneObject),
@@ -70,12 +86,15 @@ pub enum IntermediateScene {
     Sampler,
     // TODO implement it
     Integrator,
+    Film(Film),
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Invalid Camera type {0}")]
     InvalidCamera(String),
+    #[error("Invalid Film type {0}")]
+    InvalidFilm(String),
     #[error("Invalid LightSource type {0}")]
     InvalidLightSource(String),
     #[error("Invalid Material type {0}")]
@@ -213,6 +232,21 @@ impl IntermediateScene {
                         ))))
                     }
                     t => Err(Error::InvalidCamera(t.to_string())),
+                },
+                pbrt_parser::SceneObjectType::Film => match obj.t {
+                    "image" => {
+                        let filename = obj
+                            .get_str("filename")
+                            .ok_or(Error::ArgumentNotFound("filename".to_string()))??;
+                        let xresolution = obj.get_integer("xresolution").unwrap_or(Ok(640))? as u32;
+                        let yresolution = obj.get_integer("yresolution").unwrap_or(Ok(480))? as u32;
+                        Ok(Self::Film(Film {
+                            filename: filename.to_string(),
+                            xresolution,
+                            yresolution,
+                        }))
+                    }
+                    t => Err(Error::InvalidFilm(t.to_string())),
                 },
             },
             pbrt_parser::Scene::World(worlds) => worlds

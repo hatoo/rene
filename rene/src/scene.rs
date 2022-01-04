@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::ShaderIndex;
 
 use self::intermediate_scene::{
-    Camera, Infinite, IntermediateScene, IntermediateWorld, LightSource, Material, Matte,
+    Camera, Film, Infinite, IntermediateScene, IntermediateWorld, LightSource, Material, Matte,
     SceneObject, Shape, Sphere, TriangleMesh, WorldObject,
 };
 
@@ -21,6 +21,7 @@ pub struct TlasInstance {
 
 #[derive(Default)]
 pub struct Scene {
+    pub film: Film,
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
     pub materials: Vec<EnumMaterial>,
@@ -51,6 +52,9 @@ impl Scene {
                 }
                 IntermediateScene::Integrator => {
                     log::info!("Integrator is not yet implemented. Continue.");
+                }
+                IntermediateScene::Film(film) => {
+                    scene.film = film;
                 }
                 IntermediateScene::LookAt(intermediate_scene::LookAt { eye, look_at, up }) => {
                     scene.uniform.look_at = LookAt { eye, look_at, up };
