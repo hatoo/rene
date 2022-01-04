@@ -3,8 +3,8 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{char, digit1, none_of, one_of},
-    combinator::{complete, cut, eof, map, recognize, value},
-    error::ParseError,
+    combinator::{cut, eof, map, recognize, value},
+    error::{Error, ParseError},
     multi::many0,
     number::complete::float,
     sequence::{preceded, terminated},
@@ -457,19 +457,28 @@ fn parse_world_statement<'a, E: ParseError<&'a str>>(
     Ok((rest, worlds))
 }
 
-fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
-    many0(preceded(
-        sp,
-        alt((
-            map(parse_look_at, |l| Scene::LookAt(l)),
-            map(parse_scene_object, |o| Scene::SceneObject(o)),
-            map(parse_world_statement, |w| Scene::World(w)),
-        )),
+fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Scene, E> {
+    alt((
+        map(parse_look_at, |l| Scene::LookAt(l)),
+        map(parse_scene_object, |o| Scene::SceneObject(o)),
+        map(parse_world_statement, |w| Scene::World(w)),
     ))(input)
 }
 
 fn parse_all<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<Scene>, E> {
-    complete(terminated(parse_scene, eof))(input)
+    // complete(terminated(parse_scene, eof))(input)
+    let mut result = Vec::new();
+    let mut rest = input;
+
+    loop {
+        if let Ok((rest, _)) = eof::<_, Error<_>>(rest) {
+            return Ok((rest, result));
+        }
+
+        let (r, scene) = preceded(sp, parse_scene)(rest)?;
+        result.push(scene);
+        rest = r;
+    }
 }
 
 pub fn parse_pbrt<'a, E: ParseError<&'a str>>(input: &'a str) -> Result<Vec<Scene>, E> {
