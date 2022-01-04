@@ -40,6 +40,8 @@ struct Opts {
 }
 
 fn main() {
+    simple_logger::init().unwrap();
+
     const ENABLE_VALIDATION_LAYER: bool = true;
     const WIDTH: u32 = 1200;
     const HEIGHT: u32 = 800;

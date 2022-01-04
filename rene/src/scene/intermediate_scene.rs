@@ -66,6 +66,10 @@ pub enum IntermediateScene {
     LookAt(LookAt),
     SceneObject(SceneObject),
     World(Vec<IntermediateWorld>),
+    // TODO implement it
+    Sampler,
+    // TODO implement it
+    Integrator,
 }
 
 #[derive(Error, Debug)]
@@ -199,6 +203,8 @@ impl IntermediateScene {
                 up: look_at.up,
             })),
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
+                pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
+                pbrt_parser::SceneObjectType::Integrator => Ok(Self::Integrator),
                 pbrt_parser::SceneObjectType::Camera => match obj.t {
                     "perspective" => {
                         let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;

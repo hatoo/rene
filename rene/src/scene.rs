@@ -46,6 +46,12 @@ impl Scene {
         let mut scene = Self::default();
         for desc in scene_description {
             match IntermediateScene::from_scene(desc)? {
+                IntermediateScene::Sampler => {
+                    log::info!("Sampler is not yet implemented. Continue.");
+                }
+                IntermediateScene::Integrator => {
+                    log::info!("Integrator is not yet implemented. Continue.");
+                }
                 IntermediateScene::LookAt(intermediate_scene::LookAt { eye, look_at, up }) => {
                     scene.uniform.look_at = LookAt { eye, look_at, up };
                 }

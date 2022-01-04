@@ -57,6 +57,8 @@ pub struct Argument<'a> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SceneObjectType {
     Camera,
+    Sampler,
+    Integrator,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -327,7 +329,11 @@ fn parse_look_at<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
 fn parse_scene_object_type<'a, E: ParseError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, SceneObjectType, E> {
-    alt((value(SceneObjectType::Camera, tag("Camera")),))(input)
+    alt((
+        value(SceneObjectType::Camera, tag("Camera")),
+        value(SceneObjectType::Sampler, tag("Sampler")),
+        value(SceneObjectType::Integrator, tag("Integrator")),
+    ))(input)
 }
 
 fn parse_world_object_type<'a, E: ParseError<&'a str>>(
