@@ -24,12 +24,18 @@ pub struct AxisAngle {
     pub angle: f32,
 }
 
+pub struct Texture<'a> {
+    pub name: &'a str,
+    pub obj: Object<'a, ()>,
+}
+
 pub enum World<'a> {
     WorldObject(WorldObject<'a>),
     Attribute(Vec<World<'a>>),
     Translate(Vec3A),
     Scale(Vec3A),
     Rotate(AxisAngle),
+    Texture(Texture<'a>),
 }
 
 #[derive(PartialEq, Debug)]
@@ -47,6 +53,7 @@ pub enum Value<'a> {
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
     String(&'a str),
+    Texture(&'a str),
 }
 
 #[derive(PartialEq, Debug)]
@@ -85,6 +92,11 @@ pub enum ArgumentError {
     UnmatchedValueLength,
     #[error("unmatched type")]
     UnmatchedType,
+}
+
+pub enum TextureValue<'a> {
+    Color(Vec3A),
+    Texture(&'a str),
 }
 
 impl<'a, T> Object<'a, T> {
@@ -142,6 +154,23 @@ impl<'a, T> Object<'a, T> {
             .find(|a| a.name == name)
             .map(|a| match &a.value {
                 Value::String(str) => Ok(*str),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
+    pub fn get_texture(&self, name: &str) -> Option<Result<TextureValue, ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Texture(str) => Ok(TextureValue::Texture(*str)),
+                Value::Rgb(v) => {
+                    if v.len() == 3 {
+                        Ok(TextureValue::Color(vec3a(v[0], v[1], v[2])))
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
                 _ => Err(ArgumentError::UnmatchedType),
             })
     }
@@ -240,6 +269,7 @@ enum ArgumentType {
     Point,
     Normal,
     String,
+    Texture,
 }
 
 fn parse_argument_type<'a, E: ParseError<&'a str>>(
@@ -251,6 +281,7 @@ fn parse_argument_type<'a, E: ParseError<&'a str>>(
         value(ArgumentType::String, tag("string")),
         value(ArgumentType::Point, tag("point")),
         value(ArgumentType::Normal, tag("normal")),
+        value(ArgumentType::Texture, tag("texture")),
         value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
     ))(input)
 }
@@ -321,6 +352,7 @@ impl ArgumentType {
                 ))
             }
             ArgumentType::String => map(parse_str, Value::String)(input),
+            ArgumentType::Texture => map(parse_str, Value::Texture)(input),
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
         }
@@ -437,8 +469,29 @@ fn parse_rotate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, 
     preceded(sp, parse_axis_angle)(rest)
 }
 
+fn parse_texture<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Texture<'a>, E> {
+    let (rest, _) = tag("Texture")(input)?;
+    let (rest, name) = preceded(sp, parse_str)(rest)?;
+    let (rest, _) = preceded(sp, tag("\"spectrum\""))(rest)?;
+    let (rest, t) = preceded(sp, parse_str)(rest)?;
+    let (rest, arguments) = preceded(sp, many0(preceded(sp, parse_argument)))(rest)?;
+
+    Ok((
+        rest,
+        Texture {
+            name,
+            obj: Object {
+                object_type: (),
+                t,
+                arguments,
+            },
+        },
+    ))
+}
+
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
+        map(parse_texture, |w| World::Texture(w)),
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
         map(parse_transrate, |v| World::Translate(v)),

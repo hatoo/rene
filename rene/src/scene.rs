@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+
 use glam::{vec3, Affine3A};
-use rene_shader::{material::EnumMaterial, LookAt, Uniform};
+use rene_shader::{material::EnumMaterial, texture::EnumTexture, LookAt, Uniform};
 use thiserror::Error;
 
 use crate::ShaderIndex;
 
 use self::intermediate_scene::{
-    Camera, Film, Infinite, IntermediateScene, IntermediateWorld, LightSource, Material, Matte,
-    SceneObject, Shape, Sphere, TriangleMesh, WorldObject,
+    Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld, LightSource,
+    Material, Matte, SceneObject, Shape, Sphere, TextureOrColor, TriangleMesh, WorldObject,
 };
 
 pub mod intermediate_scene;
@@ -19,12 +21,13 @@ pub struct TlasInstance {
     pub blas_index: Option<usize>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Scene {
     pub film: Film,
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
     pub materials: Vec<EnumMaterial>,
+    pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
 }
 
@@ -34,12 +37,15 @@ pub enum CreateSceneError {
     IntermediateError(#[from] intermediate_scene::Error),
     #[error("No Material")]
     NoMaterial,
+    #[error("Not Found Texture: {0}")]
+    NotFoundTexture(String),
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone)]
 struct WorldState {
     current_material_index: Option<usize>,
     current_matrix: Affine3A,
+    textures: HashMap<String, u32>,
 }
 
 impl Scene {
@@ -81,9 +87,46 @@ impl Scene {
     ) -> Result<(), CreateSceneError> {
         for w in worlds {
             match w {
-                IntermediateWorld::Attribute(worlds) => self.append_world(state, worlds)?,
+                IntermediateWorld::Attribute(worlds) => self.append_world(state.clone(), worlds)?,
                 IntermediateWorld::Matrix(m) => {
                     state.current_matrix = state.current_matrix * m;
+                }
+                IntermediateWorld::Texture(texture) => {
+                    let inner = match texture.inner {
+                        InnerTexture::CheckerBoard(checkerboard) => {
+                            let tex0 = match checkerboard.tex0 {
+                                TextureOrColor::Color(color) => {
+                                    let texture_index = self.textures.len();
+                                    self.textures.push(EnumTexture::new_solid(color));
+                                    texture_index as u32
+                                }
+                                TextureOrColor::Texture(name) => *state
+                                    .textures
+                                    .get(&name)
+                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                            };
+                            let tex1 = match checkerboard.tex1 {
+                                TextureOrColor::Color(color) => {
+                                    let texture_index = self.textures.len();
+                                    self.textures.push(EnumTexture::new_solid(color));
+                                    texture_index as u32
+                                }
+                                TextureOrColor::Texture(name) => *state
+                                    .textures
+                                    .get(&name)
+                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                            };
+                            EnumTexture::new_checkerboard(
+                                tex0,
+                                tex1,
+                                checkerboard.uscale,
+                                checkerboard.vscale,
+                            )
+                        }
+                    };
+                    let texture_index = self.textures.len();
+                    self.textures.push(inner);
+                    state.textures.insert(texture.name, texture_index as u32);
                 }
                 IntermediateWorld::WorldObject(obj) => match obj {
                     WorldObject::LightSource(lightsource) => match lightsource {
@@ -92,9 +135,22 @@ impl Scene {
                         }
                     },
                     WorldObject::Material(material) => match material {
-                        Material::Matte(Matte { color }) => {
+                        Material::Matte(Matte { albedo }) => {
+                            let texture_index = match albedo {
+                                TextureOrColor::Color(color) => {
+                                    let texture_index = self.textures.len();
+                                    self.textures.push(EnumTexture::new_solid(color));
+                                    texture_index as u32
+                                }
+                                TextureOrColor::Texture(name) => *state
+                                    .textures
+                                    .get(&name)
+                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                            };
+
                             state.current_material_index = Some(self.materials.len());
-                            self.materials.push(EnumMaterial::new_lambertian(color));
+                            self.materials
+                                .push(EnumMaterial::new_lambertian(texture_index));
                         }
                         Material::Glass => {
                             state.current_material_index = Some(self.materials.len());

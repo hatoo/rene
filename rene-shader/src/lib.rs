@@ -11,6 +11,7 @@ use core::f32::consts::PI;
 use material::{EnumMaterial, Material, Scatter};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
+use texture::EnumTexture;
 
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
@@ -25,6 +26,7 @@ pub mod camera;
 pub mod material;
 pub mod math;
 pub mod rand;
+pub mod texture;
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
@@ -123,6 +125,7 @@ pub fn main_ray_generation(
     #[spirv(descriptor_set = 0, binding = 1)] top_level_as: &AccelerationStructure,
     #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] materials: &[EnumMaterial],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] textures: &[EnumTexture],
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
@@ -164,6 +167,7 @@ pub fn main_ray_generation(
         } else {
             let mut scatter = Scatter::default();
             if unsafe { materials.index_unchecked(payload.material as usize) }.scatter(
+                textures,
                 &ray,
                 payload,
                 &mut rng,
@@ -242,7 +246,7 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] index_data: &[IndexData],
 ) {
     const INV_PI: f32 = 1.0 / PI;
 
@@ -288,9 +292,9 @@ pub fn triangle_closest_hit(
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] index_data: &[IndexData],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] vertices: &[Vertex],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] vertices: &[Vertex],
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(primitive_id)] primitive_id: u32,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
