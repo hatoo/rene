@@ -1,4 +1,4 @@
-use glam::{vec3a, Affine3A, Vec3A};
+use glam::{vec2, vec3a, Affine3A, Vec2, Vec3A};
 use pbrt_parser::{ArgumentError, TextureValue};
 use rene_shader::{camera::PerspectiveCamera, Vertex};
 use std::f32::consts::PI;
@@ -221,6 +221,13 @@ impl IntermediateWorld {
                             .map(|r| r.map(Some))
                             .unwrap_or(Ok(None))?;
 
+                        let st = obj
+                            .get_floats("st")
+                            .map(|r| r.map(Some))
+                            .unwrap_or(Ok(None))?;
+
+                        // TODO st length check
+
                         if indices.len() % 3 != 0 {
                             return Err(Error::InvalidArgument(
                                 ArgumentError::UnmatchedValueLength,
@@ -240,9 +247,13 @@ impl IntermediateWorld {
                                     vertices: vertices
                                         .iter()
                                         .zip(normal.iter())
-                                        .map(|(position, normal)| Vertex {
+                                        .enumerate()
+                                        .map(|(i, (position, normal))| Vertex {
                                             position: *position,
                                             normal: *normal,
+                                            uv: st
+                                                .map(|st| vec2(st[2 * i], st[2 * i + 1]))
+                                                .unwrap_or(Vec2::ZERO),
                                         })
                                         .collect(),
                                 },
@@ -253,9 +264,13 @@ impl IntermediateWorld {
                                     indices,
                                     vertices: vertices
                                         .iter()
-                                        .map(|position| Vertex {
+                                        .enumerate()
+                                        .map(|(i, position)| Vertex {
                                             position: *position,
                                             normal: Vec3A::ZERO,
+                                            uv: st
+                                                .map(|st| vec2(st[2 * i], st[2 * i + 1]))
+                                                .unwrap_or(Vec2::ZERO),
                                         })
                                         .collect(),
                                 },

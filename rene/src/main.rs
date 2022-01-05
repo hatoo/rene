@@ -17,7 +17,7 @@ use ash::{
 };
 
 use clap::Parser;
-use glam::Vec3A;
+use glam::{Vec2, Vec3A};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
@@ -1878,6 +1878,7 @@ impl SceneBuffers {
             global_vertices.push(Vertex {
                 position: Vec3A::ZERO,
                 normal: Vec3A::ZERO,
+                uv: Vec2::ZERO,
             });
         }
 

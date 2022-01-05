@@ -284,6 +284,7 @@ pub fn sphere_closest_hit(
 pub struct Vertex {
     pub position: Vec3A,
     pub normal: Vec3A,
+    pub uv: Vec2,
 }
 
 #[spirv(closest_hit)]
@@ -333,6 +334,8 @@ pub fn triangle_closest_hit(
         v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z
     };
 
+    let uv = v0.uv * barycentrics.x + v1.uv * barycentrics.y + v2.uv * barycentrics.z;
+
     let hit_pos = vec3a(
         object_to_world.x.dot(pos),
         object_to_world.y.dot(pos),
@@ -346,13 +349,7 @@ pub fn triangle_closest_hit(
     )
     .normalize();
 
-    *out = RayPayload::new_hit(
-        hit_pos,
-        normal,
-        world_ray_direction,
-        material_index,
-        vec2(0.0, 0.0),
-    );
+    *out = RayPayload::new_hit(hit_pos, normal, world_ray_direction, material_index, uv);
 }
 
 #[spirv(any_hit)]

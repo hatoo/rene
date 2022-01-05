@@ -46,7 +46,7 @@ impl<'a> Texture for CheckerBoard<'a> {
         let x = uv.x * w;
         let y = uv.y * h;
 
-        if (x as u32 % 2 == 0) ^ (y as u32 % 2 == 0) {
+        if (x as u32 % 2 == 1) ^ (y as u32 % 2 == 0) {
             ColorOrTarget {
                 t: true,
                 index: tex0,
