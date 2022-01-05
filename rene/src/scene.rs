@@ -154,7 +154,7 @@ impl Scene {
                         }
                         Material::Glass => {
                             state.current_material_index = Some(self.materials.len());
-                            self.materials.push(EnumMaterial::new_dielectric(1.0));
+                            self.materials.push(EnumMaterial::new_dielectric(1.5));
                         }
                     },
                     WorldObject::Shape(shape) => match shape {
