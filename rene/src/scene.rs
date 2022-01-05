@@ -94,17 +94,6 @@ impl Scene {
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
                         InnerTexture::CheckerBoard(checkerboard) => {
-                            let tex0 = match checkerboard.tex0 {
-                                TextureOrColor::Color(color) => {
-                                    let texture_index = self.textures.len();
-                                    self.textures.push(EnumTexture::new_solid(color));
-                                    texture_index as u32
-                                }
-                                TextureOrColor::Texture(name) => *state
-                                    .textures
-                                    .get(&name)
-                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                            };
                             let tex1 = match checkerboard.tex1 {
                                 TextureOrColor::Color(color) => {
                                     let texture_index = self.textures.len();
@@ -116,9 +105,20 @@ impl Scene {
                                     .get(&name)
                                     .ok_or(CreateSceneError::NotFoundTexture(name))?,
                             };
+                            let tex2 = match checkerboard.tex2 {
+                                TextureOrColor::Color(color) => {
+                                    let texture_index = self.textures.len();
+                                    self.textures.push(EnumTexture::new_solid(color));
+                                    texture_index as u32
+                                }
+                                TextureOrColor::Texture(name) => *state
+                                    .textures
+                                    .get(&name)
+                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                            };
                             EnumTexture::new_checkerboard(
-                                tex0,
                                 tex1,
+                                tex2,
                                 checkerboard.uscale,
                                 checkerboard.vscale,
                             )

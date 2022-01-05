@@ -46,8 +46,8 @@ pub enum TextureOrColor {
 }
 
 pub struct CheckerBoard {
-    pub tex0: TextureOrColor,
     pub tex1: TextureOrColor,
+    pub tex2: TextureOrColor,
     pub uscale: f32,
     pub vscale: f32,
 }
@@ -137,11 +137,11 @@ impl IntermediateWorld {
         match world {
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
-                    let tex0 = texture
+                    let tex1 = texture
                         .obj
                         .get_texture("tex1")
                         .unwrap_or(Ok(TextureValue::Color(vec3a(0.0, 0.0, 0.0))))?;
-                    let tex1 = texture
+                    let tex2 = texture
                         .obj
                         .get_texture("tex2")
                         .unwrap_or(Ok(TextureValue::Color(vec3a(1.0, 1.0, 1.0))))?;
@@ -149,11 +149,11 @@ impl IntermediateWorld {
                     let uscale = texture.obj.get_float("uscale").unwrap_or(Ok(2.0))?;
                     let vscale = texture.obj.get_float("vscale").unwrap_or(Ok(2.0))?;
 
-                    let tex0 = match tex0 {
+                    let tex1 = match tex1 {
                         TextureValue::Color(c) => TextureOrColor::Color(c),
                         TextureValue::Texture(name) => TextureOrColor::Texture(name.to_string()),
                     };
-                    let tex1 = match tex1 {
+                    let tex2 = match tex2 {
                         TextureValue::Color(c) => TextureOrColor::Color(c),
                         TextureValue::Texture(name) => TextureOrColor::Texture(name.to_string()),
                     };
@@ -161,8 +161,8 @@ impl IntermediateWorld {
                     Ok(Self::Texture(Texture {
                         name: texture.name.to_string(),
                         inner: InnerTexture::CheckerBoard(CheckerBoard {
-                            tex0,
                             tex1,
+                            tex2,
                             uscale,
                             vscale,
                         }),

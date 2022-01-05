@@ -40,8 +40,8 @@ impl<'a> Texture for CheckerBoard<'a> {
         let w = self.data.v0.x;
         let h = self.data.v0.y;
 
-        let tex0 = self.data.u0.x;
-        let tex1 = self.data.u0.y;
+        let tex1 = self.data.u0.x;
+        let tex2 = self.data.u0.y;
 
         let x = uv.x * w;
         let y = uv.y * h;
@@ -49,13 +49,13 @@ impl<'a> Texture for CheckerBoard<'a> {
         if (x as u32 % 2 == 1) ^ (y as u32 % 2 == 0) {
             ColorOrTarget {
                 t: true,
-                index: tex0,
+                index: tex1,
                 color_or_uv: vec3a(x.fract(), y.fract(), 0.0),
             }
         } else {
             ColorOrTarget {
                 t: true,
-                index: tex1,
+                index: tex2,
                 color_or_uv: vec3a(x.fract(), y.fract(), 0.0),
             }
         }
@@ -83,11 +83,11 @@ impl EnumTexture {
         }
     }
 
-    pub fn new_checkerboard(tex0: u32, tex1: u32, uscale: f32, vscale: f32) -> Self {
+    pub fn new_checkerboard(tex1: u32, tex2: u32, uscale: f32, vscale: f32) -> Self {
         Self {
             t: 1,
             data: EnumTextureData {
-                u0: uvec4(tex0, tex1, 0, 0),
+                u0: uvec4(tex1, tex2, 0, 0),
                 v0: vec4(uscale, vscale, 0.0, 0.0),
             },
         }
