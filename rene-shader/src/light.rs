@@ -48,10 +48,14 @@ impl<'a> Light for Distant<'a> {
 
 impl Light for EnumLight {
     fn ray_target(&self, position: Vec3A) -> (Vec3A, f32) {
-        Distant { data: &self.data }.ray_target(position)
+        match self.t {
+            _ => Distant { data: &self.data }.ray_target(position),
+        }
     }
 
     fn color(&self, position: Vec3A) -> Vec3A {
-        Distant { data: &self.data }.color(position)
+        match self.t {
+            _ => Distant { data: &self.data }.color(position),
+        }
     }
 }
