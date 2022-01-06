@@ -1264,7 +1264,7 @@ fn main() {
         let row_f32: &[f32] = bytemuck::cast_slice(row);
         let row_rgba8: Vec<u8> = row_f32
             .iter()
-            .map(|f| (256.0 * (f * scale).sqrt().clamp(0.0, 0.999)) as u8)
+            .map(|f| (256.0 * (f * scale).powf(1.0 / 2.2).clamp(0.0, 0.999)) as u8)
             .collect();
 
         png_writer.write_all(&row_rgba8).unwrap();
