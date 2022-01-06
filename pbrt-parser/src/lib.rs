@@ -116,6 +116,22 @@ impl<'a, T> Object<'a, T> {
             })
     }
 
+    pub fn get_point(&self, name: &str) -> Option<Result<Vec3A, ArgumentError>> {
+        self.arguments
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| match &a.value {
+                Value::Point(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+    }
+
     pub fn get_float(&self, name: &str) -> Option<Result<f32, ArgumentError>> {
         self.arguments
             .iter()

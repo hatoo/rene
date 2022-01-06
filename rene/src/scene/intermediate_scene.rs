@@ -34,9 +34,16 @@ pub enum WorldObject {
 
 pub enum LightSource {
     Infinite(Infinite),
+    Distant(Distant),
 }
 
 pub struct Infinite {
+    pub color: Vec3A,
+}
+
+pub struct Distant {
+    pub from: Vec3A,
+    pub to: Vec3A,
     pub color: Vec3A,
 }
 
@@ -176,6 +183,14 @@ impl IntermediateWorld {
                         let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Infinite(Infinite { color }),
+                        )))
+                    }
+                    "distant" => {
+                        let from = obj.get_point("from").unwrap_or(Ok(vec3a(0.0, 0.0, 0.0)))?;
+                        let to = obj.get_point("to").unwrap_or(Ok(vec3a(0.0, 0.0, 1.0)))?;
+                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        Ok(Self::WorldObject(WorldObject::LightSource(
+                            LightSource::Distant(Distant { from, to, color }),
                         )))
                     }
                     t => Err(Error::InvalidLightSource(t.to_string())),

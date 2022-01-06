@@ -13,6 +13,10 @@ WorldBegin
 # uniform blue-ish illumination from all directions
 LightSource "infinite" "rgb L" [.4 .45 .5]
 
+# approximate the sun
+LightSource "distant"  "point from" [ -30 40  100 ]
+   "rgb L" [1.0 1.0 1.0]
+
 AttributeBegin
   Material "glass"
   Shape "sphere" "float radius" 1

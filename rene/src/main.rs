@@ -21,7 +21,9 @@ use glam::{Vec2, Vec3A};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
-use rene_shader::{material::EnumMaterial, texture::EnumTexture, IndexData, Uniform, Vertex};
+use rene_shader::{
+    light::EnumLight, material::EnumMaterial, texture::EnumTexture, IndexData, Uniform, Vertex,
+};
 use scene::Scene;
 
 mod scene;
@@ -407,16 +409,16 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(
-                                vk::ShaderStageFlags::RAYGEN_KHR
-                                    | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
-                            )
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(4)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::RAYGEN_KHR
+                                    | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+                            )
                             .binding(5)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
@@ -430,6 +432,12 @@ fn main() {
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                             .binding(7)
+                            .build(),
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .binding(8)
                             .build(),
                     ])
                     .build(),
@@ -580,6 +588,10 @@ fn main() {
             ty: vk::DescriptorType::STORAGE_BUFFER,
             descriptor_count: 1,
         },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        },
     ];
 
     let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
@@ -650,6 +662,21 @@ fn main() {
         .image_info(&image_info)
         .build();
 
+    let light_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.lights.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
+
+    let light_write = {
+        vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&light_buffer_info)
+            .build()
+    };
+
     let material_buffer_info = [vk::DescriptorBufferInfo::builder()
         .buffer(scene_buffers.materials.buffer)
         .range(vk::WHOLE_SIZE)
@@ -658,7 +685,7 @@ fn main() {
     let material_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(3)
+            .dst_binding(4)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&material_buffer_info)
@@ -673,7 +700,7 @@ fn main() {
     let texture_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(4)
+            .dst_binding(5)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&texture_buffer_info)
@@ -688,7 +715,7 @@ fn main() {
     let index_data_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(5)
+            .dst_binding(6)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&index_data_buffer_info)
@@ -703,7 +730,7 @@ fn main() {
     let indices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(6)
+            .dst_binding(7)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&indices_buffer_info)
@@ -718,7 +745,7 @@ fn main() {
     let vertices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(7)
+            .dst_binding(8)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&vertices_buffer_info)
@@ -731,6 +758,7 @@ fn main() {
                 uniform_buffers_write,
                 accel_write,
                 image_write,
+                light_write,
                 material_write,
                 texture_write,
                 index_data_write,
@@ -1517,6 +1545,7 @@ struct SceneBuffers {
     vertices: BufferResource,
     indices: BufferResource,
     textures: BufferResource,
+    lights: BufferResource,
 }
 
 impl SceneBuffers {
@@ -2226,6 +2255,32 @@ impl SceneBuffers {
             textures_buffer
         };
 
+        let mut lights = scene.lights.clone();
+        if lights.is_empty() {
+            lights.push(EnumLight::new_distant(
+                Vec3A::ZERO,
+                Vec3A::ZERO,
+                Vec3A::ZERO,
+            ));
+        }
+
+        let lights = {
+            let buffer_size = (lights.len() * std::mem::size_of::<EnumLight>()) as vk::DeviceSize;
+
+            let mut lights_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &device,
+                device_memory_properties,
+            );
+            lights_buffer.store(&lights, &device);
+
+            lights_buffer
+        };
+
         Self {
             tlas: top_as,
             default_blas,
@@ -2237,6 +2292,7 @@ impl SceneBuffers {
             indices,
             vertices,
             textures,
+            lights,
         }
     }
 
@@ -2255,5 +2311,6 @@ impl SceneBuffers {
         self.indices.destroy(device);
         self.vertices.destroy(device);
         self.textures.destroy(device);
+        self.lights.destroy(device);
     }
 }

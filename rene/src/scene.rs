@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use glam::{vec3, Affine3A};
-use rene_shader::{material::EnumMaterial, texture::EnumTexture, LookAt, Uniform};
+use rene_shader::{
+    light::EnumLight, material::EnumMaterial, texture::EnumTexture, LookAt, Uniform,
+};
 use thiserror::Error;
 
 use crate::ShaderIndex;
@@ -29,6 +31,7 @@ pub struct Scene {
     pub materials: Vec<EnumMaterial>,
     pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
+    pub lights: Vec<EnumLight>,
 }
 
 #[derive(Error, Debug)]
@@ -77,6 +80,7 @@ impl Scene {
                 }
             }
         }
+        scene.uniform.lights_len = scene.lights.len() as u32;
         Ok(scene)
     }
 
@@ -128,59 +132,64 @@ impl Scene {
                     self.textures.push(inner);
                     state.textures.insert(texture.name, texture_index as u32);
                 }
-                IntermediateWorld::WorldObject(obj) => match obj {
-                    WorldObject::LightSource(lightsource) => match lightsource {
-                        LightSource::Infinite(Infinite { color }) => {
-                            self.uniform.background += color;
-                        }
-                    },
-                    WorldObject::Material(material) => match material {
-                        Material::Matte(Matte { albedo }) => {
-                            let texture_index = match albedo {
-                                TextureOrColor::Color(color) => {
-                                    let texture_index = self.textures.len();
-                                    self.textures.push(EnumTexture::new_solid(color));
-                                    texture_index as u32
-                                }
-                                TextureOrColor::Texture(name) => *state
-                                    .textures
-                                    .get(&name)
-                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                            };
+                IntermediateWorld::WorldObject(obj) => {
+                    match obj {
+                        WorldObject::LightSource(lightsource) => match lightsource {
+                            LightSource::Infinite(Infinite { color }) => {
+                                self.uniform.background += color;
+                            }
+                            LightSource::Distant(distant) => self.lights.push(
+                                EnumLight::new_distant(distant.from, distant.to, distant.color),
+                            ),
+                        },
+                        WorldObject::Material(material) => match material {
+                            Material::Matte(Matte { albedo }) => {
+                                let texture_index = match albedo {
+                                    TextureOrColor::Color(color) => {
+                                        let texture_index = self.textures.len();
+                                        self.textures.push(EnumTexture::new_solid(color));
+                                        texture_index as u32
+                                    }
+                                    TextureOrColor::Texture(name) => *state
+                                        .textures
+                                        .get(&name)
+                                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                                };
 
-                            state.current_material_index = Some(self.materials.len());
-                            self.materials
-                                .push(EnumMaterial::new_lambertian(texture_index));
-                        }
-                        Material::Glass => {
-                            state.current_material_index = Some(self.materials.len());
-                            self.materials.push(EnumMaterial::new_dielectric(1.5));
-                        }
-                    },
-                    WorldObject::Shape(shape) => match shape {
-                        Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
-                            shader_offset: ShaderIndex::SPHERE,
-                            matrix: state.current_matrix
-                                * Affine3A::from_scale(vec3(radius, radius, radius)),
-                            material_index: state
-                                .current_material_index
-                                .ok_or(CreateSceneError::NoMaterial)?,
-                            blas_index: None,
-                        }),
-                        Shape::TriangleMesh(trianglemesh) => {
-                            let blass_index = self.blases.len();
-                            self.blases.push(trianglemesh);
-                            self.tlas.push(TlasInstance {
-                                shader_offset: ShaderIndex::TRIANGLE,
-                                matrix: state.current_matrix,
+                                state.current_material_index = Some(self.materials.len());
+                                self.materials
+                                    .push(EnumMaterial::new_lambertian(texture_index));
+                            }
+                            Material::Glass => {
+                                state.current_material_index = Some(self.materials.len());
+                                self.materials.push(EnumMaterial::new_dielectric(1.5));
+                            }
+                        },
+                        WorldObject::Shape(shape) => match shape {
+                            Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
+                                shader_offset: ShaderIndex::SPHERE,
+                                matrix: state.current_matrix
+                                    * Affine3A::from_scale(vec3(radius, radius, radius)),
                                 material_index: state
                                     .current_material_index
                                     .ok_or(CreateSceneError::NoMaterial)?,
-                                blas_index: Some(blass_index),
-                            })
-                        }
-                    },
-                },
+                                blas_index: None,
+                            }),
+                            Shape::TriangleMesh(trianglemesh) => {
+                                let blass_index = self.blases.len();
+                                self.blases.push(trianglemesh);
+                                self.tlas.push(TlasInstance {
+                                    shader_offset: ShaderIndex::TRIANGLE,
+                                    matrix: state.current_matrix,
+                                    material_index: state
+                                        .current_material_index
+                                        .ok_or(CreateSceneError::NoMaterial)?,
+                                    blas_index: Some(blass_index),
+                                })
+                            }
+                        },
+                    }
+                }
             }
         }
         Ok(())
