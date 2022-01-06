@@ -13,6 +13,7 @@ use self::intermediate_scene::{
     Material, Matte, SceneObject, Shape, Sphere, TextureOrColor, TriangleMesh, WorldObject,
 };
 
+mod blackbody;
 pub mod intermediate_scene;
 
 #[derive(Debug)]
