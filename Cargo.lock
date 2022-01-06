@@ -138,6 +138,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "colortemp"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5f86d2987fdf49a4912194917d7b590b2bbf2bc407fe220d939b97080dfbc2"
+
+[[package]]
 name = "crc32fast"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -402,6 +408,7 @@ dependencies = [
 name = "pbrt-parser"
 version = "0.1.0"
 dependencies = [
+ "colortemp",
  "glam",
  "nom",
  "thiserror",

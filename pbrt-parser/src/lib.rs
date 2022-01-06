@@ -50,6 +50,7 @@ pub enum Value<'a> {
     Float(Vec<f32>),
     Integer(Vec<i32>),
     Rgb(Vec<f32>),
+    BlackBody(Vec<f32>),
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
     String(&'a str),
@@ -111,6 +112,24 @@ impl<'a, T> Object<'a, T> {
                     } else {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
+                }
+                // TODO length check
+                Value::BlackBody(v) => {
+                    let mut rgb = Vec3A::ZERO;
+                    for chunk in v.chunks(2) {
+                        let t = chunk[0];
+                        let scale = chunk[1];
+
+                        let c = colortemp::temp_to_rgb(t as i64);
+                        let c = vec3a(
+                            (c.r / 255.0) as f32,
+                            (c.g / 255.0) as f32,
+                            (c.b / 255.0) as f32,
+                        );
+
+                        rgb += scale * c;
+                    }
+                    Ok(rgb)
                 }
                 _ => Err(ArgumentError::UnmatchedType),
             })
@@ -281,6 +300,7 @@ pub(crate) fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a s
 enum ArgumentType {
     Float,
     Rgb,
+    BlackBody,
     Integer,
     Point,
     Normal,
@@ -298,6 +318,7 @@ fn parse_argument_type<'a, E: ParseError<&'a str>>(
         value(ArgumentType::Point, tag("point")),
         value(ArgumentType::Normal, tag("normal")),
         value(ArgumentType::Texture, tag("texture")),
+        value(ArgumentType::BlackBody, tag("blackbody")),
         value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
     ))(input)
 }
@@ -371,6 +392,9 @@ impl ArgumentType {
             ArgumentType::Texture => map(parse_str, Value::Texture)(input),
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
+            ArgumentType::BlackBody => {
+                bracket(&float, input).map(|(rest, v)| (rest, Value::BlackBody(v)))
+            }
         }
     }
 }
