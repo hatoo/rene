@@ -18,6 +18,7 @@ thiserror = "1.0.30"
 nom = "7.1.0"
 log = "0.4.14"
 simple_logger = "1.16.0"
+blackbody = "0.0.0"
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu" }

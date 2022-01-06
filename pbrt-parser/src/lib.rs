@@ -95,44 +95,12 @@ pub enum ArgumentError {
     UnmatchedType,
 }
 
-pub enum TextureValue<'a> {
-    Color(Vec3A),
-    Texture(&'a str),
-}
-
 impl<'a, T> Object<'a, T> {
-    pub fn get_rgb(&self, name: &str) -> Option<Result<Vec3A, ArgumentError>> {
+    pub fn get_value(&self, name: &str) -> Option<&Value> {
         self.arguments
             .iter()
             .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Rgb(v) => {
-                    if v.len() == 3 {
-                        Ok(vec3a(v[0], v[1], v[2]))
-                    } else {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    }
-                }
-                // TODO length check
-                Value::BlackBody(v) => {
-                    let mut rgb = Vec3A::ZERO;
-                    for chunk in v.chunks(2) {
-                        let t = chunk[0];
-                        let scale = chunk[1];
-
-                        let c = colortemp::temp_to_rgb(t as i64);
-                        let c = vec3a(
-                            (c.r / 255.0) as f32,
-                            (c.g / 255.0) as f32,
-                            (c.b / 255.0) as f32,
-                        );
-
-                        rgb += scale * c;
-                    }
-                    Ok(rgb)
-                }
-                _ => Err(ArgumentError::UnmatchedType),
-            })
+            .map(|a| &a.value)
     }
 
     pub fn get_point(&self, name: &str) -> Option<Result<Vec3A, ArgumentError>> {
@@ -189,23 +157,6 @@ impl<'a, T> Object<'a, T> {
             .find(|a| a.name == name)
             .map(|a| match &a.value {
                 Value::String(str) => Ok(*str),
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_texture(&self, name: &str) -> Option<Result<TextureValue, ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Texture(str) => Ok(TextureValue::Texture(*str)),
-                Value::Rgb(v) => {
-                    if v.len() == 3 {
-                        Ok(TextureValue::Color(vec3a(v[0], v[1], v[2])))
-                    } else {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    }
-                }
                 _ => Err(ArgumentError::UnmatchedType),
             })
     }

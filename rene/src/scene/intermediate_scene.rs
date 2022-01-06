@@ -1,5 +1,6 @@
+use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Affine3A, Vec2, Vec3A};
-use pbrt_parser::{ArgumentError, TextureValue};
+use pbrt_parser::{ArgumentError, Object};
 use rene_shader::{camera::PerspectiveCamera, Vertex};
 use std::f32::consts::PI;
 use thiserror::Error;
@@ -139,31 +140,69 @@ pub enum Error {
     ArgumentNotFound(String),
 }
 
+fn get_rgb<T>(obj: &Object<T>, name: &str) -> Option<Result<Vec3A, Error>> {
+    obj.get_value(name).map(|value| match value {
+        pbrt_parser::Value::Rgb(v) => {
+            if v.len() != 3 {
+                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
+            } else {
+                Ok(vec3a(v[0], v[1], v[2]))
+            }
+        }
+        pbrt_parser::Value::BlackBody(v) => {
+            if v.len() % 2 != 0 {
+                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
+            } else {
+                let mut color = Vec3A::ZERO;
+
+                for v in v.chunks(2) {
+                    color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
+                }
+                Ok(color)
+            }
+        }
+        _ => Err(Error::InvalidArgument(ArgumentError::UnmatchedType)),
+    })
+}
+
+fn get_texture_or_color<T>(obj: &Object<T>, name: &str) -> Option<Result<TextureOrColor, Error>> {
+    obj.get_value(name).map(|value| match value {
+        pbrt_parser::Value::Rgb(v) => {
+            if v.len() != 3 {
+                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
+            } else {
+                Ok(TextureOrColor::Color(vec3a(v[0], v[1], v[2])))
+            }
+        }
+        pbrt_parser::Value::BlackBody(v) => {
+            if v.len() % 2 != 0 {
+                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
+            } else {
+                let mut color = Vec3A::ZERO;
+
+                for v in v.chunks(2) {
+                    color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
+                }
+                Ok(TextureOrColor::Color(color))
+            }
+        }
+        pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s.to_string())),
+        _ => Err(Error::InvalidArgument(ArgumentError::UnmatchedType)),
+    })
+}
+
 impl IntermediateWorld {
     fn from_world(world: pbrt_parser::World) -> Result<Self, Error> {
         match world {
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
-                    let tex1 = texture
-                        .obj
-                        .get_texture("tex1")
-                        .unwrap_or(Ok(TextureValue::Color(vec3a(0.0, 0.0, 0.0))))?;
-                    let tex2 = texture
-                        .obj
-                        .get_texture("tex2")
-                        .unwrap_or(Ok(TextureValue::Color(vec3a(1.0, 1.0, 1.0))))?;
+                    let tex1 = get_texture_or_color(&texture.obj, "tex1")
+                        .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.0, 0.0, 0.0))))?;
+                    let tex2 = get_texture_or_color(&texture.obj, "tex2")
+                        .unwrap_or(Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
 
                     let uscale = texture.obj.get_float("uscale").unwrap_or(Ok(2.0))?;
                     let vscale = texture.obj.get_float("vscale").unwrap_or(Ok(2.0))?;
-
-                    let tex1 = match tex1 {
-                        TextureValue::Color(c) => TextureOrColor::Color(c),
-                        TextureValue::Texture(name) => TextureOrColor::Texture(name.to_string()),
-                    };
-                    let tex2 = match tex2 {
-                        TextureValue::Color(c) => TextureOrColor::Color(c),
-                        TextureValue::Texture(name) => TextureOrColor::Texture(name.to_string()),
-                    };
 
                     Ok(Self::Texture(Texture {
                         name: texture.name.to_string(),
@@ -180,7 +219,7 @@ impl IntermediateWorld {
             pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
                     "infinite" => {
-                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        let color = get_rgb(&obj, "L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Infinite(Infinite { color }),
                         )))
@@ -188,7 +227,7 @@ impl IntermediateWorld {
                     "distant" => {
                         let from = obj.get_point("from").unwrap_or(Ok(vec3a(0.0, 0.0, 0.0)))?;
                         let to = obj.get_point("to").unwrap_or(Ok(vec3a(0.0, 0.0, 1.0)))?;
-                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        let color = get_rgb(&obj, "L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Distant(Distant { from, to, color }),
                         )))
@@ -197,16 +236,8 @@ impl IntermediateWorld {
                 },
                 pbrt_parser::WorldObjectType::Material => match obj.t {
                     "matte" => {
-                        let color = obj
-                            .get_texture("Kd")
-                            .unwrap_or(Ok(TextureValue::Color(vec3a(0.5, 0.5, 0.5))))?;
-
-                        let albedo = match color {
-                            TextureValue::Color(c) => TextureOrColor::Color(c),
-                            TextureValue::Texture(name) => {
-                                TextureOrColor::Texture(name.to_string())
-                            }
-                        };
+                        let albedo = get_texture_or_color(&obj, "Kd")
+                            .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
                         Ok(Self::WorldObject(WorldObject::Material(Material::Matte(
                             Matte { albedo },
