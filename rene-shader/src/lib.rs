@@ -188,9 +188,10 @@ pub fn main_ray_generation(
             let normal = payload.normal;
 
             for i in 0..uniform.lights_len {
+                let (target, t_max) = lights[i as usize].ray_target(payload.position);
                 let light_ray = Ray {
                     origin: payload.position,
-                    direction: lights[i as usize].position() - payload.position,
+                    direction: target - payload.position,
                 };
 
                 *payload = RayPayload::default();
@@ -204,7 +205,7 @@ pub fn main_ray_generation(
                         light_ray.origin,
                         tmin,
                         light_ray.direction,
-                        1.0,
+                        t_max,
                         payload,
                     );
                 }

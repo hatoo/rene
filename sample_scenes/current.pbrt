@@ -15,7 +15,7 @@ LightSource "infinite" "rgb L" [.4 .45 .5]
 
 # approximate the sun
 LightSource "distant"  "point from" [ -30 40  100 ]
-   "rgb L" [1.0000 0.1578 0.0000]
+   "rgb L" [1.5000 0.73049 0.21165]
 
 AttributeBegin
   Material "glass"

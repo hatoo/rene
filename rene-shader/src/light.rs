@@ -1,7 +1,7 @@
 use spirv_std::glam::{Vec3A, Vec4, Vec4Swizzles};
 
 pub trait Light {
-    fn position(&self) -> Vec3A;
+    fn ray_target(&self, position: Vec3A) -> (Vec3A, f32);
     fn color(&self, position: Vec3A) -> Vec3A;
 }
 
@@ -11,7 +11,6 @@ pub trait Light {
 pub struct EnumLightData {
     v0: Vec4,
     v1: Vec4,
-    v2: Vec4,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -26,9 +25,8 @@ impl EnumLight {
         Self {
             t: 0,
             data: EnumLightData {
-                v0: from.extend(0.0),
-                v1: to.extend(0.0),
-                v2: color.extend(0.0),
+                v0: (from - to).normalize().extend(0.0),
+                v1: color.extend(0.0),
             },
         }
     }
@@ -39,25 +37,18 @@ struct Distant<'a> {
 }
 
 impl<'a> Light for Distant<'a> {
-    fn position(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+    fn ray_target(&self, position: Vec3A) -> (Vec3A, f32) {
+        (position + Vec3A::from(self.data.v0.xyz()), 1e5)
     }
 
-    fn color(&self, position: Vec3A) -> Vec3A {
-        let v1 = Vec3A::from(self.data.v1.xyz() - self.data.v0.xyz()).normalize();
-        let v2 = (position - Vec3A::from(self.data.v0.xyz())).normalize();
-
-        if v1.dot(v2) > 0.0 {
-            self.data.v2.xyz().into()
-        } else {
-            Vec3A::ZERO
-        }
+    fn color(&self, _position: Vec3A) -> Vec3A {
+        self.data.v1.xyz().into()
     }
 }
 
 impl Light for EnumLight {
-    fn position(&self) -> Vec3A {
-        Distant { data: &self.data }.position()
+    fn ray_target(&self, position: Vec3A) -> (Vec3A, f32) {
+        Distant { data: &self.data }.ray_target(position)
     }
 
     fn color(&self, position: Vec3A) -> Vec3A {
