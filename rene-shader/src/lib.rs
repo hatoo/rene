@@ -171,27 +171,21 @@ pub fn main_ray_generation(
             break;
         } else {
             let wo = -ray.direction.normalize();
+            let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let mut scatter = Scatter::default();
-            if unsafe { materials.index_unchecked(payload.material as usize) }.scatter(
-                textures,
-                &ray,
-                payload,
-                &mut rng,
-                &mut scatter,
-            ) {
+            if material.scatter(textures, &ray, payload, &mut rng, &mut scatter) {
                 color *= scatter.color;
                 ray = scatter.ray;
             } else {
                 break;
             }
 
-            let normal = payload.normal;
-
             for i in 0..uniform.lights_len {
                 let (target, t_max) = lights[i as usize].ray_target(payload.position);
+                let direction = target - payload.position;
                 let light_ray = Ray {
                     origin: payload.position,
-                    direction: target - payload.position,
+                    direction,
                 };
 
                 *payload = RayPayload::default();
@@ -211,8 +205,9 @@ pub fn main_ray_generation(
                 }
 
                 if payload.is_miss != 0 {
-                    color_sum +=
-                        normal.dot(wo).abs() * color * lights[i as usize].color(payload.position);
+                    color_sum += material.brdf(wo, direction.normalize())
+                        * color
+                        * lights[i as usize].color(payload.position);
                 }
             }
         }

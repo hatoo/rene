@@ -1,3 +1,4 @@
+use core::f32::consts::PI;
 use spirv_std::glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
@@ -24,6 +25,8 @@ pub trait Material {
         rng: &mut DefaultRng,
         scatter: &mut Scatter,
     ) -> bool;
+
+    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -107,6 +110,10 @@ impl<'a> Material for Lambertian<'a> {
         };
         true
     }
+
+    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
+        1.0 / PI
+    }
 }
 
 impl<'a> Metal<'a> {
@@ -142,6 +149,10 @@ impl<'a> Material for Metal<'a> {
         } else {
             false
         }
+    }
+    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
+        // TODO
+        1.0
     }
 }
 
@@ -186,6 +197,10 @@ impl<'a> Material for Dielectric<'a> {
             },
         };
         true
+    }
+
+    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
+        0.0
     }
 }
 
@@ -234,6 +249,14 @@ impl Material for EnumMaterial {
             0 => Lambertian { data: &self.data }.scatter(textures, ray, ray_payload, rng, scatter),
             1 => Metal { data: &self.data }.scatter(textures, ray, ray_payload, rng, scatter),
             _ => Dielectric { data: &self.data }.scatter(textures, ray, ray_payload, rng, scatter),
+        }
+    }
+
+    fn brdf(&self, v0: Vec3A, v1: Vec3A) -> f32 {
+        match self.t {
+            0 => Lambertian { data: &self.data }.brdf(v0, v1),
+            1 => Metal { data: &self.data }.brdf(v0, v1),
+            _ => Dielectric { data: &self.data }.brdf(v0, v1),
         }
     }
 }
