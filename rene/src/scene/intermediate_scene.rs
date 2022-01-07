@@ -1,6 +1,6 @@
 use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Affine3A, Vec2, Vec3A};
-use pbrt_parser::{ArgumentError, Object};
+use pbrt_parser::Object;
 use rene_shader::{camera::PerspectiveCamera, Vertex};
 use std::f32::consts::PI;
 use thiserror::Error;
@@ -121,6 +121,14 @@ pub enum IntermediateScene {
 }
 
 #[derive(Error, Debug)]
+pub enum ArgumentError {
+    #[error("unmatched value length")]
+    UnmatchedValueLength,
+    #[error("unmatched type")]
+    UnmatchedType,
+}
+
+#[derive(Error, Debug)]
 pub enum Error {
     #[error("Invalid Camera type {0}")]
     InvalidCamera(String),
@@ -140,55 +148,170 @@ pub enum Error {
     ArgumentNotFound(String),
 }
 
-fn get_rgb<T>(obj: &Object<T>, name: &str) -> Option<Result<Vec3A, Error>> {
-    obj.get_value(name).map(|value| match value {
-        pbrt_parser::Value::Rgb(v) => {
-            if v.len() != 3 {
-                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
-            } else {
-                Ok(vec3a(v[0], v[1], v[2]))
-            }
-        }
-        pbrt_parser::Value::BlackBody(v) => {
-            if v.len() % 2 != 0 {
-                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
-            } else {
-                let mut color = Vec3A::ZERO;
-
-                for v in v.chunks(2) {
-                    color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
-                }
-                Ok(color)
-            }
-        }
-        _ => Err(Error::InvalidArgument(ArgumentError::UnmatchedType)),
-    })
+trait GetValue {
+    fn get_float(&self, name: &str) -> Result<Result<f32, ArgumentError>, Error>;
+    fn get_floats(&self, name: &str) -> Result<Result<&[f32], ArgumentError>, Error>;
+    fn get_integer(&self, name: &str) -> Result<Result<i32, ArgumentError>, Error>;
+    fn get_integers(&self, name: &str) -> Result<Result<&[i32], ArgumentError>, Error>;
+    fn get_points(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error>;
+    fn get_normals(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error>;
+    fn get_str(&self, name: &str) -> Result<Result<&str, ArgumentError>, Error>;
+    fn get_point(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error>;
+    fn get_rgb(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error>;
+    fn get_texture_or_color(
+        &self,
+        name: &str,
+    ) -> Result<Result<TextureOrColor, ArgumentError>, Error>;
 }
 
-fn get_texture_or_color<T>(obj: &Object<T>, name: &str) -> Option<Result<TextureOrColor, Error>> {
-    obj.get_value(name).map(|value| match value {
-        pbrt_parser::Value::Rgb(v) => {
-            if v.len() != 3 {
-                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
-            } else {
-                Ok(TextureOrColor::Color(vec3a(v[0], v[1], v[2])))
-            }
-        }
-        pbrt_parser::Value::BlackBody(v) => {
-            if v.len() % 2 != 0 {
-                Err(Error::InvalidArgument(ArgumentError::UnmatchedValueLength))
-            } else {
-                let mut color = Vec3A::ZERO;
-
-                for v in v.chunks(2) {
-                    color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
+impl<'a, T> GetValue for Object<'a, T> {
+    fn get_rgb(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Rgb(v) => {
+                    if v.len() != 3 {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    } else {
+                        Ok(vec3a(v[0], v[1], v[2]))
+                    }
                 }
-                Ok(TextureOrColor::Color(color))
-            }
-        }
-        pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s.to_string())),
-        _ => Err(Error::InvalidArgument(ArgumentError::UnmatchedType)),
-    })
+                pbrt_parser::Value::BlackBody(v) => {
+                    if v.len() % 2 != 0 {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    } else {
+                        let mut color = Vec3A::ZERO;
+
+                        for v in v.chunks(2) {
+                            color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
+                        }
+                        Ok(color)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_texture_or_color(
+        &self,
+        name: &str,
+    ) -> Result<Result<TextureOrColor, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Rgb(v) => {
+                    if v.len() != 3 {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    } else {
+                        Ok(TextureOrColor::Color(vec3a(v[0], v[1], v[2])))
+                    }
+                }
+                pbrt_parser::Value::BlackBody(v) => {
+                    if v.len() % 2 != 0 {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    } else {
+                        let mut color = Vec3A::ZERO;
+
+                        for v in v.chunks(2) {
+                            color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
+                        }
+                        Ok(TextureOrColor::Color(color))
+                    }
+                }
+                pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s.to_string())),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_float(&self, name: &str) -> Result<Result<f32, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Float(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_floats(&self, name: &str) -> Result<Result<&[f32], ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Float(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_integer(&self, name: &str) -> Result<Result<i32, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Integer(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_integers(&self, name: &str) -> Result<Result<&[i32], ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Integer(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_points(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Point(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_normals(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Normal(v) => Ok(v.as_slice()),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_str(&self, name: &str) -> Result<Result<&str, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::String(s) => Ok(*s),
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
+
+    fn get_point(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Point(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
+    }
 }
 
 impl IntermediateWorld {
@@ -196,9 +319,13 @@ impl IntermediateWorld {
         match world {
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
-                    let tex1 = get_texture_or_color(&texture.obj, "tex1")
+                    let tex1 = texture
+                        .obj
+                        .get_texture_or_color("tex1")
                         .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.0, 0.0, 0.0))))?;
-                    let tex2 = get_texture_or_color(&texture.obj, "tex2")
+                    let tex2 = texture
+                        .obj
+                        .get_texture_or_color("tex2")
                         .unwrap_or(Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
 
                     let uscale = texture.obj.get_float("uscale").unwrap_or(Ok(2.0))?;
@@ -219,7 +346,7 @@ impl IntermediateWorld {
             pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
                     "infinite" => {
-                        let color = get_rgb(&obj, "L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Infinite(Infinite { color }),
                         )))
@@ -227,7 +354,7 @@ impl IntermediateWorld {
                     "distant" => {
                         let from = obj.get_point("from").unwrap_or(Ok(vec3a(0.0, 0.0, 0.0)))?;
                         let to = obj.get_point("to").unwrap_or(Ok(vec3a(0.0, 0.0, 1.0)))?;
-                        let color = get_rgb(&obj, "L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Distant(Distant { from, to, color }),
                         )))
@@ -236,7 +363,8 @@ impl IntermediateWorld {
                 },
                 pbrt_parser::WorldObjectType::Material => match obj.t {
                     "matte" => {
-                        let albedo = get_texture_or_color(&obj, "Kd")
+                        let albedo = obj
+                            .get_texture_or_color("Kd")
                             .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
                         Ok(Self::WorldObject(WorldObject::Material(Material::Matte(
@@ -254,13 +382,9 @@ impl IntermediateWorld {
                         ))))
                     }
                     "trianglemesh" => {
-                        let indices = obj
-                            .get_integers("indices")
-                            .ok_or(Error::ArgumentNotFound("indices".to_string()))??;
+                        let indices = obj.get_integers("indices")??;
                         let indices: Vec<u32> = indices.into_iter().map(|&i| i as u32).collect();
-                        let vertices = obj
-                            .get_points("P")
-                            .ok_or(Error::ArgumentNotFound("P".to_string()))??;
+                        let vertices = obj.get_points("P")??;
 
                         let normal = obj
                             .get_normals("N")
@@ -367,9 +491,7 @@ impl IntermediateScene {
                 },
                 pbrt_parser::SceneObjectType::Film => match obj.t {
                     "image" => {
-                        let filename = obj
-                            .get_str("filename")
-                            .ok_or(Error::ArgumentNotFound("filename".to_string()))??;
+                        let filename = obj.get_str("filename")??;
                         let xresolution = obj.get_integer("xresolution").unwrap_or(Ok(640))? as u32;
                         let yresolution = obj.get_integer("yresolution").unwrap_or(Ok(480))? as u32;
                         Ok(Self::Film(Film {

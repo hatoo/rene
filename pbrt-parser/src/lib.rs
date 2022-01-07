@@ -87,118 +87,12 @@ pub struct Object<'a, T> {
 pub type SceneObject<'a> = Object<'a, SceneObjectType>;
 pub type WorldObject<'a> = Object<'a, WorldObjectType>;
 
-#[derive(thiserror::Error, Debug)]
-pub enum ArgumentError {
-    #[error("unmatched value length")]
-    UnmatchedValueLength,
-    #[error("unmatched type")]
-    UnmatchedType,
-}
-
 impl<'a, T> Object<'a, T> {
     pub fn get_value(&self, name: &str) -> Option<&Value> {
         self.arguments
             .iter()
             .find(|a| a.name == name)
             .map(|a| &a.value)
-    }
-
-    pub fn get_point(&self, name: &str) -> Option<Result<Vec3A, ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Point(v) => {
-                    if v.len() == 1 {
-                        Ok(v[0])
-                    } else {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    }
-                }
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_float(&self, name: &str) -> Option<Result<f32, ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Float(v) => {
-                    if v.len() == 1 {
-                        Ok(v[0])
-                    } else {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    }
-                }
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_integer(&self, name: &str) -> Option<Result<i32, ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Integer(v) => {
-                    if v.len() == 1 {
-                        Ok(v[0])
-                    } else {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    }
-                }
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_str(&self, name: &str) -> Option<Result<&str, ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::String(str) => Ok(*str),
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_integers(&self, name: &str) -> Option<Result<&[i32], ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Integer(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_floats(&self, name: &str) -> Option<Result<&[f32], ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Float(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_points(&self, name: &str) -> Option<Result<&[Vec3A], ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Point(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
-            })
-    }
-
-    pub fn get_normals(&self, name: &str) -> Option<Result<&[Vec3A], ArgumentError>> {
-        self.arguments
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| match &a.value {
-                Value::Normal(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
-            })
     }
 }
 
