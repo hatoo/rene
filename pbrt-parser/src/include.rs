@@ -25,7 +25,6 @@ pub fn expand_include<P: AsRef<Path>>(
                     let mut current_path = current_dir.as_ref().to_owned();
                     current_path.push(path);
 
-                    // TODO Error handling
                     File::open(&current_path)?.read_to_string(&mut buf)?;
 
                     current_path.pop();
