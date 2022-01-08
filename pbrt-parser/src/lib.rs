@@ -37,6 +37,7 @@ pub enum World<'a> {
     Scale(Vec3A),
     Rotate(AxisAngle),
     Texture(Texture<'a>),
+    NamedMaterial(&'a str),
 }
 
 #[derive(PartialEq, Debug)]
@@ -302,6 +303,13 @@ fn parse_transform<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     Ok((rest, Mat4::from_cols(x, y, z, w)))
 }
 
+fn parse_named_material<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, &'a str, E> {
+    let (rest, _) = tag("NamedMaterial")(input)?;
+    preceded(sp, parse_str)(rest)
+}
+
 fn parse_scene_object_type<'a, E: ParseError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, SceneObjectType, E> {
@@ -407,6 +415,7 @@ fn parse_texture<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
         map(parse_texture, |w| World::Texture(w)),
+        map(parse_named_material, |w| World::NamedMaterial(w)),
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
         map(parse_transrate, |v| World::Translate(v)),

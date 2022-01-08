@@ -30,6 +30,7 @@ pub enum IntermediateWorld {
     WorldObject(WorldObject),
     Matrix(Affine3A),
     Texture(Texture),
+    NamedMaterial(String),
 }
 
 pub enum WorldObject {
@@ -346,6 +347,7 @@ impl<'a, T> GetValue for Object<'a, T> {
 impl IntermediateWorld {
     fn from_world(world: pbrt_parser::World) -> Result<Self, Error> {
         match world {
+            pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
                     let tex1 = texture

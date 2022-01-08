@@ -38,6 +38,8 @@ pub enum CreateSceneError {
     IntermediateError(#[from] intermediate_scene::Error),
     #[error("No Material")]
     NoMaterial,
+    #[error("Unknown Material {0}")]
+    UnknownMaterial(String),
     #[error("Not Found Texture: {0}")]
     NotFoundTexture(String),
 }
@@ -140,6 +142,15 @@ impl Scene {
                 IntermediateWorld::Attribute(worlds) => self.append_world(state.clone(), worlds)?,
                 IntermediateWorld::Matrix(m) => {
                     state.current_matrix = state.current_matrix * m;
+                }
+                IntermediateWorld::NamedMaterial(name) => {
+                    state.current_material_index = Some(
+                        *state
+                            .materials
+                            .get(&name)
+                            .ok_or_else(|| CreateSceneError::UnknownMaterial(name))?
+                            as usize,
+                    );
                 }
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
