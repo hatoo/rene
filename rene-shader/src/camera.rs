@@ -71,14 +71,14 @@ impl Camera {
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct PerspectiveCamera {
-    pub camera_to_screen: Mat4,
+    pub projection: Mat4,
 }
 
 impl PerspectiveCamera {
     pub fn get_ray(&self, st: Vec2, camera_to_world: Mat4) -> Ray {
         let origin = camera_to_world.transform_point3a(vec3a(0.0, 0.0, 0.0));
         let target =
-            self.camera_to_screen
+            self.projection
                 .transform_point3a(vec3a(st.x * 2.0 - 1.0, st.y * 2.0 - 1.0, 1.0));
         let target = camera_to_world.transform_point3a(target);
 
