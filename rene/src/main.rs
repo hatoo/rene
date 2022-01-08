@@ -3,7 +3,7 @@ use std::{
     collections::HashSet,
     ffi::{c_void, CStr, CString},
     fs::File,
-    io::{Read, Write},
+    io::Read,
     os::raw::c_char,
     path::PathBuf,
     ptr::{self, null},
@@ -1267,8 +1267,26 @@ fn main() {
             .unwrap() as _
     };
 
-    let mut data = unsafe { data.offset(subresource_layout.offset as isize) };
+    let data = unsafe { data.offset(subresource_layout.offset as isize) };
 
+    let data_linear = to_linear(
+        data,
+        &subresource_layout,
+        scene.film.xresolution as usize,
+        scene.film.yresolution as usize,
+    );
+
+    let rgba = to_rgba8(&data_linear, N_SAMPLES as usize, 2.2);
+
+    image::save_buffer(
+        scene.film.filename,
+        &rgba,
+        scene.film.xresolution,
+        scene.film.yresolution,
+        image::ColorType::Rgba8,
+    )
+    .unwrap();
+    /*
     let mut png_encoder = png::Encoder::new(
         File::create(scene.film.filename).unwrap(),
         scene.film.xresolution,
@@ -1299,6 +1317,7 @@ fn main() {
     }
 
     png_writer.finish().unwrap();
+    */
 
     unsafe {
         device.unmap_memory(dst_device_memory);
@@ -1347,6 +1366,33 @@ fn main() {
     unsafe {
         instance.destroy_instance(None);
     }
+}
+
+fn to_linear(
+    mut data: *const u8,
+    layout: &vk::SubresourceLayout,
+    width: usize,
+    height: usize,
+) -> Vec<u8> {
+    let mut result = vec![0; 4 * 4 * width * height];
+
+    for h in 0..height {
+        let row = unsafe { std::slice::from_raw_parts(data, 4 * 4 * width) };
+        result[4 * 4 * width * h..4 * 4 * width * (h + 1)].copy_from_slice(row);
+
+        data = unsafe { data.offset(layout.row_pitch as isize) };
+    }
+
+    result
+}
+
+fn to_rgba8(data: &[u8], denom: usize, gamma: f32) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data);
+
+    data_f32
+        .iter()
+        .map(|&value| (256.0 * (value / denom as f32).powf(1.0 / gamma).clamp(0.0, 0.999)) as u8)
+        .collect()
 }
 
 fn check_validation_layer_support<'a>(

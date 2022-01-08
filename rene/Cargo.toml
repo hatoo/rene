@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ash = "0.35.0"
-png = "0.17.2"
+image = "0.23.14"
 bytemuck = "1.7.2"
 rand = "0.8.4"
 glam = "0.20"
