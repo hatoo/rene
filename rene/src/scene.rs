@@ -84,7 +84,10 @@ impl Scene {
 
         let aspect_ratio = scene.film.xresolution as f32 / scene.film.yresolution as f32;
         if scene.film.yresolution > scene.film.xresolution {
-            fov = fov / scene.film.xresolution as f32 * scene.film.yresolution as f32;
+            fov = ((fov * 0.5).tan() / scene.film.xresolution as f32
+                * scene.film.yresolution as f32)
+                .atan()
+                * 2.0;
         }
         scene.uniform.camera.camera_to_screen =
             Mat4::perspective_lh(fov, aspect_ratio, 0.01, 1000.0).inverse();
