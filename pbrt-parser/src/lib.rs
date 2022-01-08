@@ -54,7 +54,7 @@ pub enum Value<'a> {
     BlackBody(Vec<f32>),
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
-    String(&'a str),
+    String(Vec<&'a str>),
     Texture(&'a str),
 }
 
@@ -187,6 +187,10 @@ fn bracket<'a, T: Clone, E: ParseError<&'a str>, F: Fn(&'a str) -> IResult<&'a s
     value(v, preceded(sp, char(']')))(rest)
 }
 
+fn strs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<&'a str>, E> {
+    alt((map(parse_str, |s| vec![s]), |i| bracket(parse_str, i)))(input)
+}
+
 fn floats<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<f32>, E> {
     alt((map(float, |f| vec![f]), |i| bracket(float, i)))(input)
 }
@@ -243,7 +247,7 @@ impl ArgumentType {
                     Value::Normal(fs.chunks(3).map(|v| vec3a(v[0], v[1], v[2])).collect()),
                 ))
             }
-            ArgumentType::String => map(parse_str, Value::String)(input),
+            ArgumentType::String => map(strs, Value::String)(input),
             ArgumentType::Texture => map(parse_str, Value::Texture)(input),
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),

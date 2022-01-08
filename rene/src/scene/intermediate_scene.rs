@@ -297,7 +297,13 @@ impl<'a, T> GetValue for Object<'a, T> {
     fn get_str(&self, name: &str) -> Result<Result<&str, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::Value::String(s) => Ok(*s),
+                pbrt_parser::Value::String(s) => {
+                    if s.len() == 1 {
+                        Ok(s[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
                 _ => Err(ArgumentError::UnmatchedType),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
