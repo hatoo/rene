@@ -58,7 +58,7 @@ pub enum Value<'a> {
     Texture(&'a str),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Argument<'a> {
     pub name: &'a str,
     pub value: Value<'a>,
@@ -77,9 +77,10 @@ pub enum SceneObjectType {
 pub enum WorldObjectType {
     LightSource,
     Material,
+    MakeNamedMaterial,
     Shape,
 }
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Object<'a, T> {
     pub object_type: T,
     pub t: &'a str,
@@ -319,6 +320,7 @@ fn parse_world_object_type<'a, E: ParseError<&'a str>>(
     alt((
         value(WorldObjectType::LightSource, tag("LightSource")),
         value(WorldObjectType::Material, tag("Material")),
+        value(WorldObjectType::MakeNamedMaterial, tag("MakeNamedMaterial")),
         value(WorldObjectType::Shape, tag("Shape")),
     ))(input)
 }

@@ -51,6 +51,7 @@ struct WorldState {
     current_material_index: Option<usize>,
     current_matrix: Affine3A,
     textures: HashMap<String, u32>,
+    materials: HashMap<String, u32>,
 }
 
 impl Scene {
@@ -102,6 +103,31 @@ impl Scene {
         scene.uniform.camera_to_world = wolrd_to_camera.inverse();
         scene.uniform.lights_len = scene.lights.len() as u32;
         Ok(scene)
+    }
+
+    fn material(
+        &mut self,
+        state: &WorldState,
+        material: Material,
+    ) -> Result<EnumMaterial, CreateSceneError> {
+        match material {
+            Material::Matte(Matte { albedo }) => {
+                let texture_index = match albedo {
+                    TextureOrColor::Color(color) => {
+                        let texture_index = self.textures.len();
+                        self.textures.push(EnumTexture::new_solid(color));
+                        texture_index as u32
+                    }
+                    TextureOrColor::Texture(name) => *state
+                        .textures
+                        .get(&name)
+                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                };
+
+                Ok(EnumMaterial::new_lambertian(texture_index))
+            }
+            Material::Glass => Ok(EnumMaterial::new_dielectric(1.5)),
+        }
     }
 
     fn append_world(
@@ -162,29 +188,17 @@ impl Scene {
                                 EnumLight::new_distant(distant.from, distant.to, distant.color),
                             ),
                         },
-                        WorldObject::Material(material) => match material {
-                            Material::Matte(Matte { albedo }) => {
-                                let texture_index = match albedo {
-                                    TextureOrColor::Color(color) => {
-                                        let texture_index = self.textures.len();
-                                        self.textures.push(EnumTexture::new_solid(color));
-                                        texture_index as u32
-                                    }
-                                    TextureOrColor::Texture(name) => *state
-                                        .textures
-                                        .get(&name)
-                                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                                };
-
-                                state.current_material_index = Some(self.materials.len());
-                                self.materials
-                                    .push(EnumMaterial::new_lambertian(texture_index));
-                            }
-                            Material::Glass => {
-                                state.current_material_index = Some(self.materials.len());
-                                self.materials.push(EnumMaterial::new_dielectric(1.5));
-                            }
-                        },
+                        WorldObject::Material(material) => {
+                            let material = self.material(&state, material)?;
+                            state.current_material_index = Some(self.materials.len());
+                            self.materials.push(material);
+                        }
+                        WorldObject::MakeNamedMaterial(name, material) => {
+                            let material = self.material(&state, material)?;
+                            state.materials.insert(name, self.materials.len() as u32);
+                            state.current_material_index = Some(self.materials.len());
+                            self.materials.push(material);
+                        }
                         WorldObject::Shape(shape) => match shape {
                             Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
                                 shader_offset: ShaderIndex::SPHERE,

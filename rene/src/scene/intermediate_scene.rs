@@ -35,6 +35,7 @@ pub enum IntermediateWorld {
 pub enum WorldObject {
     LightSource(LightSource),
     Material(Material),
+    MakeNamedMaterial(String, Material),
     Shape(Shape),
 }
 
@@ -392,6 +393,17 @@ impl IntermediateWorld {
                 pbrt_parser::WorldObjectType::Material => Ok(Self::WorldObject(
                     WorldObject::Material(obj.get_material()?),
                 )),
+                pbrt_parser::WorldObjectType::MakeNamedMaterial => {
+                    let t = obj.get_str("type")??;
+                    let name = obj.t.to_string();
+                    let mut obj = obj.clone();
+                    obj.t = &t;
+
+                    Ok(Self::WorldObject(WorldObject::MakeNamedMaterial(
+                        name,
+                        obj.get_material()?,
+                    )))
+                }
                 pbrt_parser::WorldObjectType::Shape => match obj.t {
                     "sphere" => {
                         let radius = obj.get_float("radius").unwrap_or(Ok(1.0))?;
