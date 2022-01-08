@@ -1458,7 +1458,6 @@ fn optix_denoise(
     use cust::memory::DeviceBuffer;
     use cust::prelude::{Stream, StreamFlags};
     use cust::util::SliceExt;
-    use cust::vek::Vec3;
     use optix::context::OptixContext;
     use optix::denoiser::DenoiserOptions;
     use optix::denoiser::{Denoiser, DenoiserModelKind, DenoiserParams, Image, ImageFormat};
@@ -1487,7 +1486,7 @@ fn optix_denoise(
 
     // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
     // using bytemuck
-    let mut out_buf = unsafe { DeviceBuffer::<Vec3<f32>>::zeroed((width * height) as usize)? };
+    let mut out_buf = unsafe { DeviceBuffer::<[f32; 3]>::zeroed((width * height) as usize)? };
 
     // make an image to tell OptiX about how our image buffer is represented
     let input_image = Image::new(&in_buf_image, ImageFormat::Float3, width, height);
@@ -1516,7 +1515,7 @@ fn optix_denoise(
 
     Ok(denoised
         .iter()
-        .flat_map(|v| bytemuck::cast_slice::<f32, u8>(&v).iter().copied())
+        .flat_map(|v| bytemuck::cast_slice::<f32, u8>(v.as_slice()).iter().copied())
         .collect())
 }
 
