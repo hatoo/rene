@@ -239,7 +239,7 @@ pub fn main_ray_generation(
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + vec3a(0.5, 0.0, 0.0).extend(1.0));
+        image.write(pos, prev + albedo.extend(0.0));
     }
 }
 

@@ -19,7 +19,6 @@ use ash::{
 use clap::Parser;
 use glam::{Vec2, Vec3A};
 use nom::error::convert_error;
-use optix::denoiser::DenoiserOptions;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
@@ -41,6 +40,10 @@ impl ShaderIndex {
 struct Opts {
     #[clap(help = "pbrt file")]
     pbrt_path: PathBuf,
+    #[clap(help = "AOV normal", long = "aov-normal")]
+    aov_normal: Option<PathBuf>,
+    #[clap(help = "AOV albedo", long = "aov-albedo")]
+    aov_albedo: Option<PathBuf>,
     #[clap(
         help = "Use Optix Denoiser. Need to build with \"optix-denoiser\" feature",
         long = "optix-denoiser"
@@ -1296,11 +1299,13 @@ fn main() {
         data_linear
     });
 
-    let mut data_image_linear = data.next().unwrap();
-    let mut data_normal_linear = data.next().unwrap();
-    let mut data_albedo_linear = data.next().unwrap();
+    let data_image_linear = data.next().unwrap();
+    let data_normal_linear = data.next().unwrap();
+    let data_albedo_linear = data.next().unwrap();
 
-    std::mem::swap(&mut data_image_linear, &mut data_normal_linear);
+    let mut data_image_linear = f32_4_to_3(&data_image_linear);
+    let mut data_normal_linear = f32_4_to_3(&data_normal_linear);
+    let mut data_albedo_linear = f32_4_to_3(&data_albedo_linear);
 
     average(&mut data_image_linear, N_SAMPLES);
     average(&mut data_normal_linear, N_SAMPLES);
@@ -1311,22 +1316,45 @@ fn main() {
         data_image_linear = optix_denoise(
             &data_image_linear,
             &data_normal_linear,
+            &data_albedo_linear,
             scene.film.xresolution,
             scene.film.yresolution,
         )
         .unwrap();
     }
 
-    let rgba = to_rgba8(&data_image_linear, 2.2);
+    let rgb = to_rgb8(&data_image_linear, 2.2);
 
     image::save_buffer(
         scene.film.filename,
-        &rgba,
+        &rgb,
         scene.film.xresolution,
         scene.film.yresolution,
-        image::ColorType::Rgba8,
+        image::ColorType::Rgb8,
     )
     .unwrap();
+
+    if let Some(aov_normal_path) = opts.aov_normal {
+        image::save_buffer(
+            aov_normal_path,
+            &to_aov(&data_normal_linear),
+            scene.film.xresolution,
+            scene.film.yresolution,
+            image::ColorType::Rgb8,
+        )
+        .unwrap();
+    }
+
+    if let Some(aov_albedo_path) = opts.aov_albedo {
+        image::save_buffer(
+            aov_albedo_path,
+            &to_aov(&data_albedo_linear),
+            scene.film.xresolution,
+            scene.film.yresolution,
+            image::ColorType::Rgb8,
+        )
+        .unwrap();
+    }
 
     unsafe {
         device.free_memory(dst_device_memory, None);
@@ -1385,6 +1413,15 @@ fn to_linear(
     result
 }
 
+fn f32_4_to_3(data: &[u8]) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data);
+
+    data_f32
+        .chunks(4)
+        .flat_map(|v| bytemuck::cast_slice(v).iter().take(3 * 4).copied())
+        .collect()
+}
+
 fn average(data_linear: &mut [u8], denom: u32) {
     let data_f32: &mut [f32] = bytemuck::cast_slice_mut(data_linear);
 
@@ -1393,7 +1430,7 @@ fn average(data_linear: &mut [u8], denom: u32) {
     }
 }
 
-fn to_rgba8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
+fn to_rgb8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
     let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
 
     data_f32
@@ -1402,18 +1439,29 @@ fn to_rgba8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
         .collect()
 }
 
-// #[cfg(feature = "optix-denoiser")]
+fn to_aov(data_linear: &[u8]) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
+
+    data_f32
+        .iter()
+        .map(|&value| (256.0 * value.clamp(0.0, 0.999)) as u8)
+        .collect()
+}
+
+#[cfg(feature = "optix-denoiser")]
 fn optix_denoise(
     linear_image: &[u8],
     linear_normal: &[u8],
+    linear_albedo: &[u8],
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     use cust::memory::DeviceBuffer;
     use cust::prelude::{Stream, StreamFlags};
     use cust::util::SliceExt;
-    use cust::vek::Vec4;
+    use cust::vek::Vec3;
     use optix::context::OptixContext;
+    use optix::denoiser::DenoiserOptions;
     use optix::denoiser::{Denoiser, DenoiserModelKind, DenoiserParams, Image, ImageFormat};
     // set up CUDA and OptiX then make the needed structs/contexts.
     let cuda_ctx = cust::quick_init()?;
@@ -1424,6 +1472,7 @@ fn optix_denoise(
 
     let mut denoiser_option = DenoiserOptions::default();
     denoiser_option.guide_normal = true;
+    denoiser_option.guide_albedo = true;
     // set up the denoiser, choosing Ldr as our model because our colors are in
     // the 0.0 - 1.0 range.
     let mut denoiser = Denoiser::new(&optix_ctx, DenoiserModelKind::Ldr, denoiser_option)?;
@@ -1435,21 +1484,23 @@ fn optix_denoise(
     // allocate the buffer for the noisy image and copy the data to the GPU.
     let in_buf_image = linear_image.as_dbuf()?;
     let in_buf_normal = linear_normal.as_dbuf()?;
+    let in_buf_albedo = linear_albedo.as_dbuf()?;
 
     // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
     // using bytemuck
-    let mut out_buf = unsafe { DeviceBuffer::<Vec4<f32>>::zeroed((width * height) as usize)? };
+    let mut out_buf = unsafe { DeviceBuffer::<Vec3<f32>>::zeroed((width * height) as usize)? };
 
     // make an image to tell OptiX about how our image buffer is represented
-    let input_image = Image::new(&in_buf_image, ImageFormat::Float4, width, height);
-    let input_normal = Image::new(&in_buf_normal, ImageFormat::Float4, width, height);
+    let input_image = Image::new(&in_buf_image, ImageFormat::Float3, width, height);
+    let input_normal = Image::new(&in_buf_normal, ImageFormat::Float3, width, height);
+    let input_albedo = Image::new(&in_buf_albedo, ImageFormat::Float3, width, height);
 
     // Invoke the denoiser on the image. OptiX will queue up the work on the
     // CUDA stream.
     denoiser.invoke(
         &stream,
         optix::denoiser::DenoiserGuideImages {
-            albedo: None,
+            albedo: Some(input_albedo),
             normal: Some(input_normal),
             flow: None,
         },
