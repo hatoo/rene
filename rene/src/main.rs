@@ -19,6 +19,7 @@ use ash::{
 use clap::Parser;
 use glam::{Vec2, Vec3A};
 use nom::error::convert_error;
+use optix::denoiser::DenoiserOptions;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
@@ -53,7 +54,7 @@ fn main() {
     const ENABLE_VALIDATION_LAYER: bool = true;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
-    const N_SAMPLES: u32 = 5;
+    const N_SAMPLES: u32 = 5000;
     const N_SAMPLES_ITER: u32 = 100;
 
     let mut opts: Opts = Opts::parse();
@@ -1134,182 +1135,183 @@ fn main() {
         unsafe { device.allocate_command_buffers(&allocate_info) }.unwrap()[0]
     };
 
-    {
-        let cmd_begin_info = vk::CommandBufferBeginInfo::builder().build();
+    let mut data = (0..2).map(|layer| {
+        {
+            let cmd_begin_info = vk::CommandBufferBeginInfo::builder().build();
 
-        unsafe { device.begin_command_buffer(copy_cmd, &cmd_begin_info) }.unwrap();
-    }
-
-    {
-        let image_barrier = vk::ImageMemoryBarrier::builder()
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-            .old_layout(vk::ImageLayout::UNDEFINED)
-            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .image(dst_image)
-            .subresource_range(
-                vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0)
-                    .level_count(1)
-                    .base_array_layer(0)
-                    .layer_count(1)
-                    .build(),
-            )
-            .build();
-
-        unsafe {
-            device.cmd_pipeline_barrier(
-                copy_cmd,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[image_barrier],
-            );
+            unsafe { device.begin_command_buffer(copy_cmd, &cmd_begin_info) }.unwrap();
         }
-    }
 
-    {
-        let copy_region = vk::ImageCopy::builder()
-            .src_subresource(
-                vk::ImageSubresourceLayers::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .layer_count(1)
-                    .build(),
-            )
-            .dst_subresource(
-                vk::ImageSubresourceLayers::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .layer_count(1)
-                    .build(),
-            )
-            .extent(
-                vk::Extent3D::builder()
-                    .width(scene.film.xresolution)
-                    .height(scene.film.yresolution)
-                    .depth(1)
-                    .build(),
-            )
-            .build();
+        {
+            let image_barrier = vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .image(dst_image)
+                .subresource_range(
+                    vk::ImageSubresourceRange::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1)
+                        .build(),
+                )
+                .build();
 
-        unsafe {
-            device.cmd_copy_image(
-                copy_cmd,
-                image,
-                vk::ImageLayout::GENERAL,
-                dst_image,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[copy_region],
-            );
+            unsafe {
+                device.cmd_pipeline_barrier(
+                    copy_cmd,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[image_barrier],
+                );
+            }
         }
-    }
 
-    {
-        let image_barrier = vk::ImageMemoryBarrier::builder()
-            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-            .dst_access_mask(vk::AccessFlags::MEMORY_READ)
-            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .new_layout(vk::ImageLayout::GENERAL)
-            .image(dst_image)
-            .subresource_range(
-                vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0)
-                    .level_count(1)
-                    .base_array_layer(0)
-                    .layer_count(1)
-                    .build(),
-            )
-            .build();
+        {
+            let copy_region = vk::ImageCopy::builder()
+                .src_subresource(
+                    vk::ImageSubresourceLayers::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_array_layer(layer)
+                        .layer_count(1)
+                        .build(),
+                )
+                .dst_subresource(
+                    vk::ImageSubresourceLayers::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .layer_count(1)
+                        .build(),
+                )
+                .extent(
+                    vk::Extent3D::builder()
+                        .width(scene.film.xresolution)
+                        .height(scene.film.yresolution)
+                        .depth(1)
+                        .build(),
+                )
+                .build();
 
-        unsafe {
-            device.cmd_pipeline_barrier(
-                copy_cmd,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[image_barrier],
-            );
+            unsafe {
+                device.cmd_copy_image(
+                    copy_cmd,
+                    image,
+                    vk::ImageLayout::GENERAL,
+                    dst_image,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[copy_region],
+                );
+            }
         }
-    }
 
-    {
-        let submit_infos = [vk::SubmitInfo {
-            s_type: vk::StructureType::SUBMIT_INFO,
-            p_next: ptr::null(),
-            wait_semaphore_count: 0,
-            p_wait_semaphores: null(),
-            p_wait_dst_stage_mask: null(),
-            command_buffer_count: 1,
-            p_command_buffers: &copy_cmd,
-            signal_semaphore_count: 0,
-            p_signal_semaphores: null(),
-        }];
+        {
+            let image_barrier = vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .dst_access_mask(vk::AccessFlags::MEMORY_READ)
+                .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(dst_image)
+                .subresource_range(
+                    vk::ImageSubresourceRange::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1)
+                        .build(),
+                )
+                .build();
 
-        unsafe {
-            device.end_command_buffer(copy_cmd).unwrap();
+            unsafe {
+                device.cmd_pipeline_barrier(
+                    copy_cmd,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[image_barrier],
+                );
+            }
+        }
 
+        {
+            let submit_infos = [vk::SubmitInfo {
+                s_type: vk::StructureType::SUBMIT_INFO,
+                p_next: ptr::null(),
+                wait_semaphore_count: 0,
+                p_wait_semaphores: null(),
+                p_wait_dst_stage_mask: null(),
+                command_buffer_count: 1,
+                p_command_buffers: &copy_cmd,
+                signal_semaphore_count: 0,
+                p_signal_semaphores: null(),
+            }];
+
+            unsafe {
+                device.end_command_buffer(copy_cmd).unwrap();
+
+                device
+                    .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
+                    .expect("Failed to execute queue submit.");
+
+                device.queue_wait_idle(graphics_queue).unwrap();
+            }
+        }
+
+        let subresource_layout = {
+            let subresource = vk::ImageSubresource::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .build();
+
+            unsafe { device.get_image_subresource_layout(dst_image, subresource) }
+        };
+
+        let data: *const u8 = unsafe {
             device
-                .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
-                .expect("Failed to execute queue submit.");
+                .map_memory(
+                    dst_device_memory,
+                    0,
+                    vk::WHOLE_SIZE,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .unwrap() as _
+        };
 
-            device.queue_wait_idle(graphics_queue).unwrap();
-        }
-    }
+        let data_image = unsafe { data.offset(subresource_layout.offset as isize) };
+        /*
+        let data_normal = unsafe {
+            data.offset((subresource_layout.offset + subresource_layout.array_pitch) as isize)
+        };
+        */
 
-    let subresource_layout = {
-        let subresource = vk::ImageSubresource::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .build();
+        let data_linear = to_linear(
+            data_image,
+            &subresource_layout,
+            scene.film.xresolution as usize,
+            scene.film.yresolution as usize,
+        );
+        unsafe { device.unmap_memory(dst_device_memory) };
+        data_linear
+    });
 
-        unsafe { device.get_image_subresource_layout(dst_image, subresource) }
-    };
-
-    let data: *const u8 = unsafe {
-        device
-            .map_memory(
-                dst_device_memory,
-                0,
-                vk::WHOLE_SIZE,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap() as _
-    };
-
-    let data_image = unsafe { data.offset(subresource_layout.offset as isize) };
-    /*
-    let data_normal = unsafe {
-        data.offset((subresource_layout.offset + subresource_layout.array_pitch) as isize)
-    };
-    */
-
-    let mut data_image_linear = to_linear(
-        data_image,
-        &subresource_layout,
-        scene.film.xresolution as usize,
-        scene.film.yresolution as usize,
-    );
-
-    /*
-    let mut data_normal_linear = to_linear(
-        data_normal,
-        &subresource_layout,
-        scene.film.xresolution as usize,
-        scene.film.yresolution as usize,
-    );
-    */
+    let mut data_image_linear = data.next().unwrap();
+    let mut data_normal_linear = data.next().unwrap();
 
     average(&mut data_image_linear, N_SAMPLES);
+    average(&mut data_normal_linear, N_SAMPLES);
     // average(&mut data_normal_linear, N_SAMPLES);
 
     #[cfg(feature = "optix-denoiser")]
     if opts.optix_denoiser {
         data_image_linear = optix_denoise(
             &data_image_linear,
+            &data_normal_linear,
             scene.film.xresolution,
             scene.film.yresolution,
         )
@@ -1328,7 +1330,6 @@ fn main() {
     .unwrap();
 
     unsafe {
-        device.unmap_memory(dst_device_memory);
         device.free_memory(dst_device_memory, None);
         device.destroy_image(dst_image, None);
     }
@@ -1402,9 +1403,10 @@ fn to_rgba8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
         .collect()
 }
 
-#[cfg(feature = "optix-denoiser")]
+// #[cfg(feature = "optix-denoiser")]
 fn optix_denoise(
-    linear: &[u8],
+    linear_image: &[u8],
+    linear_normal: &[u8],
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -1421,29 +1423,37 @@ fn optix_denoise(
 
     let stream = Stream::new(StreamFlags::NON_BLOCKING, None)?;
 
+    let mut denoiser_option = DenoiserOptions::default();
+    denoiser_option.guide_normal = true;
     // set up the denoiser, choosing Ldr as our model because our colors are in
     // the 0.0 - 1.0 range.
-    let mut denoiser = Denoiser::new(&optix_ctx, DenoiserModelKind::Ldr, Default::default())?;
+    let mut denoiser = Denoiser::new(&optix_ctx, DenoiserModelKind::Ldr, denoiser_option)?;
 
     // setup the optix state for our required image dimensions. this allocates the required
     // state and scratch memory for further invocations.
     denoiser.setup_state(&stream, width, height, false)?;
 
     // allocate the buffer for the noisy image and copy the data to the GPU.
-    let in_buf = linear.as_dbuf()?;
+    let in_buf_image = linear_image.as_dbuf()?;
+    let in_buf_normal = linear_normal.as_dbuf()?;
 
     // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
     // using bytemuck
     let mut out_buf = unsafe { DeviceBuffer::<Vec4<f32>>::zeroed((width * height) as usize)? };
 
     // make an image to tell OptiX about how our image buffer is represented
-    let input_image = Image::new(&in_buf, ImageFormat::Float4, width, height);
+    let input_image = Image::new(&in_buf_image, ImageFormat::Float4, width, height);
+    let input_normal = Image::new(&in_buf_normal, ImageFormat::Float4, width, height);
 
     // Invoke the denoiser on the image. OptiX will queue up the work on the
     // CUDA stream.
     denoiser.invoke(
         &stream,
-        Default::default(),
+        optix::denoiser::DenoiserGuideImages {
+            albedo: None,
+            normal: Some(input_normal),
+            flow: None,
+        },
         input_image,
         DenoiserParams::default(),
         &mut out_buf,

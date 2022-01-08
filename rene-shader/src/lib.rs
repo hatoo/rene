@@ -145,7 +145,9 @@ pub fn main_ray_generation(
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
-    for _ in 0..50 {
+    let mut normal = Vec3A::ZERO;
+
+    for i in 0..50 {
         *payload = RayPayload::default();
         unsafe {
             top_level_as.trace_ray(
@@ -166,6 +168,9 @@ pub fn main_ray_generation(
             color_sum += color * payload.position;
             break;
         } else {
+            if i == 0 {
+                normal = payload.normal.normalize();
+            }
             let wo = -ray.direction.normalize();
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
@@ -218,6 +223,13 @@ pub fn main_ray_generation(
 
     unsafe {
         image.write(pos, prev + color_sum.extend(1.0));
+    }
+
+    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(1);
+    let prev: Vec4 = image.read(pos);
+
+    unsafe {
+        image.write(pos, prev + normal.extend(1.0));
     }
 }
 
