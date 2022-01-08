@@ -123,7 +123,7 @@ pub fn main_ray_generation(
     #[spirv(push_constant)] constants: &PushConstants,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] uniform: &Uniform,
     #[spirv(descriptor_set = 0, binding = 1)] top_level_as: &AccelerationStructure,
-    #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false, arrayed=true),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
@@ -213,7 +213,7 @@ pub fn main_ray_generation(
         }
     }
 
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y);
+    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(0);
     let prev: Vec4 = image.read(pos);
 
     unsafe {

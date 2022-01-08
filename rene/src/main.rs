@@ -53,7 +53,7 @@ fn main() {
     const ENABLE_VALIDATION_LAYER: bool = true;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
-    const N_SAMPLES: u32 = 5000;
+    const N_SAMPLES: u32 = 5;
     const N_SAMPLES_ITER: u32 = 100;
 
     let mut opts: Opts = Opts::parse();
@@ -263,7 +263,7 @@ fn main() {
                     .build(),
             )
             .mip_levels(1)
-            .array_layers(1)
+            .array_layers(2)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(
@@ -295,14 +295,14 @@ fn main() {
 
     let image_view = {
         let image_view_create_info = vk::ImageViewCreateInfo::builder()
-            .view_type(vk::ImageViewType::TYPE_2D)
+            .view_type(vk::ImageViewType::TYPE_2D_ARRAY)
             .format(COLOR_FORMAT)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: 0,
                 level_count: 1,
                 base_array_layer: 0,
-                layer_count: 1,
+                layer_count: 2,
             })
             .image(image)
             .build();
@@ -345,7 +345,7 @@ fn main() {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(1)
+                    .layer_count(2)
                     .build(),
             )
             .build();
@@ -913,7 +913,7 @@ fn main() {
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)
-                .layer_count(1)
+                .layer_count(2)
                 .build();
 
             device.cmd_clear_color_image(
@@ -938,7 +938,7 @@ fn main() {
                         .base_mip_level(0)
                         .level_count(1)
                         .base_array_layer(0)
-                        .layer_count(1)
+                        .layer_count(2)
                         .build(),
                 )
                 .build();
@@ -983,7 +983,7 @@ fn main() {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(1)
+                    .layer_count(2)
                     .build(),
             )
             .build();
@@ -1280,24 +1280,43 @@ fn main() {
             .unwrap() as _
     };
 
-    let data = unsafe { data.offset(subresource_layout.offset as isize) };
+    let data_image = unsafe { data.offset(subresource_layout.offset as isize) };
+    /*
+    let data_normal = unsafe {
+        data.offset((subresource_layout.offset + subresource_layout.array_pitch) as isize)
+    };
+    */
 
-    let mut data_linear = to_linear(
-        data,
+    let mut data_image_linear = to_linear(
+        data_image,
         &subresource_layout,
         scene.film.xresolution as usize,
         scene.film.yresolution as usize,
     );
 
-    average(&mut data_linear, N_SAMPLES);
+    /*
+    let mut data_normal_linear = to_linear(
+        data_normal,
+        &subresource_layout,
+        scene.film.xresolution as usize,
+        scene.film.yresolution as usize,
+    );
+    */
+
+    average(&mut data_image_linear, N_SAMPLES);
+    // average(&mut data_normal_linear, N_SAMPLES);
 
     #[cfg(feature = "optix-denoiser")]
     if opts.optix_denoiser {
-        data_linear =
-            optix_denoise(&data_linear, scene.film.xresolution, scene.film.yresolution).unwrap();
+        data_image_linear = optix_denoise(
+            &data_image_linear,
+            scene.film.xresolution,
+            scene.film.yresolution,
+        )
+        .unwrap();
     }
 
-    let rgba = to_rgba8(&data_linear, 2.2);
+    let rgba = to_rgba8(&data_image_linear, 2.2);
 
     image::save_buffer(
         scene.film.filename,
