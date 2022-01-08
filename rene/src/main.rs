@@ -1294,9 +1294,13 @@ fn main() {
         data_linear
     });
 
-    let mut data_image_linear = data.next().unwrap();
-    let mut data_normal_linear = data.next().unwrap();
-    let mut data_albedo_linear = data.next().unwrap();
+    let data_image_linear = data.next().unwrap();
+    let data_normal_linear = data.next().unwrap();
+    let data_albedo_linear = data.next().unwrap();
+
+    let mut data_image_linear = f32_4_to_3(&data_image_linear);
+    let mut data_normal_linear = f32_4_to_3(&data_normal_linear);
+    let mut data_albedo_linear = f32_4_to_3(&data_albedo_linear);
 
     average(&mut data_image_linear, N_SAMPLES);
     average(&mut data_normal_linear, N_SAMPLES);
@@ -1314,14 +1318,14 @@ fn main() {
         .unwrap();
     }
 
-    let rgba = to_rgba8(&data_image_linear, 2.2);
+    let rgb = to_rgb8(&data_image_linear, 2.2);
 
     image::save_buffer(
         scene.film.filename,
-        &rgba,
+        &rgb,
         scene.film.xresolution,
         scene.film.yresolution,
-        image::ColorType::Rgba8,
+        image::ColorType::Rgb8,
     )
     .unwrap();
 
@@ -1382,6 +1386,15 @@ fn to_linear(
     result
 }
 
+fn f32_4_to_3(data: &[u8]) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data);
+
+    data_f32
+        .chunks(4)
+        .flat_map(|v| bytemuck::cast_slice(v).iter().take(3 * 4).copied())
+        .collect()
+}
+
 fn average(data_linear: &mut [u8], denom: u32) {
     let data_f32: &mut [f32] = bytemuck::cast_slice_mut(data_linear);
 
@@ -1390,7 +1403,7 @@ fn average(data_linear: &mut [u8], denom: u32) {
     }
 }
 
-fn to_rgba8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
+fn to_rgb8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
     let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
 
     data_f32
@@ -1410,7 +1423,7 @@ fn optix_denoise(
     use cust::memory::DeviceBuffer;
     use cust::prelude::{Stream, StreamFlags};
     use cust::util::SliceExt;
-    use cust::vek::Vec4;
+    use cust::vek::Vec3;
     use optix::context::OptixContext;
     use optix::denoiser::DenoiserOptions;
     use optix::denoiser::{Denoiser, DenoiserModelKind, DenoiserParams, Image, ImageFormat};
@@ -1439,12 +1452,12 @@ fn optix_denoise(
 
     // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
     // using bytemuck
-    let mut out_buf = unsafe { DeviceBuffer::<Vec4<f32>>::zeroed((width * height) as usize)? };
+    let mut out_buf = unsafe { DeviceBuffer::<Vec3<f32>>::zeroed((width * height) as usize)? };
 
     // make an image to tell OptiX about how our image buffer is represented
-    let input_image = Image::new(&in_buf_image, ImageFormat::Float4, width, height);
-    let input_normal = Image::new(&in_buf_normal, ImageFormat::Float4, width, height);
-    let input_albedo = Image::new(&in_buf_albedo, ImageFormat::Float4, width, height);
+    let input_image = Image::new(&in_buf_image, ImageFormat::Float3, width, height);
+    let input_normal = Image::new(&in_buf_normal, ImageFormat::Float3, width, height);
+    let input_albedo = Image::new(&in_buf_albedo, ImageFormat::Float3, width, height);
 
     // Invoke the denoiser on the image. OptiX will queue up the work on the
     // CUDA stream.
