@@ -1,4 +1,4 @@
-use glam::{vec3a, Vec3A};
+use glam::{vec3a, Mat4, Vec3A, Vec4};
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
@@ -14,6 +14,7 @@ use nom::{
 pub mod include;
 
 pub enum Scene<'a> {
+    Transform(Mat4),
     LookAt(LookAt),
     SceneObject(SceneObject<'a>),
     World(Vec<World<'a>>),
@@ -117,6 +118,15 @@ fn parse_vec3<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Ve
     let (rest, x3) = preceded(sp, float)(rest)?;
 
     Ok((rest, Vec3A::new(x1, x2, x3)))
+}
+
+fn parse_vec4<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec4, E> {
+    let (rest, x1) = preceded(sp, float)(input)?;
+    let (rest, x2) = preceded(sp, float)(rest)?;
+    let (rest, x3) = preceded(sp, float)(rest)?;
+    let (rest, x4) = preceded(sp, float)(rest)?;
+
+    Ok((rest, Vec4::new(x1, x2, x3, x4)))
 }
 
 fn parse_axis_angle<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, AxisAngle, E> {
@@ -274,6 +284,18 @@ fn parse_look_at<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
     Ok((rest, LookAt { eye, look_at, up }))
 }
 
+fn parse_transform<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Mat4, E> {
+    let (rest, _) = tag("Transform")(input)?;
+    let (rest, _) = preceded(sp, char('['))(rest)?;
+    let (rest, x) = parse_vec4(rest)?;
+    let (rest, y) = parse_vec4(rest)?;
+    let (rest, z) = parse_vec4(rest)?;
+    let (rest, w) = parse_vec4(rest)?;
+    let (rest, _) = preceded(sp, char(']'))(rest)?;
+
+    Ok((rest, Mat4::from_cols(x, y, z, w)))
+}
+
 fn parse_scene_object_type<'a, E: ParseError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, SceneObjectType, E> {
@@ -398,6 +420,7 @@ fn parse_world_statement<'a, E: ParseError<&'a str>>(
 fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Scene, E> {
     alt((
         map(parse_look_at, |l| Scene::LookAt(l)),
+        map(parse_transform, |m| Scene::Transform(m)),
         map(parse_scene_object, |o| Scene::SceneObject(o)),
         map(parse_world_statement, |w| Scene::World(w)),
     ))(input)
