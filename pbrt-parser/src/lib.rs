@@ -432,7 +432,7 @@ fn parse_all<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec
     let mut rest = input;
 
     loop {
-        if let Ok((rest, _)) = eof::<_, Error<_>>(rest) {
+        if let Ok((rest, _)) = preceded(sp, eof::<_, Error<_>>)(rest) {
             return Ok((rest, result));
         }
 
@@ -544,6 +544,24 @@ mod test {
                 parse_scene_object::<Error<&str>>(q).unwrap()
             );
         }
+    }
+
+    #[test]
+    fn test_parse_scene_object2() {
+        assert_eq!(
+            parse_scene_object::<Error<&str>>(r#"Integrator "path" "integer maxdepth" [ 65 ]"#),
+            Ok((
+                "",
+                SceneObject {
+                    object_type: SceneObjectType::Integrator,
+                    t: "path",
+                    arguments: vec![Argument {
+                        name: "maxdepth",
+                        value: Value::Integer(vec![65])
+                    }]
+                }
+            ))
+        );
     }
 
     #[test]
