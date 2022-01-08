@@ -69,6 +69,7 @@ pub enum SceneObjectType {
     Camera,
     Sampler,
     Integrator,
+    PixelFilter,
     Film,
 }
 
@@ -307,6 +308,7 @@ fn parse_scene_object_type<'a, E: ParseError<&'a str>>(
         value(SceneObjectType::Camera, tag("Camera")),
         value(SceneObjectType::Sampler, tag("Sampler")),
         value(SceneObjectType::Integrator, tag("Integrator")),
+        value(SceneObjectType::Integrator, tag("PixelFilter")),
         value(SceneObjectType::Film, tag("Film")),
     ))(input)
 }

@@ -122,6 +122,8 @@ pub enum IntermediateScene {
     Sampler,
     // TODO implement it
     Integrator,
+    // TODO implement it
+    PixelFilter,
     Film(Film),
 }
 
@@ -492,6 +494,7 @@ impl IntermediateScene {
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                 pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
                 pbrt_parser::SceneObjectType::Integrator => Ok(Self::Integrator),
+                pbrt_parser::SceneObjectType::PixelFilter => Ok(Self::PixelFilter),
                 pbrt_parser::SceneObjectType::Camera => match obj.t {
                     "perspective" => {
                         let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;

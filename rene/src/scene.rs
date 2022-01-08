@@ -67,6 +67,9 @@ impl Scene {
                 IntermediateScene::Integrator => {
                     log::info!("Integrator is not yet implemented. Continue.");
                 }
+                IntermediateScene::PixelFilter => {
+                    log::info!("PixelFilter is not yet implemented. Continue.");
+                }
                 IntermediateScene::Film(film) => {
                     scene.film = film;
                 }
