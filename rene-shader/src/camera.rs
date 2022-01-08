@@ -76,32 +76,6 @@ pub struct PerspectiveCamera {
 
 impl PerspectiveCamera {
     pub fn get_ray(&self, st: Vec2, camera_to_world: Mat4) -> Ray {
-        /*
-        let theta = self.fov / 180.0 * core::f32::consts::PI;
-        let aspect_ratio = size.x as f32 / size.y as f32;
-        */
-        /*
-        let (viewport_width, viewport_height) = if size.x < size.y {
-            let w = (theta / 2.0).tan();
-            let viewport_width = 2.0 * w;
-            let viewport_height = viewport_width * size.y as f32 / size.x as f32;
-            (viewport_width, viewport_height)
-        } else {
-            let h = (theta / 2.0).tan();
-            let viewport_height = 2.0 * h;
-            let viewport_width = viewport_height * size.x as f32 / size.y as f32;
-            (viewport_width, viewport_height)
-        };
-
-        let w = (look_at.look_at - look_at.eye).normalize();
-        let u = look_at.up.cross(w).normalize();
-        let v = w.cross(u);
-
-        let origin = look_at.eye;
-        let horizontal = viewport_width * u;
-        let vertical = viewport_height * v;
-        let lower_left_corner = -horizontal / 2.0 - vertical / 2.0 + w;
-        */
         let origin = camera_to_world.transform_point3a(vec3a(0.0, 0.0, 0.0));
         let target =
             self.camera_to_screen
