@@ -40,6 +40,11 @@ impl ShaderIndex {
 struct Opts {
     #[clap(help = "pbrt file")]
     pbrt_path: PathBuf,
+    #[clap(
+        help = "Use Optix Denoiser. Need to build with \"optix-denoiser\" feature",
+        long = "optix-denoiser"
+    )]
+    optix_denoiser: bool,
 }
 
 fn main() {
@@ -53,6 +58,14 @@ fn main() {
 
     let mut opts: Opts = Opts::parse();
     let mut pbrt_file = String::new();
+
+    #[cfg(not(feature = "optix-denoiser"))]
+    if opts.optix_denoiser {
+        log::warn!(
+            "Optix Denoiser was enabled but built without \"optix-denoiser\" feature. Ignore."
+        );
+    }
+
     File::open(&opts.pbrt_path)
         .unwrap()
         .read_to_string(&mut pbrt_file)
@@ -1269,14 +1282,22 @@ fn main() {
 
     let data = unsafe { data.offset(subresource_layout.offset as isize) };
 
-    let data_linear = to_linear(
+    let mut data_linear = to_linear(
         data,
         &subresource_layout,
         scene.film.xresolution as usize,
         scene.film.yresolution as usize,
     );
 
-    let rgba = to_rgba8(&data_linear, N_SAMPLES as usize, 2.2);
+    average(&mut data_linear, N_SAMPLES);
+
+    #[cfg(feature = "optix-denoiser")]
+    if opts.optix_denoiser {
+        data_linear =
+            optix_denoise(&data_linear, scene.film.xresolution, scene.film.yresolution).unwrap();
+    }
+
+    let rgba = to_rgba8(&data_linear, 2.2);
 
     image::save_buffer(
         scene.film.filename,
@@ -1286,38 +1307,6 @@ fn main() {
         image::ColorType::Rgba8,
     )
     .unwrap();
-    /*
-    let mut png_encoder = png::Encoder::new(
-        File::create(scene.film.filename).unwrap(),
-        scene.film.xresolution,
-        scene.film.yresolution,
-    );
-
-    png_encoder.set_depth(png::BitDepth::Eight);
-    png_encoder.set_color(png::ColorType::Rgba);
-
-    let mut png_writer = png_encoder
-        .write_header()
-        .unwrap()
-        .into_stream_writer_with_size((4 * scene.film.xresolution) as usize)
-        .unwrap();
-
-    let scale = 1.0 / N_SAMPLES as f32;
-    for _ in 0..scene.film.yresolution {
-        let row =
-            unsafe { std::slice::from_raw_parts(data, 4 * 4 * scene.film.xresolution as usize) };
-        let row_f32: &[f32] = bytemuck::cast_slice(row);
-        let row_rgba8: Vec<u8> = row_f32
-            .iter()
-            .map(|f| (256.0 * (f * scale).powf(1.0 / 2.2).clamp(0.0, 0.999)) as u8)
-            .collect();
-
-        png_writer.write_all(&row_rgba8).unwrap();
-        data = unsafe { data.offset(subresource_layout.row_pitch as isize) };
-    }
-
-    png_writer.finish().unwrap();
-    */
 
     unsafe {
         device.unmap_memory(dst_device_memory);
@@ -1343,15 +1332,6 @@ fn main() {
     }
 
     unsafe {
-        /*
-        acceleration_structure.destroy_acceleration_structure(top_as, None);
-        top_as_buffer.destroy(&device);
-
-        acceleration_structure.destroy_acceleration_structure(bottom_as_sphere, None);
-        bottom_as_sphere_buffer.destroy(&device);
-
-        aabb_buffer.destroy(&device);
-        */
         scene_buffers.destroy(&device, &acceleration_structure);
 
         device.destroy_image_view(image_view, None);
@@ -1386,13 +1366,80 @@ fn to_linear(
     result
 }
 
-fn to_rgba8(data: &[u8], denom: usize, gamma: f32) -> Vec<u8> {
-    let data_f32: &[f32] = bytemuck::cast_slice(data);
+fn average(data_linear: &mut [u8], denom: u32) {
+    let data_f32: &mut [f32] = bytemuck::cast_slice_mut(data_linear);
+
+    for v in data_f32 {
+        *v /= denom as f32;
+    }
+}
+
+fn to_rgba8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
 
     data_f32
         .iter()
-        .map(|&value| (256.0 * (value / denom as f32).powf(1.0 / gamma).clamp(0.0, 0.999)) as u8)
+        .map(|&value| (256.0 * value.powf(1.0 / gamma).clamp(0.0, 0.999)) as u8)
         .collect()
+}
+
+#[cfg(feature = "optix-denoiser")]
+fn optix_denoise(
+    linear: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    use cust::memory::DeviceBuffer;
+    use cust::prelude::{Stream, StreamFlags};
+    use cust::util::SliceExt;
+    use cust::vek::Vec4;
+    use optix::context::OptixContext;
+    use optix::denoiser::{Denoiser, DenoiserModelKind, DenoiserParams, Image, ImageFormat};
+    // set up CUDA and OptiX then make the needed structs/contexts.
+    let cuda_ctx = cust::quick_init()?;
+    optix::init()?;
+    let optix_ctx = OptixContext::new(&cuda_ctx)?;
+
+    let stream = Stream::new(StreamFlags::NON_BLOCKING, None)?;
+
+    // set up the denoiser, choosing Ldr as our model because our colors are in
+    // the 0.0 - 1.0 range.
+    let mut denoiser = Denoiser::new(&optix_ctx, DenoiserModelKind::Ldr, Default::default())?;
+
+    // setup the optix state for our required image dimensions. this allocates the required
+    // state and scratch memory for further invocations.
+    denoiser.setup_state(&stream, width, height, false)?;
+
+    // allocate the buffer for the noisy image and copy the data to the GPU.
+    let in_buf = linear.as_dbuf()?;
+
+    // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
+    // using bytemuck
+    let mut out_buf = unsafe { DeviceBuffer::<Vec4<f32>>::zeroed((width * height) as usize)? };
+
+    // make an image to tell OptiX about how our image buffer is represented
+    let input_image = Image::new(&in_buf, ImageFormat::Float4, width, height);
+
+    // Invoke the denoiser on the image. OptiX will queue up the work on the
+    // CUDA stream.
+    denoiser.invoke(
+        &stream,
+        Default::default(),
+        input_image,
+        DenoiserParams::default(),
+        &mut out_buf,
+    )?;
+
+    // Finally, synchronize the stream to wait until the denoiser is finished doing its work.
+    stream.synchronize()?;
+
+    // copy back the data from the gpu.
+    let denoised = out_buf.as_host_vec()?;
+
+    Ok(denoised
+        .iter()
+        .flat_map(|v| bytemuck::cast_slice::<f32, u8>(&v).iter().copied())
+        .collect())
 }
 
 fn check_validation_layer_support<'a>(
