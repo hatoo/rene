@@ -18,4 +18,10 @@ cargo run -- sample_scenes/current.pbrt
 
 ## Cornell box
 
+With Optix Denoiser
+
+```
+cargo run --release --features=optix-denoiser  -- --optix-denoiser  .\sample_scenes\cornell-box\scene.pbrt  
+```
+
 ![Cornell box](images/cornell-box.png)
