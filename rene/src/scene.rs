@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, f32::consts::PI};
 
 use glam::{vec3, Affine3A, Mat4};
 use rene_shader::{light::EnumLight, material::EnumMaterial, texture::EnumTexture, Uniform};
@@ -42,6 +42,10 @@ pub enum CreateSceneError {
     NotFoundTexture(String),
 }
 
+fn deg_to_radian(angle: f32) -> f32 {
+    angle * PI / 180.0
+}
+
 #[derive(Default, Clone)]
 struct WorldState {
     current_material_index: Option<usize>,
@@ -53,7 +57,7 @@ impl Scene {
     pub fn create(scene_description: Vec<pbrt_parser::Scene>) -> Result<Self, CreateSceneError> {
         let mut scene = Self::default();
         let mut wolrd_to_camera = Mat4::default();
-        let mut fov = 90.0;
+        let mut fov = deg_to_radian(90.0);
 
         for desc in scene_description {
             match IntermediateScene::from_scene(desc)? {
@@ -72,7 +76,7 @@ impl Scene {
                 IntermediateScene::SceneObject(obj) => match obj {
                     SceneObject::Camera(camera) => match camera {
                         Camera::Perspective(p) => {
-                            fov = p.fov / 180.0 * core::f32::consts::PI;
+                            fov = p.fov;
                         }
                     },
                 },

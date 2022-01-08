@@ -2,8 +2,9 @@ use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Affine3A, Mat4, Vec2, Vec3A};
 use pbrt_parser::Object;
 use rene_shader::Vertex;
-use std::f32::consts::PI;
 use thiserror::Error;
+
+use super::deg_to_radian;
 
 #[derive(PartialEq, Debug)]
 pub struct LookAt {
@@ -467,7 +468,7 @@ impl IntermediateWorld {
             }
             pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Affine3A::from_axis_angle(
                 axis_angle.axis.normalize().into(),
-                -axis_angle.angle * PI / 180.0,
+                -deg_to_radian(axis_angle.angle),
             ))),
         }
     }
@@ -489,7 +490,9 @@ impl IntermediateScene {
                     "perspective" => {
                         let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;
                         Ok(Self::SceneObject(SceneObject::Camera(Camera::Perspective(
-                            Perspective { fov },
+                            Perspective {
+                                fov: deg_to_radian(fov),
+                            },
                         ))))
                     }
                     t => Err(Error::InvalidCamera(t.to_string())),
