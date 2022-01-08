@@ -1336,7 +1336,7 @@ fn main() {
     if let Some(aov_normal_path) = opts.aov_normal {
         image::save_buffer(
             aov_normal_path,
-            &to_aov(&data_normal_linear),
+            &to_aov_normal(&data_normal_linear),
             scene.film.xresolution,
             scene.film.yresolution,
             image::ColorType::Rgb8,
@@ -1444,6 +1444,15 @@ fn to_aov(data_linear: &[u8]) -> Vec<u8> {
     data_f32
         .iter()
         .map(|&value| (256.0 * value.clamp(0.0, 0.999)) as u8)
+        .collect()
+}
+
+fn to_aov_normal(data_linear: &[u8]) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
+
+    data_f32
+        .iter()
+        .map(|&value| (256.0 * (value * 0.5 + 0.5).clamp(0.0, 0.999)) as u8)
         .collect()
 }
 
