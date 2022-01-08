@@ -19,7 +19,6 @@ use ash::{
 use clap::Parser;
 use glam::{Vec2, Vec3A};
 use nom::error::convert_error;
-use optix::denoiser::DenoiserOptions;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
@@ -264,7 +263,7 @@ fn main() {
                     .build(),
             )
             .mip_levels(1)
-            .array_layers(2)
+            .array_layers(3)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(
@@ -303,7 +302,7 @@ fn main() {
                 base_mip_level: 0,
                 level_count: 1,
                 base_array_layer: 0,
-                layer_count: 2,
+                layer_count: 3,
             })
             .image(image)
             .build();
@@ -346,7 +345,7 @@ fn main() {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(2)
+                    .layer_count(3)
                     .build(),
             )
             .build();
@@ -914,7 +913,7 @@ fn main() {
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)
-                .layer_count(2)
+                .layer_count(3)
                 .build();
 
             device.cmd_clear_color_image(
@@ -939,7 +938,7 @@ fn main() {
                         .base_mip_level(0)
                         .level_count(1)
                         .base_array_layer(0)
-                        .layer_count(2)
+                        .layer_count(3)
                         .build(),
                 )
                 .build();
@@ -984,7 +983,7 @@ fn main() {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(2)
+                    .layer_count(3)
                     .build(),
             )
             .build();
@@ -1135,7 +1134,7 @@ fn main() {
         unsafe { device.allocate_command_buffers(&allocate_info) }.unwrap()[0]
     };
 
-    let mut data = (0..2).map(|layer| {
+    let mut data = (0..3).map(|layer| {
         {
             let cmd_begin_info = vk::CommandBufferBeginInfo::builder().build();
 
@@ -1283,15 +1282,10 @@ fn main() {
                 .unwrap() as _
         };
 
-        let data_image = unsafe { data.offset(subresource_layout.offset as isize) };
-        /*
-        let data_normal = unsafe {
-            data.offset((subresource_layout.offset + subresource_layout.array_pitch) as isize)
-        };
-        */
+        let data = unsafe { data.offset(subresource_layout.offset as isize) };
 
         let data_linear = to_linear(
-            data_image,
+            data,
             &subresource_layout,
             scene.film.xresolution as usize,
             scene.film.yresolution as usize,
@@ -1302,16 +1296,18 @@ fn main() {
 
     let mut data_image_linear = data.next().unwrap();
     let mut data_normal_linear = data.next().unwrap();
+    let mut data_albedo_linear = data.next().unwrap();
 
     average(&mut data_image_linear, N_SAMPLES);
     average(&mut data_normal_linear, N_SAMPLES);
-    // average(&mut data_normal_linear, N_SAMPLES);
+    average(&mut data_albedo_linear, N_SAMPLES);
 
     #[cfg(feature = "optix-denoiser")]
     if opts.optix_denoiser {
         data_image_linear = optix_denoise(
             &data_image_linear,
             &data_normal_linear,
+            &data_albedo_linear,
             scene.film.xresolution,
             scene.film.yresolution,
         )
@@ -1403,10 +1399,11 @@ fn to_rgba8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
         .collect()
 }
 
-// #[cfg(feature = "optix-denoiser")]
+#[cfg(feature = "optix-denoiser")]
 fn optix_denoise(
     linear_image: &[u8],
     linear_normal: &[u8],
+    linear_albedo: &[u8],
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -1415,6 +1412,7 @@ fn optix_denoise(
     use cust::util::SliceExt;
     use cust::vek::Vec4;
     use optix::context::OptixContext;
+    use optix::denoiser::DenoiserOptions;
     use optix::denoiser::{Denoiser, DenoiserModelKind, DenoiserParams, Image, ImageFormat};
     // set up CUDA and OptiX then make the needed structs/contexts.
     let cuda_ctx = cust::quick_init()?;
@@ -1425,6 +1423,7 @@ fn optix_denoise(
 
     let mut denoiser_option = DenoiserOptions::default();
     denoiser_option.guide_normal = true;
+    denoiser_option.guide_albedo = true;
     // set up the denoiser, choosing Ldr as our model because our colors are in
     // the 0.0 - 1.0 range.
     let mut denoiser = Denoiser::new(&optix_ctx, DenoiserModelKind::Ldr, denoiser_option)?;
@@ -1436,6 +1435,7 @@ fn optix_denoise(
     // allocate the buffer for the noisy image and copy the data to the GPU.
     let in_buf_image = linear_image.as_dbuf()?;
     let in_buf_normal = linear_normal.as_dbuf()?;
+    let in_buf_albedo = linear_albedo.as_dbuf()?;
 
     // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
     // using bytemuck
@@ -1444,13 +1444,14 @@ fn optix_denoise(
     // make an image to tell OptiX about how our image buffer is represented
     let input_image = Image::new(&in_buf_image, ImageFormat::Float4, width, height);
     let input_normal = Image::new(&in_buf_normal, ImageFormat::Float4, width, height);
+    let input_albedo = Image::new(&in_buf_albedo, ImageFormat::Float4, width, height);
 
     // Invoke the denoiser on the image. OptiX will queue up the work on the
     // CUDA stream.
     denoiser.invoke(
         &stream,
         optix::denoiser::DenoiserGuideImages {
-            albedo: None,
+            albedo: Some(input_albedo),
             normal: Some(input_normal),
             flow: None,
         },

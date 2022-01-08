@@ -20,15 +20,11 @@ log = "0.4.14"
 simple_logger = "1.16.0"
 blackbody = "0.0.0"
 
-# optix = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", optional = true }
-# cust = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", features = ["vek"], optional = true }
-optix = { git = "https://github.com/Rust-GPU/Rust-CUDA.git" }
-cust = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", features = ["vek"] }
+optix = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", optional = true }
+cust = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", features = ["vek"], optional = true }
 
-# [features]
-# optix-denoiser = ["optix", "cust"]
 [features]
-optix-denoiser = []
+optix-denoiser = ["optix", "cust"]
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu" }

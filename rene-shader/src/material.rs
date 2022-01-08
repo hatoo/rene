@@ -26,6 +26,8 @@ pub trait Material {
         scatter: &mut Scatter,
     ) -> bool;
 
+    fn albedo(&self, textures: &[EnumTexture], uv: Vec2) -> Vec3A;
+
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32;
 }
 
@@ -76,12 +78,6 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
     r0 + (1.0 - r0) * (1.0 - cosine).powf(5.0)
 }
 
-impl<'a> Lambertian<'a> {
-    fn albedo(&self, textures: &[EnumTexture], uv: Vec2) -> Vec3A {
-        textures[self.data.u0.x as usize].color(textures, uv)
-    }
-}
-
 impl<'a> Material for Lambertian<'a> {
     fn scatter(
         &self,
@@ -111,16 +107,16 @@ impl<'a> Material for Lambertian<'a> {
         true
     }
 
+    fn albedo(&self, textures: &[EnumTexture], uv: Vec2) -> Vec3A {
+        textures[self.data.u0.x as usize].color(textures, uv)
+    }
+
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
         1.0 / PI
     }
 }
 
 impl<'a> Metal<'a> {
-    fn albedo(&self) -> Vec3A {
-        self.data.v0.xyz().into()
-    }
-
     fn fuzz(&self) -> f32 {
         self.data.v0.w
     }
@@ -129,7 +125,7 @@ impl<'a> Metal<'a> {
 impl<'a> Material for Metal<'a> {
     fn scatter(
         &self,
-        _: &[EnumTexture],
+        textures: &[EnumTexture],
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -139,7 +135,7 @@ impl<'a> Material for Metal<'a> {
         let scatterd = reflected + self.fuzz() * random_in_unit_sphere(rng);
         if scatterd.dot(ray_payload.normal) > 0.0 {
             *scatter = Scatter {
-                color: self.albedo(),
+                color: self.albedo(textures, ray_payload.uv),
                 ray: Ray {
                     origin: ray_payload.position,
                     direction: scatterd,
@@ -150,6 +146,11 @@ impl<'a> Material for Metal<'a> {
             false
         }
     }
+
+    fn albedo(&self, _textures: &[EnumTexture], _uv: Vec2) -> Vec3A {
+        self.data.v0.xyz().into()
+    }
+
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
         // TODO
         1.0
@@ -197,6 +198,10 @@ impl<'a> Material for Dielectric<'a> {
             },
         };
         true
+    }
+
+    fn albedo(&self, _textures: &[EnumTexture], _uv: Vec2) -> Vec3A {
+        Vec3A::ZERO
     }
 
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
@@ -249,6 +254,14 @@ impl Material for EnumMaterial {
             0 => Lambertian { data: &self.data }.scatter(textures, ray, ray_payload, rng, scatter),
             1 => Metal { data: &self.data }.scatter(textures, ray, ray_payload, rng, scatter),
             _ => Dielectric { data: &self.data }.scatter(textures, ray, ray_payload, rng, scatter),
+        }
+    }
+
+    fn albedo(&self, textures: &[EnumTexture], uv: Vec2) -> Vec3A {
+        match self.t {
+            0 => Lambertian { data: &self.data }.albedo(textures, uv),
+            1 => Metal { data: &self.data }.albedo(textures, uv),
+            _ => Dielectric { data: &self.data }.albedo(textures, uv),
         }
     }
 
