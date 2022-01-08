@@ -40,6 +40,10 @@ impl ShaderIndex {
 struct Opts {
     #[clap(help = "pbrt file")]
     pbrt_path: PathBuf,
+    #[clap(help = "AOV normal", long = "aov-normal")]
+    aov_normal: Option<PathBuf>,
+    #[clap(help = "AOV albedo", long = "aov-albedo")]
+    aov_albedo: Option<PathBuf>,
     #[clap(
         help = "Use Optix Denoiser. Need to build with \"optix-denoiser\" feature",
         long = "optix-denoiser"
@@ -1329,6 +1333,28 @@ fn main() {
     )
     .unwrap();
 
+    if let Some(aov_normal_path) = opts.aov_normal {
+        image::save_buffer(
+            aov_normal_path,
+            &to_aov(&data_normal_linear),
+            scene.film.xresolution,
+            scene.film.yresolution,
+            image::ColorType::Rgb8,
+        )
+        .unwrap();
+    }
+
+    if let Some(aov_albedo_path) = opts.aov_albedo {
+        image::save_buffer(
+            aov_albedo_path,
+            &to_aov(&data_albedo_linear),
+            scene.film.xresolution,
+            scene.film.yresolution,
+            image::ColorType::Rgb8,
+        )
+        .unwrap();
+    }
+
     unsafe {
         device.free_memory(dst_device_memory, None);
         device.destroy_image(dst_image, None);
@@ -1409,6 +1435,15 @@ fn to_rgb8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
     data_f32
         .iter()
         .map(|&value| (256.0 * value.powf(1.0 / gamma).clamp(0.0, 0.999)) as u8)
+        .collect()
+}
+
+fn to_aov(data_linear: &[u8]) -> Vec<u8> {
+    let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
+
+    data_f32
+        .iter()
+        .map(|&value| (256.0 * value.clamp(0.0, 0.999)) as u8)
         .collect()
 }
 
