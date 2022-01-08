@@ -14,6 +14,12 @@ cargo run -- sample_scenes/current.pbrt
 
 `out.png` will be produced.
 
+## OptiX Denoiser
+
+Rene has built-in OptiX Denoiser if you enable "optix-denoiser" feature.
+
+You can denoise images by "--optix-denoiser" flag.
+
 # Examples
 
 ## Cornell box
@@ -21,7 +27,7 @@ cargo run -- sample_scenes/current.pbrt
 With Optix Denoiser
 
 ```
-cargo run --release --features=optix-denoiser  -- --optix-denoiser  .\sample_scenes\cornell-box\scene.pbrt  
+cargo run --features=optix-denoiser  -- --optix-denoiser  .\sample_scenes\cornell-box\scene.pbrt  
 ```
 
 ![Cornell box](images/cornell-box.png)
