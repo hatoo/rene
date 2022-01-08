@@ -180,8 +180,6 @@ pub fn main_ray_generation(
                 break;
             }
 
-            // color_sum += color * area_light.emit();
-
             for i in 0..uniform.lights_len {
                 let (target, t_max) = lights[i as usize].ray_target(payload.position);
                 let direction = target - payload.position;
