@@ -18,7 +18,7 @@ use texture::EnumTexture;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::{ignore_intersection, report_intersection, IndexUnchecked},
-    glam::{uvec2, vec2, vec3a, UVec3, Vec2, Vec3A, Vec4},
+    glam::{uvec2, vec2, vec3a, Mat4, UVec3, Vec2, Vec3A, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
 };
@@ -83,17 +83,8 @@ impl RayPayload {
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
-pub struct LookAt {
-    pub eye: Vec3A,
-    pub look_at: Vec3A,
-    pub up: Vec3A,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Uniform {
-    pub look_at: LookAt,
+    pub camera_to_world: Mat4,
     pub background: Vec3A,
     pub camera: PerspectiveCamera,
     pub lights_len: u32,
@@ -145,9 +136,7 @@ pub fn main_ray_generation(
     let mut color = vec3a(1.0, 1.0, 1.0);
     let mut color_sum = vec3a(0.0, 0.0, 0.0);
 
-    let mut ray = uniform
-        .camera
-        .get_ray(launch_size, vec2(u, v), &uniform.look_at);
+    let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
     for _ in 0..50 {
         *payload = RayPayload::default();

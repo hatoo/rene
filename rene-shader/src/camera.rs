@@ -1,10 +1,10 @@
-use spirv_std::glam::{UVec3, Vec2, Vec3A};
+use spirv_std::glam::{vec3a, Mat4, Vec2, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
 use crate::math::random_in_unit_disk;
 use crate::rand::DefaultRng;
-use crate::{LookAt, Ray};
+use crate::Ray;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -71,12 +71,16 @@ impl Camera {
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct PerspectiveCamera {
-    pub fov: f32,
+    pub camera_to_screen: Mat4,
 }
 
 impl PerspectiveCamera {
-    pub fn get_ray(&self, size: UVec3, st: Vec2, look_at: &LookAt) -> Ray {
+    pub fn get_ray(&self, st: Vec2, camera_to_world: Mat4) -> Ray {
+        /*
         let theta = self.fov / 180.0 * core::f32::consts::PI;
+        let aspect_ratio = size.x as f32 / size.y as f32;
+        */
+        /*
         let (viewport_width, viewport_height) = if size.x < size.y {
             let w = (theta / 2.0).tan();
             let viewport_width = 2.0 * w;
@@ -97,10 +101,16 @@ impl PerspectiveCamera {
         let horizontal = viewport_width * u;
         let vertical = viewport_height * v;
         let lower_left_corner = -horizontal / 2.0 - vertical / 2.0 + w;
+        */
+        let origin = camera_to_world.transform_point3a(vec3a(0.0, 0.0, 0.0));
+        let target =
+            self.camera_to_screen
+                .transform_point3a(vec3a(st.x * 2.0 - 1.0, st.y * 2.0 - 1.0, 1.0));
+        let target = camera_to_world.transform_point3a(target);
 
         Ray {
-            origin,
-            direction: lower_left_corner + st.x * horizontal + st.y * vertical,
+            origin: origin.into(),
+            direction: (target - origin).normalize(),
         }
     }
 }

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use glam::{vec3, Affine3A};
-use rene_shader::{
-    light::EnumLight, material::EnumMaterial, texture::EnumTexture, LookAt, Uniform,
-};
+use glam::{vec3, Affine3A, Mat4};
+use rene_shader::{light::EnumLight, material::EnumMaterial, texture::EnumTexture, Uniform};
 use thiserror::Error;
 
 use crate::ShaderIndex;
@@ -54,6 +52,9 @@ struct WorldState {
 impl Scene {
     pub fn create(scene_description: Vec<pbrt_parser::Scene>) -> Result<Self, CreateSceneError> {
         let mut scene = Self::default();
+        let mut wolrd_to_camera = Mat4::default();
+        let mut fov = 90.0;
+
         for desc in scene_description {
             match IntermediateScene::from_scene(desc)? {
                 IntermediateScene::Sampler => {
@@ -65,13 +66,13 @@ impl Scene {
                 IntermediateScene::Film(film) => {
                     scene.film = film;
                 }
-                IntermediateScene::LookAt(intermediate_scene::LookAt { eye, look_at, up }) => {
-                    scene.uniform.look_at = LookAt { eye, look_at, up };
+                IntermediateScene::Matrix(m) => {
+                    wolrd_to_camera *= m;
                 }
                 IntermediateScene::SceneObject(obj) => match obj {
                     SceneObject::Camera(camera) => match camera {
                         Camera::Perspective(p) => {
-                            scene.uniform.camera.fov = p.fov;
+                            fov = p.fov / 180.0 * core::f32::consts::PI;
                         }
                     },
                 },
@@ -80,6 +81,14 @@ impl Scene {
                 }
             }
         }
+
+        let aspect_ratio = scene.film.xresolution as f32 / scene.film.yresolution as f32;
+        if scene.film.yresolution > scene.film.xresolution {
+            fov = fov / scene.film.xresolution as f32 * scene.film.yresolution as f32;
+        }
+        scene.uniform.camera.camera_to_screen =
+            Mat4::perspective_lh(fov, aspect_ratio, 0.01, 1000.0).inverse();
+        scene.uniform.camera_to_world = wolrd_to_camera.inverse();
         scene.uniform.lights_len = scene.lights.len() as u32;
         Ok(scene)
     }

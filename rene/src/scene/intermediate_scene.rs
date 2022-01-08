@@ -1,7 +1,7 @@
 use blackbody::temperature_to_rgb;
-use glam::{vec2, vec3a, Affine3A, Vec2, Vec3A};
+use glam::{vec2, vec3a, Affine3A, Mat4, Vec2, Vec3A};
 use pbrt_parser::Object;
-use rene_shader::{camera::PerspectiveCamera, Vertex};
+use rene_shader::Vertex;
 use std::f32::consts::PI;
 use thiserror::Error;
 
@@ -16,8 +16,12 @@ pub enum SceneObject {
     Camera(Camera),
 }
 
+pub struct Perspective {
+    pub fov: f32,
+}
+
 pub enum Camera {
-    Perspective(PerspectiveCamera),
+    Perspective(Perspective),
 }
 
 pub enum IntermediateWorld {
@@ -110,7 +114,7 @@ impl Default for Film {
 }
 
 pub enum IntermediateScene {
-    LookAt(LookAt),
+    Matrix(Mat4),
     SceneObject(SceneObject),
     World(Vec<IntermediateWorld>),
     // TODO implement it
@@ -472,11 +476,11 @@ impl IntermediateWorld {
 impl IntermediateScene {
     pub fn from_scene(scene: pbrt_parser::Scene) -> Result<Self, Error> {
         match scene {
-            pbrt_parser::Scene::LookAt(look_at) => Ok(Self::LookAt(LookAt {
-                eye: look_at.eye,
-                look_at: look_at.look_at,
-                up: look_at.up,
-            })),
+            pbrt_parser::Scene::LookAt(look_at) => Ok(Self::Matrix(Mat4::look_at_lh(
+                look_at.eye.into(),
+                look_at.look_at.into(),
+                look_at.up.into(),
+            ))),
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                 pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
                 pbrt_parser::SceneObjectType::Integrator => Ok(Self::Integrator),
@@ -484,7 +488,7 @@ impl IntermediateScene {
                     "perspective" => {
                         let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;
                         Ok(Self::SceneObject(SceneObject::Camera(Camera::Perspective(
-                            PerspectiveCamera { fov },
+                            Perspective { fov },
                         ))))
                     }
                     t => Err(Error::InvalidCamera(t.to_string())),
