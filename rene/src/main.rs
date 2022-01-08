@@ -264,7 +264,7 @@ fn main() {
                     .build(),
             )
             .mip_levels(1)
-            .array_layers(2)
+            .array_layers(3)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(
@@ -303,7 +303,7 @@ fn main() {
                 base_mip_level: 0,
                 level_count: 1,
                 base_array_layer: 0,
-                layer_count: 2,
+                layer_count: 3,
             })
             .image(image)
             .build();
@@ -346,7 +346,7 @@ fn main() {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(2)
+                    .layer_count(3)
                     .build(),
             )
             .build();
@@ -914,7 +914,7 @@ fn main() {
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)
-                .layer_count(2)
+                .layer_count(3)
                 .build();
 
             device.cmd_clear_color_image(
@@ -939,7 +939,7 @@ fn main() {
                         .base_mip_level(0)
                         .level_count(1)
                         .base_array_layer(0)
-                        .layer_count(2)
+                        .layer_count(3)
                         .build(),
                 )
                 .build();
@@ -984,7 +984,7 @@ fn main() {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(2)
+                    .layer_count(3)
                     .build(),
             )
             .build();
@@ -1135,7 +1135,7 @@ fn main() {
         unsafe { device.allocate_command_buffers(&allocate_info) }.unwrap()[0]
     };
 
-    let mut data = (0..2).map(|layer| {
+    let mut data = (0..3).map(|layer| {
         {
             let cmd_begin_info = vk::CommandBufferBeginInfo::builder().build();
 
@@ -1283,29 +1283,28 @@ fn main() {
                 .unwrap() as _
         };
 
-        let data_image = unsafe { data.offset(subresource_layout.offset as isize) };
-        /*
-        let data_normal = unsafe {
-            data.offset((subresource_layout.offset + subresource_layout.array_pitch) as isize)
-        };
-        */
+        let data = unsafe { data.offset(subresource_layout.offset as isize) };
 
         let data_linear = to_linear(
-            data_image,
+            data,
             &subresource_layout,
             scene.film.xresolution as usize,
             scene.film.yresolution as usize,
         );
         unsafe { device.unmap_memory(dst_device_memory) };
+        dbg!(data_linear[0]);
         data_linear
     });
 
     let mut data_image_linear = data.next().unwrap();
     let mut data_normal_linear = data.next().unwrap();
+    let mut data_albedo_linear = data.next().unwrap();
+
+    std::mem::swap(&mut data_image_linear, &mut data_normal_linear);
 
     average(&mut data_image_linear, N_SAMPLES);
     average(&mut data_normal_linear, N_SAMPLES);
-    // average(&mut data_normal_linear, N_SAMPLES);
+    average(&mut data_albedo_linear, N_SAMPLES);
 
     #[cfg(feature = "optix-denoiser")]
     if opts.optix_denoiser {
