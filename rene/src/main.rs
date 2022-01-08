@@ -1295,7 +1295,6 @@ fn main() {
             scene.film.yresolution as usize,
         );
         unsafe { device.unmap_memory(dst_device_memory) };
-        dbg!(data_linear[0]);
         data_linear
     });
 
