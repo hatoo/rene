@@ -171,7 +171,7 @@ pub fn main_ray_generation(
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
             let mut scatter = Scatter::default();
 
-            color_sum += color * area_light.emit();
+            color_sum += color * area_light.emit(payload);
 
             if material.scatter(textures, &ray, payload, &mut rng, &mut scatter) {
                 color *= scatter.color;
