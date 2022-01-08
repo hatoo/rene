@@ -35,9 +35,14 @@ pub enum IntermediateWorld {
 
 pub enum WorldObject {
     LightSource(LightSource),
+    AreaLightSource(AreaLightSource),
     Material(Material),
     MakeNamedMaterial(String, Material),
     Shape(Shape),
+}
+
+pub enum AreaLightSource {
+    Diffuse(Vec3A),
 }
 
 pub enum LightSource {
@@ -145,6 +150,8 @@ pub enum Error {
     InvalidFilm(String),
     #[error("Invalid LightSource type {0}")]
     InvalidLightSource(String),
+    #[error("Invalid AreaLightSource type {0}")]
+    InvalidAreaLightSource(String),
     #[error("Invalid Material type {0}")]
     InvalidMaterial(String),
     #[error("Invalid Texture type {0}")]
@@ -391,6 +398,15 @@ impl IntermediateWorld {
                         )))
                     }
                     t => Err(Error::InvalidLightSource(t.to_string())),
+                },
+                pbrt_parser::WorldObjectType::AreaLightSource => match obj.t {
+                    "diffuse" => {
+                        let l = obj.get_rgb("L")??;
+                        Ok(Self::WorldObject(WorldObject::AreaLightSource(
+                            AreaLightSource::Diffuse(l),
+                        )))
+                    }
+                    t => Err(Error::InvalidAreaLightSource(t.to_string())),
                 },
                 pbrt_parser::WorldObjectType::Material => Ok(Self::WorldObject(
                     WorldObject::Material(obj.get_material()?),

@@ -77,6 +77,7 @@ pub enum SceneObjectType {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum WorldObjectType {
     LightSource,
+    AreaLightSource,
     Material,
     MakeNamedMaterial,
     Shape,
@@ -327,6 +328,7 @@ fn parse_world_object_type<'a, E: ParseError<&'a str>>(
 ) -> IResult<&'a str, WorldObjectType, E> {
     alt((
         value(WorldObjectType::LightSource, tag("LightSource")),
+        value(WorldObjectType::AreaLightSource, tag("AreaLightSource")),
         value(WorldObjectType::Material, tag("Material")),
         value(WorldObjectType::MakeNamedMaterial, tag("MakeNamedMaterial")),
         value(WorldObjectType::Shape, tag("Shape")),

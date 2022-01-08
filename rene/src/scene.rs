@@ -1,14 +1,18 @@
 use std::{collections::HashMap, f32::consts::PI};
 
 use glam::{vec3, Affine3A, Mat4};
-use rene_shader::{light::EnumLight, material::EnumMaterial, texture::EnumTexture, Uniform};
+use rene_shader::{
+    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, texture::EnumTexture,
+    Uniform,
+};
 use thiserror::Error;
 
 use crate::ShaderIndex;
 
 use self::intermediate_scene::{
-    Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld, LightSource,
-    Material, Matte, SceneObject, Shape, Sphere, TextureOrColor, TriangleMesh, WorldObject,
+    AreaLightSource, Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld,
+    LightSource, Material, Matte, SceneObject, Shape, Sphere, TextureOrColor, TriangleMesh,
+    WorldObject,
 };
 
 pub mod intermediate_scene;
@@ -18,6 +22,7 @@ pub struct TlasInstance {
     pub shader_offset: u32,
     pub matrix: Affine3A,
     pub material_index: usize,
+    pub area_light_index: usize,
     pub blas_index: Option<usize>,
 }
 
@@ -27,6 +32,7 @@ pub struct Scene {
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
     pub materials: Vec<EnumMaterial>,
+    pub area_lights: Vec<EnumAreaLight>,
     pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
     pub lights: Vec<EnumLight>,
@@ -51,6 +57,7 @@ fn deg_to_radian(angle: f32) -> f32 {
 #[derive(Default, Clone)]
 struct WorldState {
     current_material_index: Option<usize>,
+    current_area_light_index: usize,
     current_matrix: Affine3A,
     textures: HashMap<String, u32>,
     materials: HashMap<String, u32>,
@@ -61,6 +68,8 @@ impl Scene {
         let mut scene = Self::default();
         let mut wolrd_to_camera = Mat4::default();
         let mut fov = deg_to_radian(90.0);
+
+        scene.area_lights.push(EnumAreaLight::new_null());
 
         for desc in scene_description {
             match IntermediateScene::from_scene(desc)? {
@@ -199,6 +208,10 @@ impl Scene {
                                 EnumLight::new_distant(distant.from, distant.to, distant.color),
                             ),
                         },
+                        WorldObject::AreaLightSource(AreaLightSource::Diffuse(l)) => {
+                            state.current_area_light_index = self.area_lights.len();
+                            self.area_lights.push(EnumAreaLight::new_diffuse(l));
+                        }
                         WorldObject::Material(material) => {
                             let material = self.material(&state, material)?;
                             state.current_material_index = Some(self.materials.len());
@@ -218,6 +231,7 @@ impl Scene {
                                 material_index: state
                                     .current_material_index
                                     .ok_or(CreateSceneError::NoMaterial)?,
+                                area_light_index: state.current_area_light_index,
                                 blas_index: None,
                             }),
                             Shape::TriangleMesh(trianglemesh) => {
@@ -229,6 +243,7 @@ impl Scene {
                                     material_index: state
                                         .current_material_index
                                         .ok_or(CreateSceneError::NoMaterial)?,
+                                    area_light_index: state.current_area_light_index,
                                     blas_index: Some(blass_index),
                                 })
                             }

@@ -6,6 +6,7 @@
 )]
 
 use crate::rand::DefaultRng;
+use area_light::{AreaLight, EnumAreaLight};
 use camera::PerspectiveCamera;
 use core::f32::consts::PI;
 use light::{EnumLight, Light};
@@ -43,6 +44,7 @@ pub struct RayPayload {
     pub position: Vec3A,
     pub normal: Vec3A,
     pub material: u32,
+    pub area_light: u32,
     pub front_face: u32,
     pub uv: Vec2,
 }
@@ -61,6 +63,7 @@ impl RayPayload {
         outward_normal: Vec3A,
         ray_direction: Vec3A,
         material: u32,
+        area_light: u32,
         uv: Vec2,
     ) -> Self {
         let front_face = ray_direction.dot(outward_normal) < 0.0;
@@ -75,6 +78,7 @@ impl RayPayload {
             position,
             normal,
             material,
+            area_light,
             front_face: if front_face { 1 } else { 0 },
             uv,
         }
@@ -100,6 +104,7 @@ pub struct PushConstants {
 #[repr(C)]
 pub struct IndexData {
     pub material_index: u32,
+    pub area_light_index: u32,
     pub index_offset: u32,
 }
 
@@ -120,8 +125,9 @@ pub fn main_ray_generation(
     #[spirv(descriptor_set = 0, binding = 1)] top_level_as: &AccelerationStructure,
     #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] materials: &[EnumMaterial],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] textures: &[EnumTexture],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] textures: &[EnumTexture],
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
@@ -162,13 +168,19 @@ pub fn main_ray_generation(
         } else {
             let wo = -ray.direction.normalize();
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
+            let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
             let mut scatter = Scatter::default();
+
+            color_sum += color * area_light.emit();
+
             if material.scatter(textures, &ray, payload, &mut rng, &mut scatter) {
                 color *= scatter.color;
                 ray = scatter.ray;
             } else {
                 break;
             }
+
+            // color_sum += color * area_light.emit();
 
             for i in 0..uniform.lights_len {
                 let (target, t_max) = lights[i as usize].ray_target(payload.position);
@@ -268,7 +280,7 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] index_data: &[IndexData],
 ) {
     const INV_PI: f32 = 1.0 / PI;
 
@@ -288,14 +300,16 @@ pub fn sphere_closest_hit(
         world_to_object.z.dot(object_hit_pos),
     );
 
-    let material_index =
-        unsafe { index_data.index_unchecked(instance_custom_index as usize) }.material_index;
+    let index = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
+    let material_index = index.material_index;
+    let area_light_index = index.area_light_index;
 
     *out = RayPayload::new_hit(
         hit_pos,
         normal,
         world_ray_direction,
         material_index,
+        area_light_index,
         vec2(u, v),
     );
 }
@@ -315,9 +329,9 @@ pub fn triangle_closest_hit(
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] index_data: &[IndexData],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] vertices: &[Vertex],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] vertices: &[Vertex],
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(primitive_id)] primitive_id: u32,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
@@ -326,6 +340,7 @@ pub fn triangle_closest_hit(
 
     let index_offset = index_data.index_offset as usize;
     let material_index = index_data.material_index;
+    let area_light_index = index_data.area_light_index;
 
     let v0 = *unsafe {
         vertices.index_unchecked(
@@ -371,7 +386,14 @@ pub fn triangle_closest_hit(
     )
     .normalize();
 
-    *out = RayPayload::new_hit(hit_pos, normal, world_ray_direction, material_index, uv);
+    *out = RayPayload::new_hit(
+        hit_pos,
+        normal,
+        world_ray_direction,
+        material_index,
+        area_light_index,
+        uv,
+    );
 }
 
 #[spirv(any_hit)]

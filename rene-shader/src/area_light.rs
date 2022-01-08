@@ -1,4 +1,4 @@
-use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
+use spirv_std::glam::{Vec3A, Vec4, Vec4Swizzles};
 
 pub trait AreaLight {
     fn emit(&self) -> Vec3A;
