@@ -13,3 +13,9 @@ cargo run -- sample_scenes/current.pbrt
 ```
 
 `out.png` will be produced.
+
+# Examples
+
+## Cornell box
+
+![Cornell box](images/cornell-box.png)
