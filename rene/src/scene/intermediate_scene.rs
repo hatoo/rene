@@ -169,6 +169,7 @@ trait GetValue {
         &self,
         name: &str,
     ) -> Result<Result<TextureOrColor, ArgumentError>, Error>;
+    fn get_material(&self) -> Result<Material, Error>;
 }
 
 impl<'a, T> GetValue for Object<'a, T> {
@@ -325,6 +326,20 @@ impl<'a, T> GetValue for Object<'a, T> {
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
+
+    fn get_material(&self) -> Result<Material, Error> {
+        match self.t {
+            "matte" => {
+                let albedo = self
+                    .get_texture_or_color("Kd")
+                    .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+
+                Ok(Material::Matte(Matte { albedo }))
+            }
+            "glass" => Ok(Material::Glass),
+            t => Err(Error::InvalidMaterial(t.to_string())),
+        }
+    }
 }
 
 impl IntermediateWorld {
@@ -374,19 +389,9 @@ impl IntermediateWorld {
                     }
                     t => Err(Error::InvalidLightSource(t.to_string())),
                 },
-                pbrt_parser::WorldObjectType::Material => match obj.t {
-                    "matte" => {
-                        let albedo = obj
-                            .get_texture_or_color("Kd")
-                            .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
-
-                        Ok(Self::WorldObject(WorldObject::Material(Material::Matte(
-                            Matte { albedo },
-                        ))))
-                    }
-                    "glass" => Ok(Self::WorldObject(WorldObject::Material(Material::Glass))),
-                    t => Err(Error::InvalidMaterial(t.to_string())),
-                },
+                pbrt_parser::WorldObjectType::Material => Ok(Self::WorldObject(
+                    WorldObject::Material(obj.get_material()?),
+                )),
                 pbrt_parser::WorldObjectType::Shape => match obj.t {
                     "sphere" => {
                         let radius = obj.get_float("radius").unwrap_or(Ok(1.0))?;
