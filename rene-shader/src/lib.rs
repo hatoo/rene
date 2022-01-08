@@ -23,6 +23,7 @@ use spirv_std::{
     ray_tracing::{AccelerationStructure, RayFlags},
 };
 
+pub mod area_light;
 pub mod camera;
 pub mod light;
 pub mod material;
