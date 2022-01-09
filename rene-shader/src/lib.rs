@@ -22,7 +22,7 @@ use spirv_std::{
     glam::{uvec2, vec2, vec3a, Mat4, UVec3, Vec2, Vec3A, Vec4},
     image::{Image, SampledImage},
     ray_tracing::{AccelerationStructure, RayFlags},
-    RuntimeArray,
+    RuntimeArray, Sampler,
 };
 
 pub mod area_light;
@@ -132,6 +132,7 @@ pub fn main_ray_generation(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 7)] images: &RuntimeArray<InputImage>,
+    #[spirv(descriptor_set = 0, binding = 8)] _sampler: &Sampler,
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
@@ -304,7 +305,7 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
 ) {
     const INV_PI: f32 = 1.0 / PI;
 
@@ -353,9 +354,9 @@ pub fn triangle_closest_hit(
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] index_data: &[IndexData],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] vertices: &[Vertex],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(primitive_id)] primitive_id: u32,
     #[spirv(instance_custom_index)] instance_custom_index: u32,

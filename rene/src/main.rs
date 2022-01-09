@@ -395,6 +395,12 @@ fn main() {
         graphics_queue,
     );
 
+    let sampler = {
+        let sampler_create_info = vk::SamplerCreateInfo::builder().build();
+
+        unsafe { device.create_sampler(&sampler_create_info, None) }.unwrap()
+    };
+
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_groups_len) = {
         let descriptor_set_layout = unsafe {
             device.create_descriptor_set_layout(
@@ -456,34 +462,38 @@ fn main() {
                             .build(),
                         // images
                         vk::DescriptorSetLayoutBinding::builder()
-                            .descriptor_count(1)
+                            .descriptor_count(scene_buffers.images.len() as u32)
                             .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                            .stage_flags(
-                                vk::ShaderStageFlags::RAYGEN_KHR
-                                    | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
-                            )
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(7)
+                            .build(),
+                        // sampler
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::SAMPLER)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .binding(8)
                             .build(),
                         // index data
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(8)
+                            .binding(9)
                             .build(),
                         // indices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(9)
+                            .binding(10)
                             .build(),
                         // vertices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(10)
+                            .binding(11)
                             .build(),
                     ])
                     .build(),
@@ -632,6 +642,10 @@ fn main() {
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::SAMPLED_IMAGE,
+            descriptor_count: scene_buffers.images.len() as u32,
+        },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::SAMPLER,
             descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
@@ -776,11 +790,6 @@ fn main() {
             .build()
     };
 
-    let index_data_buffer_info = [vk::DescriptorBufferInfo::builder()
-        .buffer(scene_buffers.index_data.buffer)
-        .range(vk::WHOLE_SIZE)
-        .build()];
-
     let images_info: Vec<_> = scene_buffers
         .images
         .iter()
@@ -800,10 +809,25 @@ fn main() {
         .image_info(&images_info)
         .build();
 
+    let sampler_info = [vk::DescriptorImageInfo::builder().sampler(sampler).build()];
+
+    let sampler_write = vk::WriteDescriptorSet::builder()
+        .dst_set(descriptor_set)
+        .dst_binding(8)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::SAMPLER)
+        .image_info(&sampler_info)
+        .build();
+
+    let index_data_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.index_data.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
+
     let index_data_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(8)
+            .dst_binding(9)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&index_data_buffer_info)
@@ -818,7 +842,7 @@ fn main() {
     let indices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(9)
+            .dst_binding(10)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&indices_buffer_info)
@@ -833,7 +857,7 @@ fn main() {
     let vertices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(10)
+            .dst_binding(11)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&vertices_buffer_info)
@@ -851,6 +875,7 @@ fn main() {
                 material_write,
                 texture_write,
                 images_write,
+                sampler_write,
                 index_data_write,
                 indices_write,
                 vertices_write,
@@ -1424,6 +1449,7 @@ fn main() {
     }
 
     unsafe {
+        device.destroy_sampler(sampler, None);
         scene_buffers.destroy(&device, &acceleration_structure);
 
         device.destroy_image_view(image_view, None);
