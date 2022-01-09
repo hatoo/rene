@@ -463,7 +463,7 @@ fn main() {
                         // images
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(scene_buffers.images.len() as u32)
-                            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(7)
                             .build(),
@@ -641,7 +641,7 @@ fn main() {
             descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::SAMPLED_IMAGE,
+            ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
             descriptor_count: scene_buffers.images.len() as u32,
         },
         vk::DescriptorPoolSize {
@@ -797,6 +797,7 @@ fn main() {
             vk::DescriptorImageInfo::builder()
                 .image_layout(vk::ImageLayout::GENERAL)
                 .image_view(i.image_view)
+                .sampler(i.sampler)
                 .build()
         })
         .collect();
@@ -805,7 +806,7 @@ fn main() {
         .dst_set(descriptor_set)
         .dst_binding(7)
         .dst_array_element(0)
-        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .image_info(&images_info)
         .build();
 
@@ -1819,6 +1820,7 @@ struct Image {
     buffer: BufferResource,
     image: vk::Image,
     image_view: vk::ImageView,
+    sampler: vk::Sampler,
 }
 
 impl Image {
@@ -1967,10 +1969,17 @@ impl Image {
             device.free_command_buffers(command_pool, &[command_buffer]);
         }
 
+        let sampler = {
+            let sampler_create_info = vk::SamplerCreateInfo::builder().build();
+
+            unsafe { device.create_sampler(&sampler_create_info, None) }.unwrap()
+        };
+
         Self {
             buffer,
             image,
             image_view,
+            sampler,
         }
     }
 }
@@ -2790,6 +2799,7 @@ impl SceneBuffers {
             device.destroy_image_view(image.image_view, None);
             device.destroy_image(image.image, None);
             image.buffer.destroy(device);
+            device.destroy_sampler(image.sampler, None);
         }
     }
 }

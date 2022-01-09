@@ -33,7 +33,7 @@ pub mod math;
 pub mod rand;
 pub mod texture;
 
-pub type InputImage = Image!(2D, format=rgba32f, sampled=true);
+pub type InputImage = SampledImage<Image!(2D, format=rgba32f, sampled=true)>;
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]

@@ -81,7 +81,7 @@ impl<'a> Texture for Solid<'a> {
         uv: Vec2,
     ) -> ColorOrTarget {
         // tmp
-        let color: Vec4 = unsafe { images.index(0).sample_by_lod(sampler, uv, 0.0) };
+        let color: Vec4 = unsafe { images.index(0).sample_by_lod(uv, 0.0) };
         ColorOrTarget {
             t: false,
             index: 0,
