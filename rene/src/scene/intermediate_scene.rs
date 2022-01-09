@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, path::Path};
+use std::{f32::consts::PI, fs::File, path::Path};
 
 use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Affine3A, Mat4, Vec2, Vec3A};
@@ -167,6 +167,8 @@ pub enum Error {
     ArgumentNotFound(String),
     #[error("IO Error {0}")]
     IOError(#[from] std::io::Error),
+    #[error("Image Error {0}")]
+    ImageError(#[from] image::error::ImageError),
     #[error("Ply error")]
     PlyError,
 }
@@ -430,7 +432,14 @@ impl IntermediateWorld {
                     }))
                 }
                 "imagemap" => {
-                    todo!()
+                    let filename = texture.obj.get_str("filename")??;
+                    let mut pathbuf = base_dir.as_ref().to_path_buf();
+                    pathbuf.push(filename);
+                    let image = image::io::Reader::open(pathbuf)?.decode()?;
+                    Ok(Self::Texture(Texture {
+                        name: texture.name.to_string(),
+                        inner: InnerTexture::ImageMap(image),
+                    }))
                 }
                 t => Err(Error::InvalidTexture(t.to_string())),
             },

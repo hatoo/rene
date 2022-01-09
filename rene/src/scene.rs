@@ -36,6 +36,7 @@ pub struct Scene {
     pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
     pub lights: Vec<EnumLight>,
+    pub images: Vec<image::DynamicImage>,
 }
 
 #[derive(Error, Debug)]
@@ -193,7 +194,11 @@ impl Scene {
                                 checkerboard.vscale,
                             )
                         }
-                        InnerTexture::ImageMap(_) => todo!(),
+                        InnerTexture::ImageMap(image) => {
+                            let image_index = self.images.len();
+                            self.images.push(image);
+                            EnumTexture::new_image_map(image_index as u32)
+                        }
                     };
                     let texture_index = self.textures.len();
                     self.textures.push(inner);

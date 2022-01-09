@@ -23,7 +23,7 @@ AttributeBegin
 AttributeEnd
 
 AttributeBegin
-  Texture "tmap" "color" "imagemap" "string filename" "earthimage.jpg"
+  Texture "tmap" "color" "imagemap" "string filename" "earthmap.jpg"
   Material "matte" "texture Kd" "tmap"
   Translate 0 0 -1
   Shape "trianglemesh"
