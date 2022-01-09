@@ -132,7 +132,7 @@ pub fn main_ray_generation(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 7)] images: &RuntimeArray<InputImage>,
-    #[spirv(descriptor_set = 0, binding = 8)] _sampler: &Sampler,
+    #[spirv(descriptor_set = 0, binding = 8)] sampler: &Sampler,
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
@@ -183,10 +183,18 @@ pub fn main_ray_generation(
 
             if i == 0 {
                 normal = payload.normal.normalize();
-                albedo = material.albedo(textures, images, payload.uv);
+                albedo = material.albedo(textures, images, *sampler, payload.uv);
             }
 
-            if material.scatter(textures, images, &ray, payload, &mut rng, &mut scatter) {
+            if material.scatter(
+                textures,
+                images,
+                *sampler,
+                &ray,
+                payload,
+                &mut rng,
+                &mut scatter,
+            ) {
                 color *= scatter.color;
                 ray = scatter.ray;
             } else {
