@@ -3,7 +3,6 @@ use core::f32::consts::PI;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles},
-    image::Image,
     RuntimeArray,
 };
 
@@ -11,7 +10,7 @@ use crate::{
     math::{random_in_unit_sphere, IsNearZero},
     rand::DefaultRng,
     texture::EnumTexture,
-    Ray, RayPayload,
+    InputImage, Ray, RayPayload,
 };
 
 #[derive(Clone, Default)]
@@ -24,7 +23,7 @@ pub trait Material {
     fn scatter(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -34,7 +33,7 @@ pub trait Material {
     fn albedo(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         uv: Vec2,
     ) -> Vec3A;
 
@@ -92,7 +91,7 @@ impl<'a> Material for Lambertian<'a> {
     fn scatter(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         _ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -121,7 +120,7 @@ impl<'a> Material for Lambertian<'a> {
     fn albedo(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         uv: Vec2,
     ) -> Vec3A {
         textures[self.data.u0.x as usize].color(textures, images, uv)
@@ -142,7 +141,7 @@ impl<'a> Material for Metal<'a> {
     fn scatter(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -167,7 +166,7 @@ impl<'a> Material for Metal<'a> {
     fn albedo(
         &self,
         _textures: &[EnumTexture],
-        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        _images: &RuntimeArray<InputImage>,
         _uv: Vec2,
     ) -> Vec3A {
         self.data.v0.xyz().into()
@@ -189,7 +188,7 @@ impl<'a> Material for Dielectric<'a> {
     fn scatter(
         &self,
         _: &[EnumTexture],
-        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        _images: &RuntimeArray<InputImage>,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -226,7 +225,7 @@ impl<'a> Material for Dielectric<'a> {
     fn albedo(
         &self,
         _textures: &[EnumTexture],
-        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        _images: &RuntimeArray<InputImage>,
         _uv: Vec2,
     ) -> Vec3A {
         Vec3A::ZERO
@@ -273,7 +272,7 @@ impl Material for EnumMaterial {
     fn scatter(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -305,7 +304,7 @@ impl Material for EnumMaterial {
     fn albedo(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         uv: Vec2,
     ) -> Vec3A {
         match self.t {

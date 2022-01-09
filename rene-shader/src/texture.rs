@@ -1,17 +1,14 @@
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
-    glam::{uvec4, vec2, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4},
-    image::Image,
+    glam::{uvec4, vec2, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles},
     RuntimeArray,
 };
 
+use crate::InputImage;
+
 trait Texture {
-    fn color(
-        &self,
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
-        uv: Vec2,
-    ) -> ColorOrTarget;
+    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -44,11 +41,7 @@ struct ColorOrTarget {
 }
 
 impl<'a> Texture for CheckerBoard<'a> {
-    fn color(
-        &self,
-        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
-        uv: Vec2,
-    ) -> ColorOrTarget {
+    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
         let w = self.data.v0.x;
         let h = self.data.v0.y;
 
@@ -75,15 +68,13 @@ impl<'a> Texture for CheckerBoard<'a> {
 }
 
 impl<'a> Texture for Solid<'a> {
-    fn color(
-        &self,
-        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
-        _uv: Vec2,
-    ) -> ColorOrTarget {
+    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
+        // tmp
+        // let color: Vec4 = unsafe { images.index(0).sample(uv) };
         ColorOrTarget {
             t: false,
             index: 0,
-            color_or_uv: vec3a(self.data.v0.x, self.data.v0.y, self.data.v0.z),
+            color_or_uv: self.data.v0.xyz().into(),
         }
     }
 }
@@ -114,7 +105,7 @@ impl EnumTexture {
     pub fn color(
         &self,
         textures: &[EnumTexture],
-        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        images: &RuntimeArray<InputImage>,
         uv: Vec2,
     ) -> Vec3A {
         let mut color_or_target = match self.t {

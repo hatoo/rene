@@ -20,7 +20,7 @@ use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::{ignore_intersection, report_intersection, IndexUnchecked},
     glam::{uvec2, vec2, vec3a, Mat4, UVec3, Vec2, Vec3A, Vec4},
-    image::Image,
+    image::{Image, SampledImage},
     ray_tracing::{AccelerationStructure, RayFlags},
     RuntimeArray,
 };
@@ -32,6 +32,8 @@ pub mod material;
 pub mod math;
 pub mod rand;
 pub mod texture;
+
+pub type InputImage = Image!(2D, format=rgba32f, sampled=true);
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
@@ -129,9 +131,7 @@ pub fn main_ray_generation(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] textures: &[EnumTexture],
-    #[spirv(descriptor_set = 0, binding = 7)] images: &RuntimeArray<
-        Image!(2D, format=rgba32f, sampled=true),
-    >,
+    #[spirv(descriptor_set = 0, binding = 7)] images: &RuntimeArray<InputImage>,
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
