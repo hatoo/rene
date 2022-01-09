@@ -23,8 +23,10 @@ AttributeBegin
 AttributeEnd
 
 AttributeBegin
-  Texture "tmap" "color" "imagemap" "string filename" "earthmap.jpg"
-  Material "matte" "texture Kd" "tmap"
+  Texture "checks" "spectrum" "checkerboard"
+          "float uscale" [8] "float vscale" [8]
+          "rgb tex1" [.1 .1 .1] "rgb tex2" [.8 .8 .8]
+  Material "matte" "texture Kd" "checks"
   Translate 0 0 -1
   Shape "trianglemesh"
       "integer indices" [0 1 2 0 2 3]
