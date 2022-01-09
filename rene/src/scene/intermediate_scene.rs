@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, fs::File, path::Path};
+use std::{f32::consts::PI, path::Path};
 
 use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Affine3A, Mat4, Vec2, Vec3A};

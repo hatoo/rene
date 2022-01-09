@@ -18,7 +18,7 @@ use ash::{
 
 use clap::Parser;
 use glam::{Vec2, Vec3A};
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
@@ -1796,14 +1796,12 @@ struct Image {
 
 impl Image {
     fn load(
-        path: &str,
+        img: &DynamicImage,
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
     ) -> Self {
-        let img = image::io::Reader::open(path).unwrap().decode().unwrap();
-
         const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
         let image = {
@@ -2792,13 +2790,19 @@ impl SceneBuffers {
             area_lights_buffer
         };
 
-        let images = vec![Image::load(
-            "earthmap.jpg",
-            device,
-            device_memory_properties,
-            command_pool,
-            graphics_queue,
-        )];
+        let images = scene
+            .images
+            .iter()
+            .map(|img| {
+                Image::load(
+                    img,
+                    device,
+                    device_memory_properties,
+                    command_pool,
+                    graphics_queue,
+                )
+            })
+            .collect();
 
         Self {
             tlas: top_as,
