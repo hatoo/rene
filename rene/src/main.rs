@@ -778,7 +778,7 @@ fn main() {
         .iter()
         .map(|i| {
             vk::DescriptorImageInfo::builder()
-                .image_layout(vk::ImageLayout::GENERAL)
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .image_view(i.image_view)
                 .sampler(i.sampler)
                 .build()
@@ -1820,9 +1820,9 @@ impl Image {
                 .mip_levels(1)
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::LINEAR)
-                .initial_layout(vk::ImageLayout::PREINITIALIZED)
-                .usage(vk::ImageUsageFlags::SAMPLED)
+                .tiling(vk::ImageTiling::OPTIMAL)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .usage(vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .build();
 
@@ -1831,12 +1831,10 @@ impl Image {
 
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
 
-        let mut buffer = BufferResource::new(
+        let buffer = BufferResource::new(
             mem_reqs.size,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE
-                | vk::MemoryPropertyFlags::HOST_COHERENT
-                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
             device,
             device_memory_properties,
         );
@@ -1874,7 +1872,17 @@ impl Image {
             data.extend(bytemuck::cast_slice(rgba.as_slice()));
         }
 
-        buffer.store(&data, device);
+        let mut staging_buffer = BufferResource::new(
+            data.len() as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_VISIBLE
+                | vk::MemoryPropertyFlags::HOST_COHERENT
+                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            device,
+            device_memory_properties,
+        );
+
+        staging_buffer.store(&data, device);
 
         let command_buffer = {
             let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -1896,11 +1904,11 @@ impl Image {
                 .expect("Failed to begin recording Command Buffer at beginning!");
         }
 
-        let image_barrier = vk::ImageMemoryBarrier::builder()
-            .src_access_mask(vk::AccessFlags::HOST_WRITE)
-            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .old_layout(vk::ImageLayout::PREINITIALIZED)
-            .new_layout(vk::ImageLayout::GENERAL)
+        let dst_image_barrier = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .image(image)
             .subresource_range(
                 vk::ImageSubresourceRange::builder()
@@ -1913,10 +1921,62 @@ impl Image {
             )
             .build();
 
+        let image_barrier = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .build();
+
+        let copy_region = vk::BufferImageCopy::builder()
+            .image_subresource(
+                vk::ImageSubresourceLayers::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .image_extent(
+                vk::Extent3D::builder()
+                    .width(img.width())
+                    .height(img.height())
+                    .depth(1)
+                    .build(),
+            )
+            .build();
+
         unsafe {
             device.cmd_pipeline_barrier(
                 command_buffer,
                 vk::PipelineStageFlags::HOST,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[dst_image_barrier],
+            );
+
+            device.cmd_copy_buffer_to_image(
+                command_buffer,
+                staging_buffer.buffer,
+                image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[copy_region],
+            );
+
+            device.cmd_pipeline_barrier(
+                command_buffer,
+                vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
                 vk::DependencyFlags::empty(),
                 &[],
@@ -1945,6 +2005,8 @@ impl Image {
 
             unsafe { device.create_sampler(&sampler_create_info, None) }.unwrap()
         };
+
+        unsafe { staging_buffer.destroy(device) };
 
         Self {
             buffer,
