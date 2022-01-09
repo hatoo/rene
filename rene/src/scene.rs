@@ -1,4 +1,4 @@
-use std::{collections::HashMap, f32::consts::PI};
+use std::{collections::HashMap, f32::consts::PI, path::Path};
 
 use glam::{vec3, Affine3A, Mat4};
 use rene_shader::{
@@ -60,7 +60,10 @@ struct WorldState {
 }
 
 impl Scene {
-    pub fn create(scene_description: Vec<pbrt_parser::Scene>) -> Result<Self, CreateSceneError> {
+    pub fn create<P: AsRef<Path>>(
+        scene_description: Vec<pbrt_parser::Scene>,
+        base_dir: &P,
+    ) -> Result<Self, CreateSceneError> {
         let mut scene = Self::default();
         let mut wolrd_to_camera = Mat4::default();
         // 90 degree
@@ -69,7 +72,7 @@ impl Scene {
         scene.area_lights.push(EnumAreaLight::new_null());
 
         for desc in scene_description {
-            match IntermediateScene::from_scene(desc)? {
+            match IntermediateScene::from_scene(desc, base_dir)? {
                 IntermediateScene::Sampler => {
                     log::info!("Sampler is not yet implemented. Continue.");
                 }

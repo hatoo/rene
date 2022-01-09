@@ -89,7 +89,7 @@ fn main() {
             return;
         }
     };
-    let scene = match scene::Scene::create(parsed_scene) {
+    let scene = match scene::Scene::create(parsed_scene, &opts.pbrt_path) {
         Ok(scene) => scene,
         Err(e) => {
             println!("{}", e);
@@ -1524,7 +1524,11 @@ fn optix_denoise(
 
     Ok(denoised
         .iter()
-        .flat_map(|v| bytemuck::cast_slice::<f32, u8>(v.as_slice()).iter().copied())
+        .flat_map(|v| {
+            bytemuck::cast_slice::<f32, u8>(v.as_slice())
+                .iter()
+                .copied()
+        })
         .collect())
 }
 
@@ -1964,7 +1968,7 @@ impl SceneBuffers {
             acceleration_structure.get_acceleration_structure_build_sizes(
                 vk::AccelerationStructureBuildTypeKHR::DEVICE,
                 &build_info,
-                &[1],
+                &[primitive_count],
             )
         };
 

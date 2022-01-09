@@ -1,8 +1,10 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, path::Path};
 
 use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Affine3A, Mat4, Vec2, Vec3A};
 use pbrt_parser::Object;
+use ply::ply::{Ply, PropertyAccess};
+use ply_rs as ply;
 use rene_shader::Vertex;
 use thiserror::Error;
 
@@ -162,6 +164,10 @@ pub enum Error {
     InvalidArgument(#[from] ArgumentError),
     #[error("Argument not found {0}")]
     ArgumentNotFound(String),
+    #[error("IO Error {0}")]
+    IOError(#[from] std::io::Error),
+    #[error("Ply error")]
+    PlyError,
 }
 
 trait GetValue {
@@ -355,8 +361,47 @@ fn deg_to_radian(angle: f32) -> f32 {
     angle * PI / 180.0
 }
 
+fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
+    let vertex = ply.payload.get("vertex").unwrap();
+    let faces = ply.payload.get("face").unwrap();
+
+    let x_string = "x".to_string();
+    let y_string = "y".to_string();
+    let z_string = "z".to_string();
+
+    let vertex_indices_string = "vertex_indices".to_string();
+
+    let vertices: Vec<Vertex> = vertex
+        .iter()
+        .map(|e| {
+            let x = e.get_float(&x_string).ok_or(Error::PlyError)?;
+            let y = e.get_float(&y_string).ok_or(Error::PlyError)?;
+            let z = e.get_float(&z_string).ok_or(Error::PlyError)?;
+
+            Ok(Vertex {
+                position: vec3a(x, y, z),
+                normal: Vec3A::ZERO,
+                uv: Vec2::ZERO,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+
+    let mut indices = Vec::new();
+
+    for e in faces {
+        let face = e
+            .get_list_int(&vertex_indices_string)
+            .ok_or(Error::PlyError)?;
+
+        assert_eq!(face.len(), 3);
+        assert!(face.iter().all(|&i| (i as usize) < vertices.len()));
+        indices.extend(face.iter().map(|&i| i as u32));
+    }
+    Ok(TriangleMesh { vertices, indices })
+}
+
 impl IntermediateWorld {
-    fn from_world(world: pbrt_parser::World) -> Result<Self, Error> {
+    fn from_world<P: AsRef<Path>>(world: pbrt_parser::World, base_dir: &P) -> Result<Self, Error> {
         match world {
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
@@ -499,12 +544,28 @@ impl IntermediateWorld {
                             ))))
                         }
                     }
+                    "plymesh" => {
+                        let filename = obj.get_str("filename")??;
+                        let mut pathbuf = base_dir.as_ref().to_path_buf();
+                        pathbuf.push(filename);
+                        let mut f = std::fs::File::open(pathbuf)?;
+
+                        let p = ply::parser::Parser::<ply::ply::DefaultElement>::new();
+
+                        let ply = p.read_ply(&mut f)?;
+
+                        let triangle_mesh = load_ply(&ply)?;
+
+                        Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
+                            triangle_mesh,
+                        ))))
+                    }
                     t => Err(Error::InvalidShape(t.to_string())),
                 },
             },
             pbrt_parser::World::Attribute(worlds) => worlds
                 .into_iter()
-                .map(Self::from_world)
+                .map(|w| Self::from_world(w, base_dir))
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(IntermediateWorld::Attribute),
             pbrt_parser::World::Translate(translation) => {
@@ -522,7 +583,10 @@ impl IntermediateWorld {
 }
 
 impl IntermediateScene {
-    pub fn from_scene(scene: pbrt_parser::Scene) -> Result<Self, Error> {
+    pub fn from_scene<P: AsRef<Path>>(
+        scene: pbrt_parser::Scene,
+        base_dir: &P,
+    ) -> Result<Self, Error> {
         match scene {
             pbrt_parser::Scene::LookAt(look_at) => Ok(Self::Matrix(Mat4::look_at_lh(
                 look_at.eye.into(),
@@ -561,7 +625,7 @@ impl IntermediateScene {
             },
             pbrt_parser::Scene::World(worlds) => worlds
                 .into_iter()
-                .map(IntermediateWorld::from_world)
+                .map(|w| IntermediateWorld::from_world(w, base_dir))
                 .collect::<Result<Vec<IntermediateWorld>, _>>()
                 .map(IntermediateScene::World),
         }
