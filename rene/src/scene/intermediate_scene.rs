@@ -76,6 +76,7 @@ pub struct CheckerBoard {
 
 pub enum InnerTexture {
     CheckerBoard(CheckerBoard),
+    ImageMap(image::DynamicImage),
 }
 
 pub struct Texture {
@@ -427,6 +428,9 @@ impl IntermediateWorld {
                             vscale,
                         }),
                     }))
+                }
+                "imagemap" => {
+                    todo!()
                 }
                 t => Err(Error::InvalidTexture(t.to_string())),
             },

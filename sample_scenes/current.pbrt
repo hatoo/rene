@@ -23,10 +23,8 @@ AttributeBegin
 AttributeEnd
 
 AttributeBegin
-  Texture "checks" "spectrum" "checkerboard"
-          "float uscale" [8] "float vscale" [8]
-          "rgb tex1" [.1 .1 .1] "rgb tex2" [.8 .8 .8]
-  Material "matte" "texture Kd" "checks"
+  Texture "tmap" "color" "imagemap" "string filename" "earthimage.jpg"
+  Material "matte" "texture Kd" "tmap"
   Translate 0 0 -1
   Shape "trianglemesh"
       "integer indices" [0 1 2 0 2 3]

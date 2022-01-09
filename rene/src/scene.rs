@@ -193,6 +193,7 @@ impl Scene {
                                 checkerboard.vscale,
                             )
                         }
+                        InnerTexture::ImageMap(_) => todo!(),
                     };
                     let texture_index = self.textures.len();
                     self.textures.push(inner);
