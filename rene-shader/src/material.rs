@@ -3,7 +3,7 @@ use core::f32::consts::PI;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles},
-    RuntimeArray, Sampler,
+    RuntimeArray,
 };
 
 use crate::{
@@ -24,7 +24,6 @@ pub trait Material {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -35,7 +34,6 @@ pub trait Material {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         uv: Vec2,
     ) -> Vec3A;
 
@@ -94,7 +92,6 @@ impl<'a> Material for Lambertian<'a> {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         _ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -114,7 +111,7 @@ impl<'a> Material for Lambertian<'a> {
         };
 
         *scatter = Scatter {
-            color: self.albedo(textures, images, sampler, ray_payload.uv),
+            color: self.albedo(textures, images, ray_payload.uv),
             ray: scatterd,
         };
         true
@@ -124,10 +121,9 @@ impl<'a> Material for Lambertian<'a> {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         uv: Vec2,
     ) -> Vec3A {
-        textures[self.data.u0.x as usize].color(textures, images, sampler, uv)
+        textures[self.data.u0.x as usize].color(textures, images, uv)
     }
 
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
@@ -146,7 +142,6 @@ impl<'a> Material for Metal<'a> {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -156,7 +151,7 @@ impl<'a> Material for Metal<'a> {
         let scatterd = reflected + self.fuzz() * random_in_unit_sphere(rng);
         if scatterd.dot(ray_payload.normal) > 0.0 {
             *scatter = Scatter {
-                color: self.albedo(textures, images, sampler, ray_payload.uv),
+                color: self.albedo(textures, images, ray_payload.uv),
                 ray: Ray {
                     origin: ray_payload.position,
                     direction: scatterd,
@@ -172,7 +167,6 @@ impl<'a> Material for Metal<'a> {
         &self,
         _textures: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
-        _sampler: Sampler,
         _uv: Vec2,
     ) -> Vec3A {
         self.data.v0.xyz().into()
@@ -195,7 +189,6 @@ impl<'a> Material for Dielectric<'a> {
         &self,
         _: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
-        _sampler: Sampler,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -233,7 +226,6 @@ impl<'a> Material for Dielectric<'a> {
         &self,
         _textures: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
-        _sampler: Sampler,
         _uv: Vec2,
     ) -> Vec3A {
         Vec3A::ZERO
@@ -281,7 +273,6 @@ impl Material for EnumMaterial {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         ray: &Ray,
         ray_payload: &RayPayload,
         rng: &mut DefaultRng,
@@ -291,25 +282,17 @@ impl Material for EnumMaterial {
             0 => Lambertian { data: &self.data }.scatter(
                 textures,
                 images,
-                sampler,
                 ray,
                 ray_payload,
                 rng,
                 scatter,
             ),
-            1 => Metal { data: &self.data }.scatter(
-                textures,
-                images,
-                sampler,
-                ray,
-                ray_payload,
-                rng,
-                scatter,
-            ),
+            1 => {
+                Metal { data: &self.data }.scatter(textures, images, ray, ray_payload, rng, scatter)
+            }
             _ => Dielectric { data: &self.data }.scatter(
                 textures,
                 images,
-                sampler,
                 ray,
                 ray_payload,
                 rng,
@@ -322,13 +305,12 @@ impl Material for EnumMaterial {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         uv: Vec2,
     ) -> Vec3A {
         match self.t {
-            0 => Lambertian { data: &self.data }.albedo(textures, images, sampler, uv),
-            1 => Metal { data: &self.data }.albedo(textures, images, sampler, uv),
-            _ => Dielectric { data: &self.data }.albedo(textures, images, sampler, uv),
+            0 => Lambertian { data: &self.data }.albedo(textures, images, uv),
+            1 => Metal { data: &self.data }.albedo(textures, images, uv),
+            _ => Dielectric { data: &self.data }.albedo(textures, images, uv),
         }
     }
 

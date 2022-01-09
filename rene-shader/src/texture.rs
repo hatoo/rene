@@ -2,14 +2,13 @@
 use spirv_std::num_traits::Float;
 use spirv_std::{
     glam::{uvec4, vec2, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles},
-    RuntimeArray, Sampler,
+    RuntimeArray,
 };
 
 use crate::InputImage;
 
 trait Texture {
-    fn color(&self, images: &RuntimeArray<InputImage>, sampler: Sampler, uv: Vec2)
-        -> ColorOrTarget;
+    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -42,12 +41,7 @@ struct ColorOrTarget {
 }
 
 impl<'a> Texture for CheckerBoard<'a> {
-    fn color(
-        &self,
-        _images: &RuntimeArray<InputImage>,
-        _sampler: Sampler,
-        uv: Vec2,
-    ) -> ColorOrTarget {
+    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
         let w = self.data.v0.x;
         let h = self.data.v0.y;
 
@@ -74,12 +68,7 @@ impl<'a> Texture for CheckerBoard<'a> {
 }
 
 impl<'a> Texture for Solid<'a> {
-    fn color(
-        &self,
-        images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
-        uv: Vec2,
-    ) -> ColorOrTarget {
+    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
         // tmp
         let color: Vec4 = unsafe { images.index(0).sample_by_lod(uv, 0.0) };
         ColorOrTarget {
@@ -117,12 +106,11 @@ impl EnumTexture {
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        sampler: Sampler,
         uv: Vec2,
     ) -> Vec3A {
         let mut color_or_target = match self.t {
-            0 => Solid { data: &self.data }.color(images, sampler, uv),
-            _ => CheckerBoard { data: &self.data }.color(images, sampler, uv),
+            0 => Solid { data: &self.data }.color(images, uv),
+            _ => CheckerBoard { data: &self.data }.color(images, uv),
         };
 
         while color_or_target.t {
@@ -130,12 +118,10 @@ impl EnumTexture {
             color_or_target = match tex.t {
                 0 => Solid { data: &tex.data }.color(
                     images,
-                    sampler,
                     vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
                 ),
                 _ => CheckerBoard { data: &tex.data }.color(
                     images,
-                    sampler,
                     vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
                 ),
             };
