@@ -2790,7 +2790,7 @@ impl SceneBuffers {
             area_lights_buffer
         };
 
-        let images = scene
+        let mut images: Vec<Image> = scene
             .images
             .iter()
             .map(|img| {
@@ -2803,6 +2803,17 @@ impl SceneBuffers {
                 )
             })
             .collect();
+
+        if images.is_empty() {
+            let dummy_image = DynamicImage::new_rgb8(1, 1);
+            images.push(Image::load(
+                &dummy_image,
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            ))
+        }
 
         Self {
             tlas: top_as,
