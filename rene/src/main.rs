@@ -400,6 +400,7 @@ fn main() {
             device.create_descriptor_set_layout(
                 &vk::DescriptorSetLayoutCreateInfo::builder()
                     .bindings(&[
+                        // Scene global data
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -408,36 +409,42 @@ fn main() {
                             )
                             .binding(0)
                             .build(),
+                        // TLAS
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(1)
                             .build(),
+                        // output image
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(2)
                             .build(),
+                        // lights
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(3)
                             .build(),
+                        // area lights
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(4)
                             .build(),
+                        // materials
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(5)
                             .build(),
+                        // textures
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
@@ -458,18 +465,21 @@ fn main() {
                             .binding(7)
                             .build(),
                             */
+                        // index data
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                             .binding(7)
                             .build(),
+                        // indices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                             .binding(8)
                             .build(),
+                        // vertices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
