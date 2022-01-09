@@ -454,37 +454,36 @@ fn main() {
                             )
                             .binding(6)
                             .build(),
-                        /*
+                        // images
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
-                            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
                             .stage_flags(
                                 vk::ShaderStageFlags::RAYGEN_KHR
                                     | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
                             )
                             .binding(7)
                             .build(),
-                            */
                         // index data
-                        vk::DescriptorSetLayoutBinding::builder()
-                            .descriptor_count(1)
-                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(7)
-                            .build(),
-                        // indices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                             .binding(8)
                             .build(),
-                        // vertices
+                        // indices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                             .binding(9)
+                            .build(),
+                        // vertices
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .binding(10)
                             .build(),
                     ])
                     .build(),
@@ -629,6 +628,10 @@ fn main() {
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::SAMPLED_IMAGE,
             descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
@@ -778,10 +781,29 @@ fn main() {
         .range(vk::WHOLE_SIZE)
         .build()];
 
+    let images_info: Vec<_> = scene_buffers
+        .images
+        .iter()
+        .map(|i| {
+            vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::GENERAL)
+                .image_view(i.image_view)
+                .build()
+        })
+        .collect();
+
+    let images_write = vk::WriteDescriptorSet::builder()
+        .dst_set(descriptor_set)
+        .dst_binding(7)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+        .image_info(&images_info)
+        .build();
+
     let index_data_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(7)
+            .dst_binding(8)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&index_data_buffer_info)
@@ -796,7 +818,7 @@ fn main() {
     let indices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(8)
+            .dst_binding(9)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&indices_buffer_info)
@@ -811,7 +833,7 @@ fn main() {
     let vertices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(9)
+            .dst_binding(10)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&vertices_buffer_info)
@@ -828,6 +850,7 @@ fn main() {
                 area_light_write,
                 material_write,
                 texture_write,
+                images_write,
                 index_data_write,
                 indices_write,
                 vertices_write,
@@ -1809,7 +1832,7 @@ impl Image {
 
         let mut buffer = BufferResource::new(
             mem_reqs.size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT
                 | vk::MemoryPropertyFlags::DEVICE_LOCAL,
