@@ -18,6 +18,7 @@ use ash::{
 
 use clap::Parser;
 use glam::{Vec2, Vec3A};
+use image::GenericImageView;
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
@@ -189,6 +190,7 @@ fn main() {
             .shader_int8(true)
             .buffer_device_address(true)
             .vulkan_memory_model(true)
+            .runtime_descriptor_array(true)
             .build();
 
         let mut as_feature = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
@@ -445,6 +447,17 @@ fn main() {
                             )
                             .binding(6)
                             .build(),
+                        /*
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                            .stage_flags(
+                                vk::ShaderStageFlags::RAYGEN_KHR
+                                    | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+                            )
+                            .binding(7)
+                            .build(),
+                            */
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
@@ -1743,6 +1756,99 @@ unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) ->
 
     device.get_buffer_device_address(&buffer_device_address_info)
 }
+struct Image {
+    buffer: BufferResource,
+    image: vk::Image,
+    image_view: vk::ImageView,
+}
+
+impl Image {
+    fn load(
+        path: &str,
+        device: &ash::Device,
+        device_memory_properties: vk::PhysicalDeviceMemoryProperties,
+    ) -> Self {
+        let img = image::io::Reader::open(path).unwrap().decode().unwrap();
+
+        const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
+
+        let image = {
+            let image_create_info = vk::ImageCreateInfo::builder()
+                .image_type(vk::ImageType::TYPE_2D)
+                .format(COLOR_FORMAT)
+                .extent(
+                    vk::Extent3D::builder()
+                        .width(img.width())
+                        .height(img.height())
+                        .depth(1)
+                        .build(),
+                )
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::LINEAR)
+                .initial_layout(vk::ImageLayout::PREINITIALIZED)
+                .usage(vk::ImageUsageFlags::SAMPLED)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            unsafe { device.create_image(&image_create_info, None) }.unwrap()
+        };
+
+        let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
+
+        let mut buffer = BufferResource::new(
+            mem_reqs.size,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE
+                | vk::MemoryPropertyFlags::HOST_COHERENT
+                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            device,
+            device_memory_properties,
+        );
+
+        unsafe { device.bind_image_memory(image, buffer.memory, 0) }.unwrap();
+
+        let image_view = {
+            let image_view_create_info = vk::ImageViewCreateInfo::builder()
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .format(COLOR_FORMAT)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .image(image)
+                .build();
+
+            unsafe { device.create_image_view(&image_view_create_info, None) }.unwrap()
+        };
+
+        let rgb = img.as_rgb8().unwrap();
+        let mut data: Vec<u8> = Vec::new();
+
+        for p in rgb.pixels() {
+            let rgba = [
+                p.0[0] as f32 / 255.0,
+                p.0[1] as f32 / 255.0,
+                p.0[2] as f32 / 255.0,
+                1.0,
+            ];
+
+            data.extend(bytemuck::cast_slice(rgba.as_slice()));
+        }
+
+        buffer.store(&data, device);
+
+        Self {
+            buffer,
+            image,
+            image_view,
+        }
+    }
+}
 
 struct SceneBuffers {
     tlas: AccelerationStructureKHR,
@@ -1757,6 +1863,7 @@ struct SceneBuffers {
     textures: BufferResource,
     lights: BufferResource,
     area_lights: BufferResource,
+    images: Vec<Image>,
 }
 
 impl SceneBuffers {
@@ -2511,6 +2618,12 @@ impl SceneBuffers {
             area_lights_buffer
         };
 
+        let images = vec![Image::load(
+            "earthmap.jpg",
+            device,
+            device_memory_properties,
+        )];
+
         Self {
             tlas: top_as,
             default_blas,
@@ -2524,6 +2637,7 @@ impl SceneBuffers {
             textures,
             lights,
             area_lights,
+            images,
         }
     }
 
@@ -2544,5 +2658,11 @@ impl SceneBuffers {
         self.textures.destroy(device);
         self.lights.destroy(device);
         self.area_lights.destroy(device);
+
+        for image in self.images {
+            device.destroy_image_view(image.image_view, None);
+            device.destroy_image(image.image, None);
+            image.buffer.destroy(device);
+        }
     }
 }
