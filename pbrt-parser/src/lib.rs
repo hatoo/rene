@@ -27,6 +27,7 @@ pub struct AxisAngle {
 
 pub struct Texture<'a> {
     pub name: &'a str,
+    pub value_type: &'a str,
     pub obj: Object<'a, ()>,
 }
 
@@ -397,7 +398,7 @@ fn parse_rotate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, 
 fn parse_texture<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Texture<'a>, E> {
     let (rest, _) = tag("Texture")(input)?;
     let (rest, name) = preceded(sp, parse_str)(rest)?;
-    let (rest, _) = preceded(sp, tag("\"spectrum\""))(rest)?;
+    let (rest, value_type) = preceded(sp, parse_str)(rest)?;
     let (rest, t) = preceded(sp, parse_str)(rest)?;
     let (rest, arguments) = preceded(sp, many0(preceded(sp, parse_argument)))(rest)?;
 
@@ -405,6 +406,7 @@ fn parse_texture<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
         rest,
         Texture {
             name,
+            value_type,
             obj: Object {
                 object_type: (),
                 t,
