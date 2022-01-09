@@ -1826,6 +1826,8 @@ impl Image {
         path: &str,
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
+        command_pool: vk::CommandPool,
+        graphics_queue: vk::Queue,
     ) -> Self {
         let img = image::io::Reader::open(path).unwrap().decode().unwrap();
 
@@ -1900,6 +1902,70 @@ impl Image {
         }
 
         buffer.store(&data, device);
+
+        let command_buffer = {
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(1)
+                .command_pool(command_pool)
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .build();
+
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
+                .expect("Failed to allocate Command Buffers!")[0]
+        };
+
+        {
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                .build();
+
+            unsafe { device.begin_command_buffer(command_buffer, &command_buffer_begin_info) }
+                .expect("Failed to begin recording Command Buffer at beginning!");
+        }
+
+        let image_barrier = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::HOST_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .old_layout(vk::ImageLayout::PREINITIALIZED)
+            .new_layout(vk::ImageLayout::GENERAL)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .build();
+
+        unsafe {
+            device.cmd_pipeline_barrier(
+                command_buffer,
+                vk::PipelineStageFlags::HOST,
+                vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[image_barrier],
+            );
+
+            device.end_command_buffer(command_buffer).unwrap();
+
+            let command_buffers = [command_buffer];
+
+            let submit_infos = [vk::SubmitInfo::builder()
+                .command_buffers(&command_buffers)
+                .build()];
+
+            device
+                .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
+                .expect("Failed to execute queue submit.");
+
+            device.queue_wait_idle(graphics_queue).unwrap();
+            device.free_command_buffers(command_pool, &[command_buffer]);
+        }
 
         Self {
             buffer,
@@ -2681,6 +2747,8 @@ impl SceneBuffers {
             "earthmap.jpg",
             device,
             device_memory_properties,
+            command_pool,
+            graphics_queue,
         )];
 
         Self {
