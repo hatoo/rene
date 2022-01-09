@@ -68,13 +68,11 @@ impl<'a> Texture for CheckerBoard<'a> {
 }
 
 impl<'a> Texture for Solid<'a> {
-    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
-        // tmp
-        let color: Vec4 = unsafe { images.index(0).sample_by_lod(uv, 0.0) };
+    fn color(&self, _images: &RuntimeArray<InputImage>, _uv: Vec2) -> ColorOrTarget {
         ColorOrTarget {
             t: false,
             index: 0,
-            color_or_uv: color.xyz().into(),
+            color_or_uv: self.data.v0.xyz().into(),
         }
     }
 }
