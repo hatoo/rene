@@ -1,9 +1,17 @@
-use spirv_std::glam::{uvec4, vec2, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
+use spirv_std::{
+    glam::{uvec4, vec2, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4},
+    image::Image,
+    RuntimeArray,
+};
 
 trait Texture {
-    fn color(&self, uv: Vec2) -> ColorOrTarget;
+    fn color(
+        &self,
+        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        uv: Vec2,
+    ) -> ColorOrTarget;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -36,7 +44,11 @@ struct ColorOrTarget {
 }
 
 impl<'a> Texture for CheckerBoard<'a> {
-    fn color(&self, uv: Vec2) -> ColorOrTarget {
+    fn color(
+        &self,
+        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        uv: Vec2,
+    ) -> ColorOrTarget {
         let w = self.data.v0.x;
         let h = self.data.v0.y;
 
@@ -63,7 +75,11 @@ impl<'a> Texture for CheckerBoard<'a> {
 }
 
 impl<'a> Texture for Solid<'a> {
-    fn color(&self, _uv: Vec2) -> ColorOrTarget {
+    fn color(
+        &self,
+        _images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        _uv: Vec2,
+    ) -> ColorOrTarget {
         ColorOrTarget {
             t: false,
             index: 0,
@@ -95,23 +111,28 @@ impl EnumTexture {
 }
 
 impl EnumTexture {
-    pub fn color(&self, textures: &[EnumTexture], uv: Vec2) -> Vec3A {
+    pub fn color(
+        &self,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<Image!(2D, format=rgba32f, sampled=true)>,
+        uv: Vec2,
+    ) -> Vec3A {
         let mut color_or_target = match self.t {
-            0 => Solid { data: &self.data }.color(uv),
-            _ => CheckerBoard { data: &self.data }.color(uv),
+            0 => Solid { data: &self.data }.color(images, uv),
+            _ => CheckerBoard { data: &self.data }.color(images, uv),
         };
 
         while color_or_target.t {
             let tex = textures[color_or_target.index as usize];
             color_or_target = match tex.t {
-                0 => Solid { data: &tex.data }.color(vec2(
-                    color_or_target.color_or_uv.x,
-                    color_or_target.color_or_uv.y,
-                )),
-                _ => CheckerBoard { data: &tex.data }.color(vec2(
-                    color_or_target.color_or_uv.x,
-                    color_or_target.color_or_uv.y,
-                )),
+                0 => Solid { data: &tex.data }.color(
+                    images,
+                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
+                ),
+                _ => CheckerBoard { data: &tex.data }.color(
+                    images,
+                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
+                ),
             };
         }
 

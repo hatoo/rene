@@ -129,7 +129,7 @@ pub fn main_ray_generation(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] textures: &[EnumTexture],
-    #[spirv(descriptor_set = 0, binding = 7)] _images: &RuntimeArray<
+    #[spirv(descriptor_set = 0, binding = 7)] images: &RuntimeArray<
         Image!(2D, format=rgba32f, sampled=true),
     >,
     #[spirv(ray_payload)] payload: &mut RayPayload,
@@ -182,10 +182,10 @@ pub fn main_ray_generation(
 
             if i == 0 {
                 normal = payload.normal.normalize();
-                albedo = material.albedo(textures, payload.uv);
+                albedo = material.albedo(textures, images, payload.uv);
             }
 
-            if material.scatter(textures, &ray, payload, &mut rng, &mut scatter) {
+            if material.scatter(textures, images, &ray, payload, &mut rng, &mut scatter) {
                 color *= scatter.color;
                 ray = scatter.ray;
             } else {
