@@ -2015,6 +2015,13 @@ impl Image {
             sampler,
         }
     }
+
+    unsafe fn destroy(self, device: &ash::Device) {
+        self.buffer.destroy(device);
+        device.destroy_image_view(self.image_view, None);
+        device.destroy_image(self.image, None);
+        device.destroy_sampler(self.sampler, None);
+    }
 }
 
 struct SceneBuffers {
@@ -2829,10 +2836,7 @@ impl SceneBuffers {
         self.area_lights.destroy(device);
 
         for image in self.images {
-            device.destroy_image_view(image.image_view, None);
-            device.destroy_image(image.image, None);
-            image.buffer.destroy(device);
-            device.destroy_sampler(image.sampler, None);
+            image.destroy(device);
         }
     }
 }
