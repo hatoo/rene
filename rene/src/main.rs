@@ -1999,7 +1999,10 @@ impl Image {
         }
 
         let sampler = {
-            let sampler_create_info = vk::SamplerCreateInfo::builder().build();
+            let sampler_create_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .build();
 
             unsafe { device.create_sampler(&sampler_create_info, None) }.unwrap()
         };
