@@ -2521,8 +2521,8 @@ impl SceneBuffers {
                 vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
                         matrix: [
-                            m.x_axis.x, m.x_axis.y, m.x_axis.z, m.w_axis.x, m.y_axis.x, m.y_axis.y,
-                            m.y_axis.z, m.w_axis.y, m.z_axis.x, m.z_axis.y, m.z_axis.z, m.w_axis.z,
+                            m.x_axis.x, m.y_axis.x, m.z_axis.x, m.w_axis.x, m.x_axis.y, m.y_axis.y,
+                            m.z_axis.y, m.w_axis.y, m.x_axis.z, m.y_axis.z, m.z_axis.z, m.w_axis.z,
                         ],
                     },
                     instance_custom_index_and_mask: vk::Packed24_8::new(index as u32, 0xff),
