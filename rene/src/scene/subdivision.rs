@@ -31,10 +31,8 @@ pub fn loop_subdivision(mut mesh: TriangleMesh, level: usize) -> TriangleMesh {
         refined_vertex.extend([v.position.x, v.position.y, v.position.z]);
     }
 
-    for _ in 1..=level {
-        refined_vertex = primvar_refiner
-            .interpolate(level, 3, &refined_vertex)
-            .unwrap();
+    for l in 1..=level {
+        refined_vertex = primvar_refiner.interpolate(l, 3, &refined_vertex).unwrap();
     }
 
     let last_level = refiner.level(level).unwrap();
