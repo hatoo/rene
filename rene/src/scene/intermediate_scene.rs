@@ -8,6 +8,8 @@ use ply_rs as ply;
 use rene_shader::Vertex;
 use thiserror::Error;
 
+use super::subdivision::loop_subdivision;
+
 #[derive(PartialEq, Debug)]
 pub struct LookAt {
     pub eye: Vec3A,
@@ -491,7 +493,7 @@ impl IntermediateWorld {
                             Sphere { radius },
                         ))))
                     }
-                    "trianglemesh" => {
+                    "trianglemesh" | "loopsubdiv" => {
                         let indices = obj.get_integers("indices")??;
                         let indices: Vec<u32> = indices.into_iter().map(|&i| i as u32).collect();
                         let vertices = obj.get_points("P")??;
@@ -514,46 +516,54 @@ impl IntermediateWorld {
                             ));
                         }
 
-                        if let Some(normal) = normal {
+                        let mesh = if let Some(normal) = normal {
                             if normal.len() != vertices.len() {
                                 return Err(Error::InvalidArgument(
                                     ArgumentError::UnmatchedValueLength,
                                 ));
                             }
 
+                            TriangleMesh {
+                                indices,
+                                vertices: vertices
+                                    .iter()
+                                    .zip(normal.iter())
+                                    .enumerate()
+                                    .map(|(i, (position, normal))| Vertex {
+                                        position: *position,
+                                        normal: *normal,
+                                        uv: st
+                                            .map(|st| vec2(st[2 * i], st[2 * i + 1]))
+                                            .unwrap_or(Vec2::ZERO),
+                                    })
+                                    .collect(),
+                            }
+                        } else {
+                            TriangleMesh {
+                                indices,
+                                vertices: vertices
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, position)| Vertex {
+                                        position: *position,
+                                        normal: Vec3A::ZERO,
+                                        uv: st
+                                            .map(|st| vec2(st[2 * i], st[2 * i + 1]))
+                                            .unwrap_or(Vec2::ZERO),
+                                    })
+                                    .collect(),
+                            }
+                        };
+
+                        if obj.t == "loopsubdiv" {
+                            let nlevels = obj.get_integer("nlevels")??;
+
                             Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
-                                TriangleMesh {
-                                    indices,
-                                    vertices: vertices
-                                        .iter()
-                                        .zip(normal.iter())
-                                        .enumerate()
-                                        .map(|(i, (position, normal))| Vertex {
-                                            position: *position,
-                                            normal: *normal,
-                                            uv: st
-                                                .map(|st| vec2(st[2 * i], st[2 * i + 1]))
-                                                .unwrap_or(Vec2::ZERO),
-                                        })
-                                        .collect(),
-                                },
+                                loop_subdivision(mesh, nlevels as usize),
                             ))))
                         } else {
                             Ok(Self::WorldObject(WorldObject::Shape(Shape::TriangleMesh(
-                                TriangleMesh {
-                                    indices,
-                                    vertices: vertices
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(i, position)| Vertex {
-                                            position: *position,
-                                            normal: Vec3A::ZERO,
-                                            uv: st
-                                                .map(|st| vec2(st[2 * i], st[2 * i + 1]))
-                                                .unwrap_or(Vec2::ZERO),
-                                        })
-                                        .collect(),
-                                },
+                                mesh,
                             ))))
                         }
                     }
