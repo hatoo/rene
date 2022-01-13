@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1957aa4a5fb388f0a0a73ce7556c5b42025b874e5cdc2c670775e346e97adec0"
+checksum = "12e8611f9ae4e068fa3e56931fded356ff745e70987ff76924a6e0ab1c8ef2e3"
 dependencies = [
  "atty",
  "bitflags",
@@ -1065,7 +1065,7 @@ dependencies = [
  "ash",
  "blackbody",
  "bytemuck",
- "clap 3.0.6",
+ "clap 3.0.7",
  "cust",
  "glam",
  "image",
@@ -1115,7 +1115,7 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 [[package]]
 name = "rustc_codegen_spirv"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#fe5c7716ed89d8f8ab92374c7ea077e365246b18"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git#11e21c64128fb027ae17e365531c0da302468987"
 dependencies = [
  "ar",
  "bimap",
@@ -1288,7 +1288,7 @@ dependencies = [
 [[package]]
 name = "spirv-builder"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#fe5c7716ed89d8f8ab92374c7ea077e365246b18"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git#11e21c64128fb027ae17e365531c0da302468987"
 dependencies = [
  "memchr",
  "raw-string",
@@ -1300,7 +1300,7 @@ dependencies = [
 [[package]]
 name = "spirv-std"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#fe5c7716ed89d8f8ab92374c7ea077e365246b18"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git#11e21c64128fb027ae17e365531c0da302468987"
 dependencies = [
  "bitflags",
  "glam",
@@ -1312,7 +1312,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-macros"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#fe5c7716ed89d8f8ab92374c7ea077e365246b18"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git#11e21c64128fb027ae17e365531c0da302468987"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1341,7 +1341,7 @@ dependencies = [
 [[package]]
 name = "spirv-types"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#fe5c7716ed89d8f8ab92374c7ea077e365246b18"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git#11e21c64128fb027ae17e365531c0da302468987"
 
 [[package]]
 name = "strsim"
