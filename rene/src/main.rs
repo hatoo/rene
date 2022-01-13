@@ -37,6 +37,13 @@ impl ShaderIndex {
     const SPHERE: u32 = 1;
 }
 
+#[derive(parse_display::FromStr, Debug, PartialEq, Eq, Clone, Copy)]
+enum Denoiser {
+    None,
+    Optix,
+    Oidn,
+}
+
 #[derive(Parser)]
 struct Opts {
     #[clap(help = "pbrt file")]
@@ -46,10 +53,11 @@ struct Opts {
     #[clap(help = "AOV albedo", long = "aov-albedo")]
     aov_albedo: Option<PathBuf>,
     #[clap(
-        help = "Use Optix Denoiser. Need to build with \"optix-denoiser\" feature",
-        long = "optix-denoiser"
+        help = "Set Denoiser, values: None, Optix, Oidn",
+        long = "denoiser",
+        default_value = "None"
     )]
-    optix_denoiser: bool,
+    denoiser: Denoiser,
 }
 
 fn main() {
@@ -65,9 +73,16 @@ fn main() {
     let mut pbrt_file = String::new();
 
     #[cfg(not(feature = "optix-denoiser"))]
-    if opts.optix_denoiser {
+    if opts.denoiser == Denoiser::Optix {
         log::warn!(
             "Optix Denoiser was enabled but built without \"optix-denoiser\" feature. Ignore."
+        );
+    }
+
+    #[cfg(not(feature = "oidn-denoiser"))]
+    if opts.denoiser == Denoiser::Oidn {
+        log::warn!(
+            "Oidn Denoiser was enabled but built without \"oidn-denoiser\" feature. Ignore."
         );
     }
 
@@ -1355,8 +1370,20 @@ fn main() {
     average(&mut data_albedo_linear, N_SAMPLES);
 
     #[cfg(feature = "optix-denoiser")]
-    if opts.optix_denoiser {
+    if opts.denoiser == Denoiser::Optix {
         data_image_linear = optix_denoise(
+            &data_image_linear,
+            &data_normal_linear,
+            &data_albedo_linear,
+            scene.film.xresolution,
+            scene.film.yresolution,
+        )
+        .unwrap();
+    }
+
+    #[cfg(feature = "oidn-denoiser")]
+    if opts.denoiser == Denoiser::Oidn {
+        data_image_linear = oidn_denoise(
             &data_image_linear,
             &data_normal_linear,
             &data_albedo_linear,
@@ -1498,6 +1525,34 @@ fn to_aov_normal(data_linear: &[u8]) -> Vec<u8> {
         .iter()
         .map(|&value| (256.0 * (value * 0.5 + 0.5).clamp(0.0, 0.999)) as u8)
         .collect()
+}
+
+#[cfg(feature = "oidn-denoiser")]
+fn oidn_denoise(
+    linear_image: &[u8],
+    linear_normal: &[u8],
+    linear_albedo: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, oidn::FilterError> {
+    let mut output = vec![0u8; linear_image.len()];
+
+    let device = oidn::Device::new();
+    let mut filter = oidn::RayTracing::new(&device);
+    filter
+        .srgb(true)
+        .image_dimensions(width as usize, height as usize)
+        .albedo_normal(
+            bytemuck::cast_slice(linear_albedo),
+            bytemuck::cast_slice(linear_normal),
+        );
+
+    filter.filter(
+        bytemuck::cast_slice(linear_image),
+        &mut bytemuck::cast_slice_mut(&mut output),
+    )?;
+
+    Ok(output)
 }
 
 #[cfg(feature = "optix-denoiser")]
