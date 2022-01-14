@@ -1541,7 +1541,6 @@ fn oidn_denoise(
     let device = oidn::Device::new();
     let mut filter = oidn::RayTracing::new(&device);
     filter
-        .srgb(true)
         .image_dimensions(width as usize, height as usize)
         .albedo_normal(
             bytemuck::cast_slice(linear_albedo),
