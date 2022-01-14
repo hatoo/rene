@@ -16,7 +16,7 @@ use ash::{
     vk::{self, AccelerationStructureKHR},
 };
 
-use clap::Parser;
+use clap::{ArgEnum, Parser};
 use glam::{Vec2, Vec3A};
 use image::{DynamicImage, GenericImageView};
 use nom::error::convert_error;
@@ -37,7 +37,7 @@ impl ShaderIndex {
     const SPHERE: u32 = 1;
 }
 
-#[derive(parse_display::FromStr, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(ArgEnum, Debug, PartialEq, Eq, Clone, Copy)]
 enum Denoiser {
     None,
     Optix,
@@ -53,7 +53,8 @@ struct Opts {
     #[clap(help = "AOV albedo", long = "aov-albedo")]
     aov_albedo: Option<PathBuf>,
     #[clap(
-        help = "Set Denoiser, values: None, Optix, Oidn",
+        arg_enum,
+        help = "Set Denoiser",
         long = "denoiser",
         default_value = "None"
     )]
