@@ -1,9 +1,9 @@
 use std::{collections::HashMap, f32::consts::PI, path::Path};
 
-use glam::{vec3, vec3a, Affine3A, Mat4};
+use glam::{vec3, Affine3A, Mat4};
 use rene_shader::{
-    aabb::AABB, area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial,
-    texture::EnumTexture, Uniform,
+    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, texture::EnumTexture,
+    Uniform,
 };
 use thiserror::Error;
 
@@ -38,33 +38,6 @@ pub struct Scene {
     pub blases: Vec<TriangleMesh>,
     pub lights: Vec<EnumLight>,
     pub images: Vec<image::DynamicImage>,
-}
-
-impl TlasInstance {
-    pub fn aabb(&self, blases: &[TriangleMesh]) -> AABB {
-        let aabb = match self.shader_offset {
-            ShaderIndex::TRIANGLE => {
-                let mut aabb = AABB {
-                    min: vec3a(f32::INFINITY, f32::INFINITY, f32::INFINITY),
-                    max: vec3a(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
-                };
-
-                let blas = &blases[self.blas_index.unwrap()];
-                for i in &blas.indices {
-                    aabb.merge(blas.vertices[*i as usize].position);
-                }
-
-                aabb
-            }
-            ShaderIndex::SPHERE => AABB {
-                min: vec3a(-1.0, -1.0, -1.0),
-                max: vec3a(1.0, 1.0, 1.0),
-            },
-            _ => unreachable!(),
-        };
-
-        aabb.transform(&self.matrix)
-    }
 }
 
 #[derive(Error, Debug)]

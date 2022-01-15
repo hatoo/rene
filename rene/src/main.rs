@@ -17,14 +17,14 @@ use ash::{
 };
 
 use clap::{ArgEnum, Parser};
-use glam::{vec3a, Vec2, Vec3A};
+use glam::{Vec2, Vec3A};
 use image::{DynamicImage, GenericImageView};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
-    aabb::AABB, area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial,
-    texture::EnumTexture, IndexData, Uniform, Vertex,
+    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial,
+    surface_sample::SurfaceSample, texture::EnumTexture, IndexData, Uniform, Vertex,
 };
 use scene::Scene;
 
@@ -495,14 +495,20 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::CLOSEST_HIT_KHR
+                                    | vk::ShaderStageFlags::RAYGEN_KHR,
+                            )
                             .binding(10)
                             .build(),
                         // vertices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::CLOSEST_HIT_KHR
+                                    | vk::ShaderStageFlags::RAYGEN_KHR,
+                            )
                             .binding(11)
                             .build(),
                     ])
@@ -2853,6 +2859,24 @@ impl SceneBuffers {
             graphics_queue,
         );
 
+        let mut emit_objects: Vec<SurfaceSample> = scene
+            .tlas
+            .iter()
+            .filter(|t| !scene.area_lights[t.area_light_index].is_null())
+            .map(|t| match t.shader_offset {
+                ShaderIndex::SPHERE => SurfaceSample::new_sphere(t.matrix),
+                ShaderIndex::TRIANGLE => {
+                    let blas = &blas_args[t.blas_index.unwrap() as usize];
+                    SurfaceSample::new_triangle(blas.index_offset, blas.primitive_count, t.matrix)
+                }
+                _ => unreachable!(),
+            })
+            .collect();
+
+        if emit_objects.is_empty() {
+            emit_objects.push(SurfaceSample::new_sphere(Default::default()));
+        }
+
         buffers.push(top_as_buffer);
         buffers.push(instance_buffer);
 
@@ -2961,13 +2985,6 @@ impl SceneBuffers {
             ))
         }
 
-        let mut emit_objects: Vec<AABB> = scene
-            .tlas
-            .iter()
-            .filter(|t| !scene.area_lights[t.area_light_index].is_null())
-            .map(|t| t.aabb(&scene.blases))
-            .collect();
-
         let uniform_buffer = {
             let mut uniform = scene.uniform;
             uniform.emit_object_len = emit_objects.len() as u32;
@@ -2988,15 +3005,9 @@ impl SceneBuffers {
             uniform_buffer
         };
 
-        if emit_objects.is_empty() {
-            emit_objects.push(AABB {
-                min: vec3a(0.0, 0.0, 0.0),
-                max: vec3a(0.0, 0.0, 0.0),
-            });
-        }
-
         let emit_objects = {
-            let buffer_size = (emit_objects.len() * std::mem::size_of::<AABB>()) as vk::DeviceSize;
+            let buffer_size =
+                (emit_objects.len() * std::mem::size_of::<SurfaceSample>()) as vk::DeviceSize;
 
             let mut emit_objects_buffer = BufferResource::new(
                 buffer_size,

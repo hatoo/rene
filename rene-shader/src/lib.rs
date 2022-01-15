@@ -6,7 +6,6 @@
 )]
 
 use crate::rand::DefaultRng;
-use aabb::AABB;
 use area_light::{AreaLight, EnumAreaLight};
 use camera::PerspectiveCamera;
 use core::f32::consts::PI;
@@ -14,6 +13,7 @@ use light::{EnumLight, Light};
 use material::{EnumMaterial, Material, Scatter};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
+use surface_sample::SurfaceSample;
 use texture::EnumTexture;
 
 #[allow(unused_imports)]
@@ -33,6 +33,7 @@ pub mod light;
 pub mod material;
 pub mod math;
 pub mod rand;
+pub mod surface_sample;
 pub mod texture;
 
 pub type InputImage = SampledImage<Image!(2D, format=rgba32f, sampled=true)>;
@@ -132,10 +133,12 @@ pub fn main_ray_generation(
     #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false, arrayed=true),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] emit_objects: &[AABB],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] emit_objects: &[SurfaceSample],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
     #[spirv(ray_payload)] payload: &mut RayPayload,
     #[spirv(ray_payload)] payload_pdf: &mut RayPayloadPDF,
 ) {
@@ -201,7 +204,7 @@ pub fn main_ray_generation(
                 if uniform.emit_object_len > 0 {
                     if rng.next_f32() > 0.5 {
                         let dir = emit_objects[(rng.next_u32() % uniform.emit_object_len) as usize]
-                            .sample(&mut rng)
+                            .sample(indices, vertices, &mut rng)
                             - payload.position;
 
                         ray.direction = dir.normalize();
@@ -227,7 +230,7 @@ pub fn main_ray_generation(
 
                     color *= material.scattering_pdf(payload, ray.direction);
                     let pdf = (0.5 * material.scattering_pdf(payload, ray.direction)
-                        + 0.5  /* * 0.8 correction for AABB */ * weight * payload_pdf.pdf)
+                        + 0.5 * weight * payload_pdf.pdf)
                         .max(1e-5);
 
                     color /= pdf;
