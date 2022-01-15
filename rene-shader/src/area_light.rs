@@ -1,4 +1,4 @@
-use spirv_std::glam::{Vec3A, Vec4, Vec4Swizzles};
+use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 
 use crate::RayPayload;
 
@@ -26,6 +26,10 @@ struct Diffuse<'a> {
 }
 
 impl EnumAreaLight {
+    pub fn is_null(&self) -> bool {
+        self.t == 0
+    }
+
     pub fn new_null() -> Self {
         Self {
             t: 0,
@@ -34,7 +38,7 @@ impl EnumAreaLight {
     }
     pub fn new_diffuse(color: Vec3A) -> Self {
         Self {
-            t: 0,
+            t: 1,
             data: EnumAreaLightData {
                 v0: color.extend(0.0),
             },
@@ -55,6 +59,7 @@ impl<'a> AreaLight for Diffuse<'a> {
 impl AreaLight for EnumAreaLight {
     fn emit(&self, payload: &RayPayload) -> Vec3A {
         match self.t {
+            0 => vec3a(0.0, 0.0, 0.0),
             _ => Diffuse { data: &self.data }.emit(payload),
         }
     }
