@@ -17,14 +17,14 @@ use ash::{
 };
 
 use clap::{ArgEnum, Parser};
-use glam::{Vec2, Vec3A};
+use glam::{vec3a, Vec2, Vec3A};
 use image::{DynamicImage, GenericImageView};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
-    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, texture::EnumTexture,
-    IndexData, Uniform, Vertex,
+    aabb::AABB, area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial,
+    texture::EnumTexture, IndexData, Uniform, Vertex,
 };
 use scene::Scene;
 
@@ -453,12 +453,19 @@ fn main() {
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(4)
                             .build(),
-                        // materials
+                        // emit objects AABB
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(5)
+                            .build(),
+                        // materials
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .binding(6)
                             .build(),
                         // textures
                         vk::DescriptorSetLayoutBinding::builder()
@@ -468,35 +475,35 @@ fn main() {
                                 vk::ShaderStageFlags::RAYGEN_KHR
                                     | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
                             )
-                            .binding(6)
+                            .binding(7)
                             .build(),
                         // images
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(scene_buffers.images.len() as u32)
                             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                            .binding(7)
+                            .binding(8)
                             .build(),
                         // index data
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(8)
+                            .binding(9)
                             .build(),
                         // indices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(9)
+                            .binding(10)
                             .build(),
                         // vertices
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                            .binding(10)
+                            .binding(11)
                             .build(),
                     ])
                     .build(),
@@ -541,7 +548,15 @@ fn main() {
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
-            // group2 = [ triangle ]
+            // group2 = [ miss ]
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(5)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build(),
+            // group3 = [ triangle ]
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
                 .general_shader(vk::SHADER_UNUSED_KHR)
@@ -549,11 +564,27 @@ fn main() {
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
-            // group2 = [ sphere ]
+            // group4 = [ sphere ]
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
                 .general_shader(vk::SHADER_UNUSED_KHR)
                 .closest_hit_shader(3)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(2)
+                .build(),
+            // group5 = [ triangle ]
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
+                .general_shader(vk::SHADER_UNUSED_KHR)
+                .closest_hit_shader(6)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build(),
+            // group6 = [ sphere ]
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
+                .general_shader(vk::SHADER_UNUSED_KHR)
+                .closest_hit_shader(7)
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(2)
                 .build(),
@@ -584,6 +615,21 @@ fn main() {
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"triangle_closest_hit\0").unwrap())
+                .build(),
+            vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::MISS_KHR)
+                .module(shader_module)
+                .name(std::ffi::CStr::from_bytes_with_nul(b"main_miss_pdf\0").unwrap())
+                .build(),
+            vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                .module(shader_module)
+                .name(std::ffi::CStr::from_bytes_with_nul(b"triangle_closest_hit_pdf\0").unwrap())
+                .build(),
+            vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                .module(shader_module)
+                .name(std::ffi::CStr::from_bytes_with_nul(b"sphere_closest_hit_pdf\0").unwrap())
                 .build(),
         ];
 
@@ -625,6 +671,10 @@ fn main() {
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_IMAGE,
+            descriptor_count: 1,
+        },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
             descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
@@ -759,6 +809,21 @@ fn main() {
             .build()
     };
 
+    let emit_object_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.emit_objects.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
+
+    let emit_object_write = {
+        vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(5)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&emit_object_buffer_info)
+            .build()
+    };
+
     let material_buffer_info = [vk::DescriptorBufferInfo::builder()
         .buffer(scene_buffers.materials.buffer)
         .range(vk::WHOLE_SIZE)
@@ -767,7 +832,7 @@ fn main() {
     let material_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(5)
+            .dst_binding(6)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&material_buffer_info)
@@ -782,7 +847,7 @@ fn main() {
     let texture_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(6)
+            .dst_binding(7)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&texture_buffer_info)
@@ -803,7 +868,7 @@ fn main() {
 
     let images_write = vk::WriteDescriptorSet::builder()
         .dst_set(descriptor_set)
-        .dst_binding(7)
+        .dst_binding(8)
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .image_info(&images_info)
@@ -817,7 +882,7 @@ fn main() {
     let index_data_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(8)
+            .dst_binding(9)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&index_data_buffer_info)
@@ -832,7 +897,7 @@ fn main() {
     let indices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(9)
+            .dst_binding(10)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&indices_buffer_info)
@@ -847,7 +912,7 @@ fn main() {
     let vertices_write = {
         vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
-            .dst_binding(10)
+            .dst_binding(11)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .buffer_info(&vertices_buffer_info)
@@ -862,6 +927,7 @@ fn main() {
                 image_write,
                 light_write,
                 area_light_write,
+                emit_object_write,
                 material_write,
                 texture_write,
                 images_write,
@@ -940,13 +1006,13 @@ fn main() {
 
         let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address + 1 * handle_size_aligned)
-            .size(handle_size_aligned)
+            .size(2 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 2 * handle_size_aligned)
-            .size(handle_size_aligned * 2)
+            .device_address(sbt_address + 3 * handle_size_aligned)
+            .size(handle_size_aligned * 4)
             .stride(handle_size_aligned)
             .build();
 
@@ -2093,6 +2159,7 @@ struct SceneBuffers {
     textures: BufferResource,
     lights: BufferResource,
     area_lights: BufferResource,
+    emit_objects: BufferResource,
     images: Vec<Image>,
 }
 
@@ -2521,25 +2588,6 @@ impl SceneBuffers {
         buffers.push(default_blas_buffer);
         buffers.push(default_aabb_buffer);
 
-        let uniform_buffer = {
-            let uniform = scene.uniform;
-
-            let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
-
-            let mut uniform_buffer = BufferResource::new(
-                buffer_size,
-                vk::BufferUsageFlags::UNIFORM_BUFFER,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
-                device_memory_properties,
-            );
-            uniform_buffer.store(&[uniform], &device);
-
-            uniform_buffer
-        };
-
         let material_buffer = {
             let buffer_size =
                 (scene.materials.len() * std::mem::size_of::<EnumMaterial>()) as vk::DeviceSize;
@@ -2580,7 +2628,14 @@ impl SceneBuffers {
                             m.z_axis.y, m.w_axis.y, m.x_axis.z, m.y_axis.z, m.z_axis.z, m.w_axis.z,
                         ],
                     },
-                    instance_custom_index_and_mask: vk::Packed24_8::new(index as u32, 0xff),
+                    instance_custom_index_and_mask: vk::Packed24_8::new(
+                        index as u32,
+                        if scene.area_lights[instance.area_light_index].is_null() {
+                            0x0f
+                        } else {
+                            0xff
+                        },
+                    ),
                     instance_shader_binding_table_record_offset_and_flags: vk::Packed24_8::new(
                         instance.shader_offset,
                         vk::GeometryInstanceFlagsKHR::FORCE_OPAQUE.as_raw() as u8,
@@ -2873,6 +2928,57 @@ impl SceneBuffers {
             ))
         }
 
+        let mut emit_objects: Vec<AABB> = scene
+            .tlas
+            .iter()
+            .filter(|t| !scene.area_lights[t.area_light_index].is_null())
+            .map(|t| t.aabb(&scene.blases))
+            .collect();
+
+        let uniform_buffer = {
+            let mut uniform = scene.uniform;
+            uniform.emit_object_len = emit_objects.len() as u32;
+
+            let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
+
+            let mut uniform_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &device,
+                device_memory_properties,
+            );
+            uniform_buffer.store(&[uniform], &device);
+
+            uniform_buffer
+        };
+
+        if emit_objects.is_empty() {
+            emit_objects.push(AABB {
+                min: vec3a(0.0, 0.0, 0.0),
+                max: vec3a(0.0, 0.0, 0.0),
+            });
+        }
+
+        let emit_objects = {
+            let buffer_size = (emit_objects.len() * std::mem::size_of::<AABB>()) as vk::DeviceSize;
+
+            let mut emit_objects_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &device,
+                device_memory_properties,
+            );
+            emit_objects_buffer.store(&emit_objects, &device);
+
+            emit_objects_buffer
+        };
+
         Self {
             tlas: top_as,
             default_blas,
@@ -2886,6 +2992,7 @@ impl SceneBuffers {
             textures,
             lights,
             area_lights,
+            emit_objects,
             images,
         }
     }
@@ -2907,6 +3014,7 @@ impl SceneBuffers {
         self.textures.destroy(device);
         self.lights.destroy(device);
         self.area_lights.destroy(device);
+        self.emit_objects.destroy(device);
 
         for image in self.images {
             image.destroy(device);

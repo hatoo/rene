@@ -38,6 +38,11 @@ pub trait Material {
     ) -> Vec3A;
 
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32;
+
+    fn scattering_pdf(&self, _payload: &RayPayload, _direction: Vec3A) -> f32 {
+        // TODO
+        1.0
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -124,6 +129,11 @@ impl<'a> Material for Lambertian<'a> {
         uv: Vec2,
     ) -> Vec3A {
         textures[self.data.u0.x as usize].color(textures, images, uv)
+    }
+
+    fn scattering_pdf(&self, payload: &RayPayload, direction: Vec3A) -> f32 {
+        let cosine = payload.normal.dot(direction.normalize());
+        (cosine / PI).max(0.0)
     }
 
     fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
@@ -319,6 +329,14 @@ impl Material for EnumMaterial {
             0 => Lambertian { data: &self.data }.brdf(v0, v1),
             1 => Metal { data: &self.data }.brdf(v0, v1),
             _ => Dielectric { data: &self.data }.brdf(v0, v1),
+        }
+    }
+
+    fn scattering_pdf(&self, payload: &RayPayload, direction: Vec3A) -> f32 {
+        match self.t {
+            0 => Lambertian { data: &self.data }.scattering_pdf(payload, direction),
+            1 => Metal { data: &self.data }.scattering_pdf(payload, direction),
+            _ => Dielectric { data: &self.data }.scattering_pdf(payload, direction),
         }
     }
 }

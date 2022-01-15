@@ -6,6 +6,7 @@
 )]
 
 use crate::rand::DefaultRng;
+use aabb::AABB;
 use area_light::{AreaLight, EnumAreaLight};
 use camera::PerspectiveCamera;
 use core::f32::consts::PI;
@@ -25,6 +26,7 @@ use spirv_std::{
     RuntimeArray,
 };
 
+pub mod aabb;
 pub mod area_light;
 pub mod camera;
 pub mod light;
@@ -96,6 +98,7 @@ pub struct Uniform {
     pub background: Vec3A,
     pub camera: PerspectiveCamera,
     pub lights_len: u32,
+    pub emit_object_len: u32,
 }
 
 pub struct PushConstants {
@@ -129,10 +132,12 @@ pub fn main_ray_generation(
     #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false, arrayed=true),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] materials: &[EnumMaterial],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] textures: &[EnumTexture],
-    #[spirv(descriptor_set = 0, binding = 7)] images: &RuntimeArray<InputImage>,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] emit_objects: &[AABB],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
+    #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
     #[spirv(ray_payload)] payload: &mut RayPayload,
+    #[spirv(ray_payload)] payload_pdf: &mut RayPayloadPDF,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
@@ -188,6 +193,42 @@ pub fn main_ray_generation(
             if material.scatter(textures, images, &ray, payload, &mut rng, &mut scatter) {
                 color *= scatter.color;
                 ray = scatter.ray;
+
+                // TMP
+                if uniform.emit_object_len > 0 {
+                    if rng.next_f32() > 0.5 {
+                        let dir = emit_objects[(rng.next_u32() % uniform.emit_object_len) as usize]
+                            .sample(&mut rng)
+                            - payload.position;
+
+                        ray.direction = dir.normalize();
+                    }
+
+                    *payload_pdf = RayPayloadPDF::default();
+                    let weight = 1.0 / uniform.emit_object_len as f32;
+
+                    unsafe {
+                        top_level_as.trace_ray(
+                            RayFlags::OPAQUE,
+                            0xf0,
+                            2,
+                            0,
+                            1,
+                            ray.origin,
+                            tmin,
+                            ray.direction,
+                            tmax,
+                            payload_pdf,
+                        );
+                    }
+
+                    color *= material.scattering_pdf(payload, ray.direction);
+                    let pdf = (0.5 * material.scattering_pdf(payload, ray.direction)
+                        + 0.5 * weight * payload_pdf.pdf)
+                        .max(1e-5);
+
+                    color /= pdf;
+                }
             } else {
                 break;
             }
@@ -304,7 +345,7 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
 ) {
     const INV_PI: f32 = 1.0 / PI;
 
@@ -353,9 +394,9 @@ pub fn triangle_closest_hit(
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] index_data: &[IndexData],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] vertices: &[Vertex],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(primitive_id)] primitive_id: u32,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
@@ -417,6 +458,120 @@ pub fn triangle_closest_hit(
         area_light_index,
         uv,
     );
+}
+
+#[derive(Default)]
+pub struct RayPayloadPDF {
+    pdf: f32,
+}
+
+#[spirv(miss)]
+pub fn main_miss_pdf(#[spirv(incoming_ray_payload)] out: &mut RayPayloadPDF) {
+    *out = RayPayloadPDF { pdf: 0.0 };
+}
+
+#[spirv(closest_hit)]
+pub fn triangle_closest_hit_pdf(
+    #[spirv(hit_attribute)] attribute: &Vec2,
+    #[spirv(object_to_world)] object_to_world: Affine3,
+    #[spirv(world_to_object)] world_to_object: Affine3,
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
+    #[spirv(world_ray_origin)] world_ray_origin: Vec3A,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
+    #[spirv(primitive_id)] primitive_id: u32,
+    #[spirv(instance_custom_index)] instance_custom_index: u32,
+    #[spirv(incoming_ray_payload)] out: &mut RayPayloadPDF,
+) {
+    let index_data = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
+
+    let index_offset = index_data.index_offset as usize;
+
+    let v0 = *unsafe {
+        vertices.index_unchecked(
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 0) as usize,
+        )
+    };
+    let v1 = *unsafe {
+        vertices.index_unchecked(
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 1) as usize,
+        )
+    };
+    let v2 = *unsafe {
+        vertices.index_unchecked(
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 2) as usize,
+        )
+    };
+
+    let barycentrics = vec3a(1.0 - attribute.x - attribute.y, attribute.x, attribute.y);
+
+    let pos =
+        v0.position * barycentrics.x + v1.position * barycentrics.y + v2.position * barycentrics.z;
+
+    let nrm = if v0.normal == Vec3A::ZERO && v1.normal == Vec3A::ZERO && v2.normal == Vec3A::ZERO {
+        (v1.position - v0.position)
+            .cross(v2.position - v0.position)
+            .normalize()
+    } else {
+        v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z
+    };
+
+    let p0 = v0.position.x * object_to_world.x
+        + v0.position.y * object_to_world.y
+        + v0.position.z * object_to_world.z
+        + object_to_world.w;
+
+    let p1 = v1.position.x * object_to_world.x
+        + v1.position.y * object_to_world.y
+        + v1.position.z * object_to_world.z
+        + object_to_world.w;
+
+    let p2 = v2.position.x * object_to_world.x
+        + v2.position.y * object_to_world.y
+        + v2.position.z * object_to_world.z
+        + object_to_world.w;
+
+    let ab = p1 - p0;
+    let ac = p2 - p0;
+
+    let abac = ab.dot(ac);
+
+    let normal = vec3a(
+        world_to_object.x.dot(nrm),
+        world_to_object.y.dot(nrm),
+        world_to_object.z.dot(nrm),
+    )
+    .normalize();
+
+    let area = 0.5 * (ab.length_squared() * ac.length_squared() - abac * abac).sqrt();
+    let distance_squared = (world_ray_origin - pos).length_squared();
+    let cosine = (-world_ray_direction).normalize().dot(normal).abs();
+
+    *out = RayPayloadPDF {
+        pdf: distance_squared / (cosine * area),
+    };
+}
+
+#[spirv(closest_hit)]
+pub fn sphere_closest_hit_pdf(
+    #[spirv(object_to_world)] object_to_world: Affine3,
+    #[spirv(world_ray_origin)] world_ray_origin: Vec3A,
+    #[spirv(incoming_ray_payload)] out: &mut RayPayloadPDF,
+) {
+    // TODO
+    let radius =
+        (object_to_world.x.x.abs() + object_to_world.y.y.abs() + object_to_world.z.z.abs()) / 3.0;
+    let center = object_to_world.w;
+
+    let cos_theta_max = (1.0 - radius * radius / (center - world_ray_origin).length_squared())
+        .max(0.0)
+        .sqrt();
+    let solid_angle = 2.0 * PI * (1.0 - cos_theta_max);
+
+    *out = RayPayloadPDF {
+        pdf: 1.0 / solid_angle,
+    };
 }
 
 #[spirv(any_hit)]
