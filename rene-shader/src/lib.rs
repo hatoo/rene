@@ -202,8 +202,12 @@ pub fn main_ray_generation(
 
                 if uniform.emit_object_len > 0 {
                     if rng.next_f32() > 0.5 {
-                        let dir = emit_objects[(rng.next_u32() % uniform.emit_object_len) as usize]
-                            .sample(indices, vertices, &mut rng)
+                        let dir = unsafe {
+                            emit_objects.index_unchecked(
+                                (rng.next_u32() % uniform.emit_object_len) as usize,
+                            )
+                        }
+                        .sample(indices, vertices, &mut rng)
                             - payload.position;
 
                         ray.direction = dir.normalize();
@@ -239,7 +243,8 @@ pub fn main_ray_generation(
             }
 
             for i in 0..uniform.lights_len {
-                let (target, t_max) = lights[i as usize].ray_target(payload.position);
+                let (target, t_max) =
+                    unsafe { lights.index_unchecked(i as usize) }.ray_target(payload.position);
                 let direction = target - payload.position;
                 let light_ray = Ray {
                     origin: payload.position,
@@ -265,7 +270,7 @@ pub fn main_ray_generation(
                 if payload.is_miss != 0 {
                     color_sum += material.brdf(wo, direction.normalize())
                         * color
-                        * lights[i as usize].color(payload.position);
+                        * unsafe { lights.index_unchecked(i as usize) }.color(payload.position);
                 }
             }
         }
