@@ -128,7 +128,7 @@ pub fn main_ray_generation(
     #[spirv(launch_size)] launch_size: UVec3,
     #[spirv(push_constant)] constants: &PushConstants,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] uniform: &Uniform,
-    #[spirv(descriptor_set = 0, binding = 1)] top_level_as: &AccelerationStructure,
+    #[spirv(descriptor_set = 0, binding = 1)] tlases: &RuntimeArray<AccelerationStructure>,
     #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false, arrayed=true),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
@@ -139,6 +139,9 @@ pub fn main_ray_generation(
     #[spirv(ray_payload)] payload: &mut RayPayload,
     #[spirv(ray_payload)] payload_pdf: &mut RayPayloadPDF,
 ) {
+    let tlas_main = unsafe { tlases.index(0) };
+    let tlas_emit = unsafe { tlases.index(1) };
+
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
 
@@ -160,7 +163,7 @@ pub fn main_ray_generation(
     for i in 0..50 {
         *payload = RayPayload::default();
         unsafe {
-            top_level_as.trace_ray(
+            tlas_main.trace_ray(
                 RayFlags::OPAQUE,
                 cull_mask,
                 0,
@@ -208,9 +211,9 @@ pub fn main_ray_generation(
                     let weight = 1.0 / uniform.emit_object_len as f32;
 
                     unsafe {
-                        top_level_as.trace_ray(
+                        tlas_emit.trace_ray(
                             RayFlags::OPAQUE,
-                            0xf0,
+                            cull_mask,
                             2,
                             0,
                             1,
@@ -243,7 +246,7 @@ pub fn main_ray_generation(
 
                 *payload = RayPayload::default();
                 unsafe {
-                    top_level_as.trace_ray(
+                    tlas_main.trace_ray(
                         RayFlags::empty(),
                         cull_mask,
                         0,
