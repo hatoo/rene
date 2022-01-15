@@ -227,7 +227,7 @@ pub fn main_ray_generation(
 
                     color *= material.scattering_pdf(payload, ray.direction);
                     let pdf = (0.5 * material.scattering_pdf(payload, ray.direction)
-                        + 0.5 * weight * payload_pdf.pdf)
+                        + 0.5  /* * 0.8 correction for AABB */ * weight * payload_pdf.pdf)
                         .max(1e-5);
 
                     color /= pdf;
