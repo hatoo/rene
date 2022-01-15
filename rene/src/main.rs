@@ -56,7 +56,7 @@ struct Opts {
         arg_enum,
         help = "Set Denoiser",
         long = "denoiser",
-        default_value = "None"
+        default_value = "none"
     )]
     denoiser: Denoiser,
 }
