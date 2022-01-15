@@ -200,7 +200,6 @@ pub fn main_ray_generation(
                 color *= scatter.color;
                 ray = scatter.ray;
 
-                // TMP
                 if uniform.emit_object_len > 0 {
                     if rng.next_f32() > 0.5 {
                         let dir = emit_objects[(rng.next_u32() % uniform.emit_object_len) as usize]

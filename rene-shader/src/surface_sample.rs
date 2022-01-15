@@ -1,4 +1,7 @@
-use spirv_std::glam::{Affine3A, Vec3A};
+use spirv_std::{
+    arch::IndexUnchecked,
+    glam::{Affine3A, Vec3A},
+};
 
 use crate::{math::random_in_unit_sphere, rand::DefaultRng, Vertex};
 
@@ -35,9 +38,21 @@ impl SurfaceSample {
             0 => {
                 let p = rng.next_u32() % self.primitive_count;
 
-                let v0 = vertices[indices[(self.index_offset + 3 * p + 0) as usize] as usize];
-                let v1 = vertices[indices[(self.index_offset + 3 * p + 1) as usize] as usize];
-                let v2 = vertices[indices[(self.index_offset + 3 * p + 2) as usize] as usize];
+                let v0 = unsafe {
+                    vertices.index_unchecked(
+                        *indices.index_unchecked((self.index_offset + 3 * p + 0) as usize) as usize,
+                    )
+                };
+                let v1 = unsafe {
+                    vertices.index_unchecked(
+                        *indices.index_unchecked((self.index_offset + 3 * p + 1) as usize) as usize,
+                    )
+                };
+                let v2 = unsafe {
+                    vertices.index_unchecked(
+                        *indices.index_unchecked((self.index_offset + 3 * p + 2) as usize) as usize,
+                    )
+                };
 
                 let r = rng.next_f32();
                 let s = rng.next_f32();
