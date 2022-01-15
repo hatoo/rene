@@ -4,6 +4,24 @@ use rene_shader::Vertex;
 
 use super::intermediate_scene::TriangleMesh;
 
+fn generate_normal(mesh: &mut TriangleMesh) {
+    for tri in mesh.indices.chunks(3) {
+        let a = mesh.vertices[tri[0] as usize].position;
+        let b = mesh.vertices[tri[1] as usize].position;
+        let c = mesh.vertices[tri[2] as usize].position;
+
+        let p = (b - a).cross(c - a);
+
+        mesh.vertices[tri[0] as usize].normal += p;
+        mesh.vertices[tri[1] as usize].normal += p;
+        mesh.vertices[tri[2] as usize].normal += p;
+    }
+
+    for v in &mut mesh.vertices {
+        v.normal = v.normal.normalize();
+    }
+}
+
 pub fn loop_subdivision(mut mesh: TriangleMesh, level: usize) -> TriangleMesh {
     let num_vertices = mesh.vertices.len();
     let verts_per_face = vec![3; mesh.indices.len() / 3];
@@ -50,6 +68,9 @@ pub fn loop_subdivision(mut mesh: TriangleMesh, level: usize) -> TriangleMesh {
         .face_vertices_iter()
         .flat_map(|f| f.into_iter().copied())
         .collect();
+
+    // TODO always generate normal?
+    generate_normal(&mut mesh);
 
     mesh
 }
