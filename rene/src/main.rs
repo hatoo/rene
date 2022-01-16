@@ -997,9 +997,9 @@ fn main() {
             rt_pipeline_properties.shader_group_base_alignment,
         ) as u64;
 
-        // |[ raygen shader ]|[ miss shader ]|[ hit shader  ]|
-        // |                 |               |               |
-        // | 0               | 1             | 2             |
+        // |[ raygen shader ]|[ miss shader ]|[ miss shader (PDF) ]|[ hit shader (triangle) ]|[ hit shader (sphere) ]|[ hit shader (triangle) (PDF) ]|[ hit shader (sphere) (PDF) ]|
+        // |                 |               |                     |                         |                       |                               |                             |
+        // | 0               | 1             | 2                   | 3                       | 3                     | 4                             | 5                           |
 
         let sbt_address =
             unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
@@ -1018,7 +1018,7 @@ fn main() {
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address + 3 * handle_size_aligned)
-            .size(handle_size_aligned * 4)
+            .size(4 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
