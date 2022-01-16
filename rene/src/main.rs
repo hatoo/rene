@@ -2873,10 +2873,6 @@ impl SceneBuffers {
             })
             .collect();
 
-        if emit_objects.is_empty() {
-            emit_objects.push(SurfaceSample::new_sphere(Default::default()));
-        }
-
         buffers.push(top_as_buffer);
         buffers.push(instance_buffer);
 
@@ -3004,6 +3000,10 @@ impl SceneBuffers {
 
             uniform_buffer
         };
+
+        if emit_objects.is_empty() {
+            emit_objects.push(SurfaceSample::new_sphere(Default::default()));
+        }
 
         let emit_objects = {
             let buffer_size =
