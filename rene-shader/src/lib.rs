@@ -198,6 +198,11 @@ pub fn main_ray_generation(
 
             if material.scatter(textures, images, &ray, payload, &mut rng, &mut scatter) {
                 color *= scatter.color;
+
+                if color == Vec3A::ZERO {
+                    break;
+                }
+
                 ray = scatter.ray;
 
                 if uniform.emit_object_len > 0 {
