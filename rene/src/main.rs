@@ -31,7 +31,7 @@ use scene::Scene;
 mod scene;
 
 #[derive(Debug, Clone, Copy)]
-pub enum ShaderIndex {
+pub enum ShaderOffset {
     Triangle = 0,
     Sphere = 1,
 }
@@ -2863,8 +2863,8 @@ impl SceneBuffers {
             .iter()
             .filter(|t| !scene.area_lights[t.area_light_index].is_null())
             .map(|t| match t.shader_offset {
-                ShaderIndex::Sphere => SurfaceSample::new_sphere(t.matrix),
-                ShaderIndex::Triangle => {
+                ShaderOffset::Sphere => SurfaceSample::new_sphere(t.matrix),
+                ShaderOffset::Triangle => {
                     let blas = &blas_args[t.blas_index.unwrap() as usize];
                     SurfaceSample::new_triangle(blas.index_offset, blas.primitive_count, t.matrix)
                 }

@@ -7,7 +7,7 @@ use rene_shader::{
 };
 use thiserror::Error;
 
-use crate::ShaderIndex;
+use crate::ShaderOffset;
 
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld,
@@ -20,7 +20,7 @@ mod subdivision;
 
 #[derive(Debug)]
 pub struct TlasInstance {
-    pub shader_offset: ShaderIndex,
+    pub shader_offset: ShaderOffset,
     pub matrix: Affine3A,
     pub material_index: usize,
     pub area_light_index: usize,
@@ -232,7 +232,7 @@ impl Scene {
                         }
                         WorldObject::Shape(shape) => match shape {
                             Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
-                                shader_offset: ShaderIndex::Sphere,
+                                shader_offset: ShaderOffset::Sphere,
                                 matrix: state.current_matrix
                                     * Affine3A::from_scale(vec3(radius, radius, radius)),
                                 material_index: state
@@ -245,7 +245,7 @@ impl Scene {
                                 let blass_index = self.blases.len();
                                 self.blases.push(trianglemesh);
                                 self.tlas.push(TlasInstance {
-                                    shader_offset: ShaderIndex::Triangle,
+                                    shader_offset: ShaderOffset::Triangle,
                                     matrix: state.current_matrix,
                                     material_index: state
                                         .current_material_index
