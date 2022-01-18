@@ -30,11 +30,10 @@ use scene::Scene;
 
 mod scene;
 
-pub struct ShaderIndex {}
-
-impl ShaderIndex {
-    const TRIANGLE: u32 = 0;
-    const SPHERE: u32 = 1;
+#[derive(Debug, Clone, Copy)]
+pub enum ShaderIndex {
+    Triangle = 0,
+    Sphere = 1,
 }
 
 #[derive(ArgEnum, Debug, PartialEq, Eq, Clone, Copy)]
@@ -2803,7 +2802,7 @@ impl SceneBuffers {
                     },
                     instance_custom_index_and_mask: vk::Packed24_8::new(index as u32, 0xff),
                     instance_shader_binding_table_record_offset_and_flags: vk::Packed24_8::new(
-                        instance.shader_offset,
+                        instance.shader_offset as u32,
                         vk::GeometryInstanceFlagsKHR::FORCE_OPAQUE.as_raw() as u8,
                     ),
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
@@ -2864,12 +2863,11 @@ impl SceneBuffers {
             .iter()
             .filter(|t| !scene.area_lights[t.area_light_index].is_null())
             .map(|t| match t.shader_offset {
-                ShaderIndex::SPHERE => SurfaceSample::new_sphere(t.matrix),
-                ShaderIndex::TRIANGLE => {
+                ShaderIndex::Sphere => SurfaceSample::new_sphere(t.matrix),
+                ShaderIndex::Triangle => {
                     let blas = &blas_args[t.blas_index.unwrap() as usize];
                     SurfaceSample::new_triangle(blas.index_offset, blas.primitive_count, t.matrix)
                 }
-                _ => unreachable!(),
             })
             .collect();
 
