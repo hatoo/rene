@@ -1,9 +1,7 @@
 use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 
-use crate::RayPayload;
-
 pub trait AreaLight {
-    fn emit(&self, payload: &RayPayload) -> Vec3A;
+    fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -47,8 +45,8 @@ impl EnumAreaLight {
 }
 
 impl<'a> AreaLight for Diffuse<'a> {
-    fn emit(&self, payload: &RayPayload) -> Vec3A {
-        if payload.front_face != 0 {
+    fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A {
+        if wo.dot(normal) > 0.0 {
             self.data.v0.xyz().into()
         } else {
             Vec3A::ZERO
@@ -57,10 +55,10 @@ impl<'a> AreaLight for Diffuse<'a> {
 }
 
 impl AreaLight for EnumAreaLight {
-    fn emit(&self, payload: &RayPayload) -> Vec3A {
+    fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A {
         match self.t {
             0 => vec3a(0.0, 0.0, 0.0),
-            _ => Diffuse { data: &self.data }.emit(payload),
+            _ => Diffuse { data: &self.data }.emit(wo, normal),
         }
     }
 }

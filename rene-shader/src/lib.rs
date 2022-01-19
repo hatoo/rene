@@ -51,7 +51,6 @@ pub struct RayPayload {
     pub normal: Vec3A,
     pub material: u32,
     pub area_light: u32,
-    pub front_face: u32,
     pub uv: Vec2,
 }
 
@@ -66,26 +65,17 @@ impl RayPayload {
 
     pub fn new_hit(
         position: Vec3A,
-        outward_normal: Vec3A,
-        ray_direction: Vec3A,
+        normal: Vec3A,
         material: u32,
         area_light: u32,
         uv: Vec2,
     ) -> Self {
-        let front_face = ray_direction.dot(outward_normal) < 0.0;
-        let normal = if front_face {
-            outward_normal
-        } else {
-            -outward_normal
-        };
-
         Self {
             is_miss: 0,
             position,
             normal,
             material,
             area_light,
-            front_face: if front_face { 1 } else { 0 },
             uv,
         }
     }
@@ -193,7 +183,7 @@ pub fn main_ray_generation(
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
 
-            color_sum += color * area_light.emit(payload);
+            color_sum += color * area_light.emit(wo, normal);
 
             if i == 0 {
                 aov_normal = normal;
@@ -406,7 +396,6 @@ pub fn sphere_closest_hit(
     *out = RayPayload::new_hit(
         hit_pos,
         normal,
-        world_ray_direction,
         material_index,
         area_light_index,
         vec2(u, v),
@@ -427,7 +416,6 @@ pub fn triangle_closest_hit(
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
-    #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
@@ -484,14 +472,7 @@ pub fn triangle_closest_hit(
     )
     .normalize();
 
-    *out = RayPayload::new_hit(
-        hit_pos,
-        normal,
-        world_ray_direction,
-        material_index,
-        area_light_index,
-        uv,
-    );
+    *out = RayPayload::new_hit(hit_pos, normal, material_index, area_light_index, uv);
 }
 
 #[derive(Default)]

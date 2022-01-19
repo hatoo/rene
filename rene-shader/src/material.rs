@@ -2,7 +2,7 @@ use core::f32::consts::PI;
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
-    glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles},
+    glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4},
     RuntimeArray,
 };
 
@@ -10,7 +10,7 @@ use crate::{
     math::{random_in_unit_sphere, IsNearZero},
     rand::DefaultRng,
     texture::EnumTexture,
-    InputImage, Ray, RayPayload,
+    InputImage, Ray,
 };
 
 #[derive(Clone, Default)]
@@ -80,12 +80,12 @@ struct Lambertian<'a> {
 struct Metal<'a> {
     data: &'a EnumMaterialData,
 }
+*/
 
 #[repr(transparent)]
 struct Dielectric<'a> {
     data: &'a EnumMaterialData,
 }
-*/
 
 fn reflect(v: Vec3A, n: Vec3A) -> Vec3A {
     v - 2.0 * v.dot(n) * n
@@ -119,12 +119,16 @@ impl<'a> Material for Lambertian<'a> {
     fn sample_f(
         &self,
         wo: Vec3A,
-        normal: Vec3A,
+        mut normal: Vec3A,
         uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
     ) -> SampledF {
+        if normal.dot(wo) < 0.0 {
+            normal = -normal;
+        }
+
         let scatter_direction = normal + random_in_unit_sphere(rng).normalize();
 
         let scatter_direction = if scatter_direction.is_near_zero() {
@@ -205,6 +209,7 @@ impl<'a> Material for Metal<'a> {
         1.0
     }
 }
+*/
 
 impl<'a> Dielectric<'a> {
     fn ir(&self) -> f32 {
@@ -213,58 +218,77 @@ impl<'a> Dielectric<'a> {
 }
 
 impl<'a> Material for Dielectric<'a> {
-    fn scatter(
+    fn albedo(
         &self,
-        _: &[EnumTexture],
+        _uv: Vec2,
+        _textures: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
-        ray: &Ray,
-        ray_payload: &RayPayload,
+    ) -> Vec3A {
+        Vec3A::ZERO
+    }
+
+    fn f(
+        &self,
+        _wo: Vec3A,
+        _wi: Vec3A,
+        _uv: Vec2,
+        _textures: &[EnumTexture],
+        _images: &RuntimeArray<InputImage>,
+    ) -> Vec3A {
+        Vec3A::ZERO
+    }
+
+    fn sample_f(
+        &self,
+        wo: Vec3A,
+        mut normal: Vec3A,
+        _uv: Vec2,
+        _textures: &[EnumTexture],
+        _images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
-        scatter: &mut Scatter,
-    ) -> bool {
-        let refraction_ratio = if ray_payload.front_face != 0 {
+    ) -> SampledF {
+        let front_face = normal.dot(wo) > 0.0;
+
+        let refraction_ratio = if front_face {
             1.0 / self.ir()
         } else {
             self.ir()
         };
 
-        let unit_direction = ray.direction.normalize();
-        let cos_theta = (-unit_direction).dot(ray_payload.normal).min(1.0);
+        if !front_face {
+            normal = -normal;
+        }
+
+        let unit_direction = -wo;
+        let cos_theta = (-unit_direction).dot(normal).min(1.0);
         let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
         let cannot_refract = refraction_ratio * sin_theta > 1.0;
 
-        let direction =
-            if cannot_refract || reflectance(cos_theta, refraction_ratio) > rng.next_f32() {
-                reflect(unit_direction, ray_payload.normal)
-            } else {
-                refract(unit_direction, ray_payload.normal, refraction_ratio)
-            };
+        let f = reflectance(cos_theta, refraction_ratio);
 
-        *scatter = Scatter {
-            color: vec3a(1.0, 1.0, 1.0),
-            ray: Ray {
-                origin: ray_payload.position,
-                direction,
-            },
-        };
-        true
+        if cannot_refract || f > rng.next_f32() {
+            let wi = reflect(unit_direction, normal);
+
+            SampledF {
+                wi,
+                f: vec3a(1.0, 1.0, 1.0) * f / normal.dot(wi).abs(),
+                pdf: f,
+            }
+        } else {
+            let wi = refract(unit_direction, normal, refraction_ratio);
+
+            SampledF {
+                wi,
+                f: vec3a(1.0, 1.0, 1.0) * (1.0 - f) / normal.dot(wi).abs(),
+                pdf: 1.0 - f,
+            }
+        }
     }
 
-    fn albedo(
-        &self,
-        _textures: &[EnumTexture],
-        _images: &RuntimeArray<InputImage>,
-        _uv: Vec2,
-    ) -> Vec3A {
-        Vec3A::ZERO
-    }
-
-    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
+    fn pdf(&self, _wi: Vec3A, _normal: Vec3A) -> f32 {
         0.0
     }
 }
-
-*/
 
 impl EnumMaterial {
     pub fn new_lambertian(albedo_index: u32) -> Self {
@@ -306,7 +330,8 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
         match self.t {
-            _ => Lambertian { data: &self.data }.albedo(uv, textures, images),
+            0 => Lambertian { data: &self.data }.albedo(uv, textures, images),
+            _ => Dielectric { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
@@ -319,7 +344,8 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
         match self.t {
-            _ => Lambertian { data: &self.data }.f(wo, wi, uv, textures, images),
+            0 => Lambertian { data: &self.data }.f(wo, wi, uv, textures, images),
+            _ => Dielectric { data: &self.data }.f(wo, wi, uv, textures, images),
         }
     }
 
@@ -333,13 +359,15 @@ impl Material for EnumMaterial {
         rng: &mut DefaultRng,
     ) -> SampledF {
         match self.t {
-            _ => Lambertian { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng),
+            0 => Lambertian { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng),
+            _ => Dielectric { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng),
         }
     }
 
     fn pdf(&self, wi: Vec3A, normal: Vec3A) -> f32 {
         match self.t {
-            _ => Lambertian { data: &self.data }.pdf(wi, normal),
+            0 => Lambertian { data: &self.data }.pdf(wi, normal),
+            _ => Dielectric { data: &self.data }.pdf(wi, normal),
         }
     }
 }
