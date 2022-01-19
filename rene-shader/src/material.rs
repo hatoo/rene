@@ -19,30 +19,40 @@ pub struct Scatter {
     pub ray: Ray,
 }
 
+pub struct SampledF {
+    pub wi: Vec3A,
+    pub f: Vec3A,
+    pub pdf: f32,
+}
+
 pub trait Material {
-    fn scatter(
+    fn f(
         &self,
+        wo: Vec3A,
+        wi: Vec3A,
+        uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        ray: &Ray,
-        ray_payload: &RayPayload,
+    ) -> Vec3A;
+
+    fn sample_f(
+        &self,
+        wo: Vec3A,
+        normal: Vec3A,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
-        scatter: &mut Scatter,
-    ) -> bool;
+    ) -> SampledF;
+
+    fn pdf(&self, wi: Vec3A, normal: Vec3A) -> f32;
 
     fn albedo(
         &self,
+        uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        uv: Vec2,
     ) -> Vec3A;
-
-    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32;
-
-    fn scattering_pdf(&self, _payload: &RayPayload, _direction: Vec3A) -> f32 {
-        // TODO
-        1.0
-    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -65,6 +75,7 @@ struct Lambertian<'a> {
     data: &'a EnumMaterialData,
 }
 
+/*
 #[repr(transparent)]
 struct Metal<'a> {
     data: &'a EnumMaterialData,
@@ -74,6 +85,7 @@ struct Metal<'a> {
 struct Dielectric<'a> {
     data: &'a EnumMaterialData,
 }
+*/
 
 fn reflect(v: Vec3A, n: Vec3A) -> Vec3A {
     v - 2.0 * v.dot(n) * n
@@ -93,53 +105,59 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
 }
 
 impl<'a> Material for Lambertian<'a> {
-    fn scatter(
+    fn f(
         &self,
+        _wo: Vec3A,
+        _wi: Vec3A,
+        uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        _ray: &Ray,
-        ray_payload: &RayPayload,
+    ) -> Vec3A {
+        self.albedo(uv, textures, images) / PI
+    }
+
+    fn sample_f(
+        &self,
+        wo: Vec3A,
+        normal: Vec3A,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
-        scatter: &mut Scatter,
-    ) -> bool {
-        let scatter_direction = ray_payload.normal + random_in_unit_sphere(rng).normalize();
+    ) -> SampledF {
+        let scatter_direction = normal + random_in_unit_sphere(rng).normalize();
 
         let scatter_direction = if scatter_direction.is_near_zero() {
-            ray_payload.normal
+            normal
         } else {
             scatter_direction
         };
 
-        let scatterd = Ray {
-            origin: ray_payload.position,
-            direction: scatter_direction,
-        };
+        let wi = scatter_direction.normalize();
+        let pdf = (normal.dot(wi) / PI).max(0.0);
 
-        *scatter = Scatter {
-            color: self.albedo(textures, images, ray_payload.uv),
-            ray: scatterd,
-        };
-        true
+        SampledF {
+            wi,
+            f: self.f(wo, wi, uv, textures, images),
+            pdf,
+        }
     }
 
     fn albedo(
         &self,
+        uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        uv: Vec2,
     ) -> Vec3A {
         textures[self.data.u0.x as usize].color(textures, images, uv)
     }
 
-    fn scattering_pdf(&self, payload: &RayPayload, direction: Vec3A) -> f32 {
-        let cosine = payload.normal.dot(direction.normalize());
-        (cosine / PI).max(0.0)
-    }
-
-    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
-        1.0 / PI
+    fn pdf(&self, wi: Vec3A, normal: Vec3A) -> f32 {
+        wi.dot(normal).abs()
     }
 }
+
+/*
 
 impl<'a> Metal<'a> {
     fn fuzz(&self) -> f32 {
@@ -246,6 +264,8 @@ impl<'a> Material for Dielectric<'a> {
     }
 }
 
+*/
+
 impl EnumMaterial {
     pub fn new_lambertian(albedo_index: u32) -> Self {
         Self {
@@ -279,64 +299,47 @@ impl EnumMaterial {
 }
 
 impl Material for EnumMaterial {
-    fn scatter(
-        &self,
-        textures: &[EnumTexture],
-        images: &RuntimeArray<InputImage>,
-        ray: &Ray,
-        ray_payload: &RayPayload,
-        rng: &mut DefaultRng,
-        scatter: &mut Scatter,
-    ) -> bool {
-        match self.t {
-            0 => Lambertian { data: &self.data }.scatter(
-                textures,
-                images,
-                ray,
-                ray_payload,
-                rng,
-                scatter,
-            ),
-            1 => {
-                Metal { data: &self.data }.scatter(textures, images, ray, ray_payload, rng, scatter)
-            }
-            _ => Dielectric { data: &self.data }.scatter(
-                textures,
-                images,
-                ray,
-                ray_payload,
-                rng,
-                scatter,
-            ),
-        }
-    }
-
     fn albedo(
         &self,
+        uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        uv: Vec2,
     ) -> Vec3A {
         match self.t {
-            0 => Lambertian { data: &self.data }.albedo(textures, images, uv),
-            1 => Metal { data: &self.data }.albedo(textures, images, uv),
-            _ => Dielectric { data: &self.data }.albedo(textures, images, uv),
+            _ => Lambertian { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
-    fn brdf(&self, v0: Vec3A, v1: Vec3A) -> f32 {
+    fn f(
+        &self,
+        wo: Vec3A,
+        wi: Vec3A,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> Vec3A {
         match self.t {
-            0 => Lambertian { data: &self.data }.brdf(v0, v1),
-            1 => Metal { data: &self.data }.brdf(v0, v1),
-            _ => Dielectric { data: &self.data }.brdf(v0, v1),
+            _ => Lambertian { data: &self.data }.f(wo, wi, uv, textures, images),
         }
     }
 
-    fn scattering_pdf(&self, payload: &RayPayload, direction: Vec3A) -> f32 {
+    fn sample_f(
+        &self,
+        wo: Vec3A,
+        normal: Vec3A,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+        rng: &mut DefaultRng,
+    ) -> SampledF {
         match self.t {
-            0 => Lambertian { data: &self.data }.scattering_pdf(payload, direction),
-            1 => Metal { data: &self.data }.scattering_pdf(payload, direction),
-            _ => Dielectric { data: &self.data }.scattering_pdf(payload, direction),
+            _ => Lambertian { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng),
+        }
+    }
+
+    fn pdf(&self, wi: Vec3A, normal: Vec3A) -> f32 {
+        match self.t {
+            _ => Lambertian { data: &self.data }.pdf(wi, normal),
         }
     }
 }

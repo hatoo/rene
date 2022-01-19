@@ -10,7 +10,7 @@ use area_light::{AreaLight, EnumAreaLight};
 use camera::PerspectiveCamera;
 use core::f32::consts::PI;
 use light::{EnumLight, Light};
-use material::{EnumMaterial, Material, Scatter};
+use material::{EnumMaterial, Material};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 use surface_sample::SurfaceSample;
@@ -161,8 +161,8 @@ pub fn main_ray_generation(
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
-    let mut normal = Vec3A::ZERO;
-    let mut albedo = Vec3A::ZERO;
+    let mut aov_normal = Vec3A::ZERO;
+    let mut aov_albedo = Vec3A::ZERO;
 
     for i in 0..50 {
         *payload = RayPayload::default();
@@ -185,76 +185,91 @@ pub fn main_ray_generation(
             color_sum += color * payload.position;
             break;
         } else {
+            let color0 = color;
             let wo = -ray.direction.normalize();
+            let normal = payload.normal.normalize();
+            let position = payload.position;
+            let uv = payload.uv;
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
-            let mut scatter = Scatter::default();
 
             color_sum += color * area_light.emit(payload);
 
             if i == 0 {
-                normal = payload.normal.normalize();
-                albedo = material.albedo(textures, images, payload.uv);
+                aov_normal = normal;
+                aov_albedo = material.albedo(payload.uv, textures, images);
             }
 
-            if material.scatter(textures, images, &ray, payload, &mut rng, &mut scatter) {
-                color *= scatter.color;
+            if uniform.emit_object_len > 0 {
+                let (wi, pdf) = if rng.next_f32() > 0.5 {
+                    let wi = (unsafe {
+                        emit_objects
+                            .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
+                    }
+                    .sample(indices, vertices, &mut rng)
+                        - position)
+                        .normalize();
 
-                if color == Vec3A::ZERO {
+                    (wi, material.pdf(wi, normal))
+                } else {
+                    let sampled_f = material.sample_f(wo, normal, uv, textures, images, &mut rng);
+
+                    (sampled_f.wi, sampled_f.pdf)
+                };
+
+                ray = Ray {
+                    origin: position,
+                    direction: wi,
+                };
+
+                *payload_pdf = RayPayloadPDF::default();
+                let weight = 1.0 / uniform.emit_primitives as f32;
+
+                unsafe {
+                    tlas_emit.trace_ray(
+                        RayFlags::OPAQUE,
+                        cull_mask,
+                        2,
+                        0,
+                        1,
+                        ray.origin,
+                        tmin,
+                        ray.direction,
+                        tmax,
+                        payload_pdf,
+                    );
+                }
+
+                color *= material.f(wo, wi, uv, textures, images) * normal.dot(wi).abs();
+                let pdf = (0.5 * pdf + 0.5 * weight * payload_pdf.pdf).max(1e-5);
+
+                color /= pdf;
+            } else {
+                let sampled_f = material.sample_f(wo, normal, uv, textures, images, &mut rng);
+
+                if sampled_f.pdf < 1e-5 {
                     break;
                 }
 
-                ray = scatter.ray;
+                color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
+                ray = Ray {
+                    origin: position,
+                    direction: sampled_f.wi,
+                };
+            }
 
-                if uniform.emit_object_len > 0 {
-                    if rng.next_f32() > 0.5 {
-                        let dir = unsafe {
-                            emit_objects.index_unchecked(
-                                (rng.next_u32() % uniform.emit_object_len) as usize,
-                            )
-                        }
-                        .sample(indices, vertices, &mut rng)
-                            - payload.position;
-
-                        ray.direction = dir.normalize();
-                    }
-
-                    *payload_pdf = RayPayloadPDF::default();
-                    let weight = 1.0 / uniform.emit_primitives as f32;
-
-                    unsafe {
-                        tlas_emit.trace_ray(
-                            RayFlags::OPAQUE,
-                            cull_mask,
-                            2,
-                            0,
-                            1,
-                            ray.origin,
-                            tmin,
-                            ray.direction,
-                            tmax,
-                            payload_pdf,
-                        );
-                    }
-
-                    color *= material.scattering_pdf(payload, ray.direction);
-                    let pdf = (0.5 * material.scattering_pdf(payload, ray.direction)
-                        + 0.5 * weight * payload_pdf.pdf)
-                        .max(1e-5);
-
-                    color /= pdf;
-                }
-            } else {
+            // TODO russian roulette
+            if color == Vec3A::ZERO {
                 break;
             }
 
             for i in 0..uniform.lights_len {
                 let (target, t_max) =
-                    unsafe { lights.index_unchecked(i as usize) }.ray_target(payload.position);
-                let direction = target - payload.position;
+                    unsafe { lights.index_unchecked(i as usize) }.ray_target(position);
+                let wi = (target - position).normalize();
                 let light_ray = Ray {
-                    origin: payload.position,
-                    direction,
+                    origin: position,
+                    direction: wi,
                 };
 
                 *payload = RayPayload::default();
@@ -274,9 +289,12 @@ pub fn main_ray_generation(
                 }
 
                 if payload.is_miss != 0 {
-                    color_sum += material.brdf(wo, direction.normalize())
-                        * color
-                        * unsafe { lights.index_unchecked(i as usize) }.color(payload.position);
+                    let f = material.f(wo, wi, uv, textures, images);
+
+                    color_sum += color0
+                        * f
+                        * wi.dot(normal).abs()
+                        * unsafe { lights.index_unchecked(i as usize) }.color(position);
                 }
             }
         }
@@ -293,14 +311,14 @@ pub fn main_ray_generation(
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + normal.extend(0.0));
+        image.write(pos, prev + aov_normal.extend(0.0));
     }
 
     let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(2);
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + albedo.extend(0.0));
+        image.write(pos, prev + aov_albedo.extend(0.0));
     }
 }
 
