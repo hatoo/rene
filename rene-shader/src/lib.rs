@@ -100,6 +100,7 @@ pub struct Uniform {
     pub camera: PerspectiveCamera,
     pub lights_len: u32,
     pub emit_object_len: u32,
+    pub emit_primitives: u32,
 }
 
 pub struct PushConstants {
@@ -219,7 +220,7 @@ pub fn main_ray_generation(
                     }
 
                     *payload_pdf = RayPayloadPDF::default();
-                    let weight = 1.0 / uniform.emit_object_len as f32;
+                    let weight = 1.0 / uniform.emit_primitives as f32;
 
                     unsafe {
                         tlas_emit.trace_ray(
@@ -547,10 +548,10 @@ pub fn triangle_closest_hit_pdf(
         + v2.position.z * object_to_world.z
         + object_to_world.w;
 
-    let ab = p1 - p0;
-    let ac = p2 - p0;
-
-    let abac = ab.dot(ac);
+    let hit_pos = pos.x * object_to_world.x
+        + pos.y * object_to_world.y
+        + pos.z * object_to_world.z
+        + object_to_world.w;
 
     let normal = vec3a(
         world_to_object.x.dot(nrm),
@@ -559,8 +560,11 @@ pub fn triangle_closest_hit_pdf(
     )
     .normalize();
 
-    let area = 0.5 * (ab.length_squared() * ac.length_squared() - abac * abac).sqrt();
-    let distance_squared = (world_ray_origin - pos).length_squared();
+    let ab = p1 - p0;
+    let ac = p2 - p0;
+
+    let area = 0.5 * ab.cross(ac).length();
+    let distance_squared = (world_ray_origin - hit_pos).length_squared();
     let cosine = (-world_ray_direction).normalize().dot(normal).abs();
 
     *out = RayPayloadPDF {

@@ -33,6 +33,13 @@ impl SurfaceSample {
         }
     }
 
+    pub fn primitive_count(&self) -> u32 {
+        match self.t {
+            0 => self.primitive_count,
+            _ => 1,
+        }
+    }
+
     pub fn sample(&self, indices: &[u32], vertices: &[Vertex], rng: &mut DefaultRng) -> Vec3A {
         match self.t {
             0 => {

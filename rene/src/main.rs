@@ -2982,6 +2982,7 @@ impl SceneBuffers {
         let uniform_buffer = {
             let mut uniform = scene.uniform;
             uniform.emit_object_len = emit_objects.len() as u32;
+            uniform.emit_primitives = emit_objects.iter().map(|s| s.primitive_count()).sum();
 
             let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
 
