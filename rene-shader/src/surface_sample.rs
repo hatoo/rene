@@ -6,9 +6,16 @@ use spirv_std::{
 use crate::{math::random_in_unit_sphere, rand::DefaultRng, Vertex};
 
 #[derive(Clone, Copy)]
+#[repr(u32)]
+enum SurfaceType {
+    Triangle,
+    Sphere,
+}
+
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct SurfaceSample {
-    t: u32,
+    t: SurfaceType,
     index_offset: u32,
     primitive_count: u32,
     matrix: Affine3A,
@@ -17,7 +24,7 @@ pub struct SurfaceSample {
 impl SurfaceSample {
     pub fn new_triangle(index_offset: u32, primitive_count: u32, matrix: Affine3A) -> Self {
         SurfaceSample {
-            t: 0,
+            t: SurfaceType::Triangle,
             index_offset,
             primitive_count,
             matrix,
@@ -26,7 +33,7 @@ impl SurfaceSample {
 
     pub fn new_sphere(matrix: Affine3A) -> Self {
         SurfaceSample {
-            t: 1,
+            t: SurfaceType::Sphere,
             index_offset: 0,
             primitive_count: 0,
             matrix,
@@ -35,14 +42,14 @@ impl SurfaceSample {
 
     pub fn primitive_count(&self) -> u32 {
         match self.t {
-            0 => self.primitive_count,
-            _ => 1,
+            SurfaceType::Triangle => self.primitive_count,
+            SurfaceType::Sphere => 1,
         }
     }
 
     pub fn sample(&self, indices: &[u32], vertices: &[Vertex], rng: &mut DefaultRng) -> Vec3A {
         match self.t {
-            0 => {
+            SurfaceType::Triangle => {
                 let p = rng.next_u32() % self.primitive_count;
 
                 let v0 = unsafe {
@@ -74,7 +81,7 @@ impl SurfaceSample {
 
                 self.matrix.transform_point3a(pos)
             }
-            _ => {
+            SurfaceType::Sphere => {
                 let v = random_in_unit_sphere(rng).normalize();
                 self.matrix.transform_point3a(v)
             }
