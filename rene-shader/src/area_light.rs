@@ -3,12 +3,25 @@ use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 pub trait AreaLight {
     fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A;
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(u32)]
+enum AreaLightType {
+    Null,
+    Diffuse,
+}
+
+impl Default for AreaLightType {
+    fn default() -> Self {
+        Self::Null
+    }
+}
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
 pub struct EnumAreaLight {
-    t: u32,
+    t: AreaLightType,
     data: EnumAreaLightData,
 }
 
@@ -25,18 +38,18 @@ struct Diffuse<'a> {
 
 impl EnumAreaLight {
     pub fn is_null(&self) -> bool {
-        self.t == 0
+        self.t == AreaLightType::Null
     }
 
     pub fn new_null() -> Self {
         Self {
-            t: 0,
+            t: AreaLightType::Null,
             data: EnumAreaLightData { v0: Vec4::ZERO },
         }
     }
     pub fn new_diffuse(color: Vec3A) -> Self {
         Self {
-            t: 1,
+            t: AreaLightType::Diffuse,
             data: EnumAreaLightData {
                 v0: color.extend(0.0),
             },
@@ -57,8 +70,8 @@ impl<'a> AreaLight for Diffuse<'a> {
 impl AreaLight for EnumAreaLight {
     fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A {
         match self.t {
-            0 => vec3a(0.0, 0.0, 0.0),
-            _ => Diffuse { data: &self.data }.emit(wo, normal),
+            AreaLightType::Null => vec3a(0.0, 0.0, 0.0),
+            AreaLightType::Diffuse => Diffuse { data: &self.data }.emit(wo, normal),
         }
     }
 }
