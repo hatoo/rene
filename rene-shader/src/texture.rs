@@ -19,10 +19,19 @@ pub struct EnumTextureData {
     v0: Vec4,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(u32)]
+enum TextureType {
+    Solid,
+    CheckerBoard,
+    ImageMap,
+}
+
+#[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumTexture {
-    t: u32,
+    t: TextureType,
     data: EnumTextureData,
 }
 
@@ -96,7 +105,7 @@ impl<'a> Texture for Solid<'a> {
 impl EnumTexture {
     pub fn new_solid(color: Vec3A) -> Self {
         Self {
-            t: 0,
+            t: TextureType::Solid,
             data: EnumTextureData {
                 u0: UVec4::ZERO,
                 v0: vec4(color.x, color.y, color.z, 0.0),
@@ -106,7 +115,7 @@ impl EnumTexture {
 
     pub fn new_checkerboard(tex1: u32, tex2: u32, uscale: f32, vscale: f32) -> Self {
         Self {
-            t: 1,
+            t: TextureType::CheckerBoard,
             data: EnumTextureData {
                 u0: uvec4(tex1, tex2, 0, 0),
                 v0: vec4(uscale, vscale, 0.0, 0.0),
@@ -116,7 +125,7 @@ impl EnumTexture {
 
     pub fn new_image_map(image: u32) -> Self {
         Self {
-            t: 2,
+            t: TextureType::ImageMap,
             data: EnumTextureData {
                 u0: uvec4(image, 0, 0, 0),
                 v0: Vec4::ZERO,
@@ -133,23 +142,23 @@ impl EnumTexture {
         uv: Vec2,
     ) -> Vec3A {
         let mut color_or_target = match self.t {
-            0 => Solid { data: &self.data }.color(images, uv),
-            1 => CheckerBoard { data: &self.data }.color(images, uv),
-            _ => ImageMap { data: &self.data }.color(images, uv),
+            TextureType::Solid => Solid { data: &self.data }.color(images, uv),
+            TextureType::CheckerBoard => CheckerBoard { data: &self.data }.color(images, uv),
+            TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
         };
 
         while color_or_target.t {
             let tex = textures[color_or_target.index as usize];
             color_or_target = match tex.t {
-                0 => Solid { data: &tex.data }.color(
+                TextureType::Solid => Solid { data: &tex.data }.color(
                     images,
                     vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
                 ),
-                1 => CheckerBoard { data: &tex.data }.color(
+                TextureType::CheckerBoard => CheckerBoard { data: &tex.data }.color(
                     images,
                     vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
                 ),
-                _ => ImageMap { data: &tex.data }.color(
+                TextureType::ImageMap => ImageMap { data: &tex.data }.color(
                     images,
                     vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
                 ),
