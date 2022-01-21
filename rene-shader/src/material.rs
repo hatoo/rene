@@ -10,14 +10,8 @@ use crate::{
     math::{random_in_unit_sphere, IsNearZero},
     rand::DefaultRng,
     texture::EnumTexture,
-    InputImage, Ray,
+    InputImage,
 };
-
-#[derive(Clone, Default)]
-pub struct Scatter {
-    pub color: Vec3A,
-    pub ray: Ray,
-}
 
 pub struct SampledF {
     pub wi: Vec3A,
@@ -63,10 +57,18 @@ pub struct EnumMaterialData {
     v0: Vec4,
 }
 
-#[derive(Clone, Copy, Default)]
+#[repr(u32)]
+#[derive(Clone, Copy)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+enum MaterialType {
+    Lambertian,
+    Dielectric,
+}
+
+#[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumMaterial {
-    t: u32,
+    t: MaterialType,
     data: EnumMaterialData,
 }
 
@@ -293,7 +295,7 @@ impl<'a> Material for Dielectric<'a> {
 impl EnumMaterial {
     pub fn new_lambertian(albedo_index: u32) -> Self {
         Self {
-            t: 0,
+            t: MaterialType::Lambertian,
             data: EnumMaterialData {
                 u0: uvec4(albedo_index, 0, 0, 0),
                 v0: Vec4::ZERO,
@@ -301,6 +303,7 @@ impl EnumMaterial {
         }
     }
 
+    /*
     pub fn new_metal(albedo: Vec3A, fuzz: f32) -> Self {
         Self {
             t: 1,
@@ -310,10 +313,11 @@ impl EnumMaterial {
             },
         }
     }
+    */
 
     pub fn new_dielectric(ir: f32) -> Self {
         Self {
-            t: 2,
+            t: MaterialType::Dielectric,
             data: EnumMaterialData {
                 u0: UVec4::ZERO,
                 v0: vec4(ir, 0.0, 0.0, 0.0),
@@ -330,8 +334,12 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
         match self.t {
-            0 => Lambertian { data: &self.data }.albedo(uv, textures, images),
-            _ => Dielectric { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Lambertian => {
+                Lambertian { data: &self.data }.albedo(uv, textures, images)
+            }
+            MaterialType::Dielectric => {
+                Dielectric { data: &self.data }.albedo(uv, textures, images)
+            }
         }
     }
 
@@ -344,8 +352,12 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
         match self.t {
-            0 => Lambertian { data: &self.data }.f(wo, wi, uv, textures, images),
-            _ => Dielectric { data: &self.data }.f(wo, wi, uv, textures, images),
+            MaterialType::Lambertian => {
+                Lambertian { data: &self.data }.f(wo, wi, uv, textures, images)
+            }
+            MaterialType::Dielectric => {
+                Dielectric { data: &self.data }.f(wo, wi, uv, textures, images)
+            }
         }
     }
 
@@ -359,15 +371,19 @@ impl Material for EnumMaterial {
         rng: &mut DefaultRng,
     ) -> SampledF {
         match self.t {
-            0 => Lambertian { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng),
-            _ => Dielectric { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng),
+            MaterialType::Lambertian => {
+                Lambertian { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng)
+            }
+            MaterialType::Dielectric => {
+                Dielectric { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng)
+            }
         }
     }
 
     fn pdf(&self, wi: Vec3A, normal: Vec3A) -> f32 {
         match self.t {
-            0 => Lambertian { data: &self.data }.pdf(wi, normal),
-            _ => Dielectric { data: &self.data }.pdf(wi, normal),
+            MaterialType::Lambertian => Lambertian { data: &self.data }.pdf(wi, normal),
+            MaterialType::Dielectric => Dielectric { data: &self.data }.pdf(wi, normal),
         }
     }
 }
