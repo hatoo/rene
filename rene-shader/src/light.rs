@@ -13,17 +13,24 @@ pub struct EnumLightData {
     v1: Vec4,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(u32)]
+enum LightType {
+    Distant,
+}
+
+#[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumLight {
-    t: u32,
+    t: LightType,
     data: EnumLightData,
 }
 
 impl EnumLight {
     pub fn new_distant(from: Vec3A, to: Vec3A, color: Vec3A) -> Self {
         Self {
-            t: 0,
+            t: LightType::Distant,
             data: EnumLightData {
                 v0: (from - to).normalize().extend(0.0),
                 v1: color.extend(0.0),
@@ -49,13 +56,13 @@ impl<'a> Light for Distant<'a> {
 impl Light for EnumLight {
     fn ray_target(&self, position: Vec3A) -> (Vec3A, f32) {
         match self.t {
-            _ => Distant { data: &self.data }.ray_target(position),
+            LightType::Distant => Distant { data: &self.data }.ray_target(position),
         }
     }
 
     fn color(&self, position: Vec3A) -> Vec3A {
         match self.t {
-            _ => Distant { data: &self.data }.color(position),
+            LightType::Distant => Distant { data: &self.data }.color(position),
         }
     }
 }
