@@ -11,6 +11,7 @@ use camera::PerspectiveCamera;
 use core::f32::consts::PI;
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
+use reflection::{Bsdf, Bxdf};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 use surface_sample::SurfaceSample;
@@ -33,6 +34,7 @@ pub mod light;
 pub mod material;
 pub mod math;
 pub mod rand;
+mod reflection;
 pub mod surface_sample;
 pub mod texture;
 
@@ -146,6 +148,8 @@ pub fn main_ray_generation(
     let tmin = 0.001;
     let tmax = 100000.0;
 
+    let mut bsdf = Bsdf::new();
+
     let mut color = vec3a(1.0, 1.0, 1.0);
     let mut color_sum = vec3a(0.0, 0.0, 0.0);
 
@@ -185,6 +189,9 @@ pub fn main_ray_generation(
             let front_face = wo.dot(normal) > 0.0;
             let front_normal = if front_face { normal } else { -normal };
 
+            bsdf.clear();
+            material.compute_bsdf(&mut bsdf, uv, textures, images);
+
             color_sum += color * area_light.emit(wo, front_normal, front_face);
 
             if i == 0 {
@@ -202,17 +209,9 @@ pub fn main_ray_generation(
                         - position)
                         .normalize();
 
-                    (wi, material.pdf(wi, normal))
+                    (wi, bsdf.pdf(wi, normal))
                 } else {
-                    let sampled_f = material.sample_f(
-                        wo,
-                        front_normal,
-                        front_face,
-                        uv,
-                        textures,
-                        images,
-                        &mut rng,
-                    );
+                    let sampled_f = bsdf.sample_f(wo, front_normal, front_face, &mut rng);
 
                     (sampled_f.wi, sampled_f.pdf)
                 };
@@ -240,14 +239,13 @@ pub fn main_ray_generation(
                     );
                 }
 
-                color *= material.f(wo, wi, uv, textures, images) * normal.dot(wi).abs();
+                color *= bsdf.f(wo, wi) * normal.dot(wi).abs();
                 let pdf = (0.5 * pdf + 0.5 * weight * payload_pdf.pdf).max(1e-5);
 
                 color /= pdf;
             } else {
                 let front_face = wo.dot(normal) > 0.0;
-                let sampled_f =
-                    material.sample_f(wo, front_normal, front_face, uv, textures, images, &mut rng);
+                let sampled_f = bsdf.sample_f(wo, front_normal, front_face, &mut rng);
 
                 if sampled_f.pdf < 1e-5 {
                     break;
@@ -286,7 +284,7 @@ pub fn main_ray_generation(
                 }
 
                 if payload.is_miss != 0 {
-                    let f = material.f(wo, wi, uv, textures, images);
+                    let f = bsdf.f(wo, wi);
 
                     color_sum += color0
                         * f
