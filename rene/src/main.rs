@@ -1465,7 +1465,7 @@ fn main() {
         .unwrap();
     }
 
-    let rgb = to_rgb8(&data_image_linear, 2.2);
+    let rgb = to_rgb8(&data_image_linear);
 
     image::save_buffer(
         scene.film.filename,
@@ -1572,12 +1572,22 @@ fn average(data_linear: &mut [u8], denom: u32) {
     }
 }
 
-fn to_rgb8(data_linear: &[u8], gamma: f32) -> Vec<u8> {
+// from pbrt-v3
+// gamma 2.2
+fn gamma_correct(value: f32) -> f32 {
+    if value <= 0.0031308 {
+        12.92 * value
+    } else {
+        1.055 * value.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+fn to_rgb8(data_linear: &[u8]) -> Vec<u8> {
     let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
 
     data_f32
         .iter()
-        .map(|&value| (256.0 * value.powf(1.0 / gamma).clamp(0.0, 0.999)) as u8)
+        .map(|&value| (255.0 * gamma_correct(value)).round().clamp(0.0, 255.0) as u8)
         .collect()
 }
 
