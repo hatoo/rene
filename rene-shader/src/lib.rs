@@ -248,11 +248,6 @@ pub fn main_ray_generation(
                 };
             }
 
-            // TODO russian roulette
-            if color == Vec3A::ZERO {
-                break;
-            }
-
             for i in 0..uniform.lights_len {
                 let (target, t_max) =
                     unsafe { lights.index_unchecked(i as usize) }.ray_target(position);
@@ -286,6 +281,11 @@ pub fn main_ray_generation(
                         * wi.dot(normal).abs()
                         * unsafe { lights.index_unchecked(i as usize) }.color(position);
                 }
+            }
+
+            // TODO russian roulette
+            if color == Vec3A::ZERO {
+                break;
             }
         }
     }
