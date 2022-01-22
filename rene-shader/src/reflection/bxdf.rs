@@ -3,12 +3,9 @@ use spirv_std::glam::{vec3a, vec4, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
-use crate::{
-    math::{random_in_unit_sphere, IsNearZero},
-    rand::DefaultRng,
-};
+use crate::{math::random_cosine_direction, rand::DefaultRng};
 
-use super::{Bxdf, EnumBxdfData, SampledF};
+use super::{onb::Onb, Bxdf, EnumBxdfData, SampledF};
 
 #[repr(transparent)]
 pub struct Lambertian<'a> {
@@ -44,13 +41,8 @@ impl<'a> Bxdf for Lambertian<'a> {
         _front_face: bool,
         rng: &mut DefaultRng,
     ) -> SampledF {
-        let scatter_direction = normal + random_in_unit_sphere(rng).normalize();
-
-        let scatter_direction = if scatter_direction.is_near_zero() {
-            normal
-        } else {
-            scatter_direction
-        };
+        let onb = Onb::from_w(normal);
+        let scatter_direction = onb.local(random_cosine_direction(rng)).normalize();
 
         let wi = scatter_direction.normalize();
         let pdf = (normal.dot(wi) / PI).max(0.0);

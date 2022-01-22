@@ -14,6 +14,7 @@ pub struct SampledF {
 }
 
 mod bxdf;
+mod onb;
 
 use bxdf::{Dielectric, Lambertian};
 

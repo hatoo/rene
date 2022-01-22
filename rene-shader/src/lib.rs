@@ -240,7 +240,11 @@ pub fn main_ray_generation(
                 }
 
                 color *= bsdf.f(wo, wi) * normal.dot(wi).abs();
-                let pdf = (0.5 * pdf + 0.5 * weight * payload_pdf.pdf).max(1e-5);
+                let pdf = 0.5 * pdf + 0.5 * weight * payload_pdf.pdf;
+
+                if pdf < 1e-5 {
+                    break;
+                }
 
                 color /= pdf;
             } else {

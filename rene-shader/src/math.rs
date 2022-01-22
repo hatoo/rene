@@ -1,7 +1,7 @@
+use core::f32::consts::PI;
 use spirv_std::glam::{vec3a, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
-use spirv_std::num_traits::FloatConst;
 
 use crate::rand::DefaultRng;
 
@@ -47,9 +47,10 @@ pub fn random_cosine_direction(rng: &mut DefaultRng) -> Vec3A {
     let r2: f32 = rng.next_f32();
     let z = (1.0 - r2).sqrt();
 
-    let phi = 2.0 * f32::PI() * r1;
-    let x = phi.cos() * r2.sqrt();
-    let y = phi.sin() * r2.sqrt();
+    let phi = 2.0 * PI * r1;
+    let r2_sqrt = r2.sqrt();
+    let x = phi.cos() * r2_sqrt;
+    let y = phi.sin() * r2_sqrt;
 
     vec3a(x, y, z)
 }
@@ -59,7 +60,7 @@ pub fn random_to_sphere(radius: f32, distance_squared: f32, rng: &mut DefaultRng
     let r2 = rng.next_f32();
     let z = 1.0 + r2 * ((1.0 - radius * radius / distance_squared).sqrt() - 1.0);
 
-    let phi = 2.0 * f32::PI() * r1;
+    let phi = 2.0 * PI * r1;
     let x = phi.cos() * (1.0 - z * z).sqrt();
     let y = phi.sin() * (1.0 - z * z).sqrt();
 
@@ -68,8 +69,8 @@ pub fn random_to_sphere(radius: f32, distance_squared: f32, rng: &mut DefaultRng
 
 pub fn sphere_uv(point: Vec3A) -> (f32, f32) {
     let theta = (-point.y).acos();
-    let phi = (-point.z).atan2(point.x) + f32::PI();
-    (phi / (2.0 * f32::PI()), theta / f32::PI())
+    let phi = (-point.z).atan2(point.x) + PI;
+    (phi / (2.0 * PI), theta / PI)
 }
 
 pub trait IsNearZero {
