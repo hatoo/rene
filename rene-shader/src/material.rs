@@ -33,6 +33,7 @@ pub trait Material {
         &self,
         wo: Vec3A,
         normal: Vec3A,
+        front_face: bool,
         uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
@@ -121,16 +122,13 @@ impl<'a> Material for Lambertian<'a> {
     fn sample_f(
         &self,
         wo: Vec3A,
-        mut normal: Vec3A,
+        normal: Vec3A,
+        _front_face: bool,
         uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
     ) -> SampledF {
-        if normal.dot(wo) < 0.0 {
-            normal = -normal;
-        }
-
         let scatter_direction = normal + random_in_unit_sphere(rng).normalize();
 
         let scatter_direction = if scatter_direction.is_near_zero() {
@@ -243,23 +241,18 @@ impl<'a> Material for Dielectric<'a> {
     fn sample_f(
         &self,
         wo: Vec3A,
-        mut normal: Vec3A,
+        normal: Vec3A,
+        front_face: bool,
         _uv: Vec2,
         _textures: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
     ) -> SampledF {
-        let front_face = normal.dot(wo) > 0.0;
-
         let refraction_ratio = if front_face {
             1.0 / self.ir()
         } else {
             self.ir()
         };
-
-        if !front_face {
-            normal = -normal;
-        }
 
         let unit_direction = -wo;
         let cos_theta = (-unit_direction).dot(normal).min(1.0);
@@ -365,18 +358,17 @@ impl Material for EnumMaterial {
         &self,
         wo: Vec3A,
         normal: Vec3A,
+        front_face: bool,
         uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
         rng: &mut DefaultRng,
     ) -> SampledF {
         match self.t {
-            MaterialType::Lambertian => {
-                Lambertian { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng)
-            }
-            MaterialType::Dielectric => {
-                Dielectric { data: &self.data }.sample_f(wo, normal, uv, textures, images, rng)
-            }
+            MaterialType::Lambertian => Lambertian { data: &self.data }
+                .sample_f(wo, normal, front_face, uv, textures, images, rng),
+            MaterialType::Dielectric => Dielectric { data: &self.data }
+                .sample_f(wo, normal, front_face, uv, textures, images, rng),
         }
     }
 

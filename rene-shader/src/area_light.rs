@@ -1,7 +1,7 @@
 use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 
 pub trait AreaLight {
-    fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A;
+    fn emit(&self, wo: Vec3A, normal: Vec3A, front_face: bool) -> Vec3A;
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
@@ -58,8 +58,8 @@ impl EnumAreaLight {
 }
 
 impl<'a> AreaLight for Diffuse<'a> {
-    fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A {
-        if wo.dot(normal) > 0.0 {
+    fn emit(&self, _wo: Vec3A, _normal: Vec3A, front_face: bool) -> Vec3A {
+        if front_face {
             self.data.v0.xyz().into()
         } else {
             Vec3A::ZERO
@@ -68,10 +68,10 @@ impl<'a> AreaLight for Diffuse<'a> {
 }
 
 impl AreaLight for EnumAreaLight {
-    fn emit(&self, wo: Vec3A, normal: Vec3A) -> Vec3A {
+    fn emit(&self, wo: Vec3A, normal: Vec3A, front_face: bool) -> Vec3A {
         match self.t {
             AreaLightType::Null => vec3a(0.0, 0.0, 0.0),
-            AreaLightType::Diffuse => Diffuse { data: &self.data }.emit(wo, normal),
+            AreaLightType::Diffuse => Diffuse { data: &self.data }.emit(wo, normal, front_face),
         }
     }
 }
