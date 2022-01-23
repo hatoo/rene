@@ -1585,6 +1585,15 @@ fn gamma_correct(value: f32) -> f32 {
     }
 }
 
+#[allow(dead_code)]
+fn inverse_gamma_correct(value: f32) -> f32 {
+    if value <= 0.04045 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 fn to_rgb8(data_linear: &[u8]) -> Vec<u8> {
     let data_f32: &[f32] = bytemuck::cast_slice(data_linear);
 
