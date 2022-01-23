@@ -35,6 +35,7 @@ pub struct Texture<'a> {
 pub enum World<'a> {
     WorldObject(WorldObject<'a>),
     Attribute(Vec<World<'a>>),
+    TransformBeginEnd(Vec<World<'a>>),
     Translate(Vec3A),
     Scale(Vec3A),
     Rotate(AxisAngle),
@@ -381,6 +382,16 @@ fn parse_attribute_statement<'a, E: ParseError<&'a str>>(
     Ok((rest, worlds))
 }
 
+fn parse_transform_statement<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, Vec<World>, E> {
+    let (rest, _) = tag("TransformBegin")(input)?;
+    let (rest, worlds) = many0(preceded(sp, parse_world))(rest)?;
+    let (rest, _) = preceded(sp, tag("TransformEnd"))(rest)?;
+
+    Ok((rest, worlds))
+}
+
 fn parse_transrate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec3A, E> {
     let (rest, _) = tag("Translate")(input)?;
     preceded(sp, parse_vec3)(rest)
@@ -423,6 +434,7 @@ fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, W
         map(parse_named_material, |w| World::NamedMaterial(w)),
         map(parse_world_object, |w| World::WorldObject(w)),
         map(parse_attribute_statement, |w| World::Attribute(w)),
+        map(parse_transform_statement, |w| World::TransformBeginEnd(w)),
         map(parse_transrate, |v| World::Translate(v)),
         map(parse_scale, |v| World::Scale(v)),
         map(parse_rotate, |v| World::Rotate(v)),

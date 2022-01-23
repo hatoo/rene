@@ -103,7 +103,8 @@ impl Scene {
                     },
                 },
                 IntermediateScene::World(worlds) => {
-                    scene.append_world(Default::default(), worlds)?;
+                    let mut state = Default::default();
+                    scene.append_world(&mut state, worlds)?;
                 }
             }
         }
@@ -150,12 +151,20 @@ impl Scene {
 
     fn append_world(
         &mut self,
-        mut state: WorldState,
+        state: &mut WorldState,
         worlds: Vec<IntermediateWorld>,
     ) -> Result<(), CreateSceneError> {
         for w in worlds {
             match w {
-                IntermediateWorld::Attribute(worlds) => self.append_world(state.clone(), worlds)?,
+                IntermediateWorld::Attribute(worlds) => {
+                    let mut state = state.clone();
+                    self.append_world(&mut state, worlds)?
+                }
+                IntermediateWorld::TransformBeginEnd(worlds) => {
+                    let matrix = state.current_matrix;
+                    self.append_world(state, worlds)?;
+                    state.current_matrix = matrix;
+                }
                 IntermediateWorld::Matrix(m) => {
                     state.current_matrix = state.current_matrix * m;
                 }

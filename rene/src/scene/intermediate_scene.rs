@@ -31,6 +31,7 @@ pub enum Camera {
 
 pub enum IntermediateWorld {
     Attribute(Vec<IntermediateWorld>),
+    TransformBeginEnd(Vec<IntermediateWorld>),
     WorldObject(WorldObject),
     Matrix(Affine3A),
     Texture(Texture),
@@ -616,6 +617,11 @@ impl IntermediateWorld {
                 .map(|w| Self::from_world(w, base_dir))
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(IntermediateWorld::Attribute),
+            pbrt_parser::World::TransformBeginEnd(worlds) => worlds
+                .into_iter()
+                .map(|w| Self::from_world(w, base_dir))
+                .collect::<Result<Vec<Self>, Error>>()
+                .map(IntermediateWorld::TransformBeginEnd),
             pbrt_parser::World::Translate(translation) => {
                 Ok(Self::Matrix(Affine3A::from_translation(translation.into())))
             }
