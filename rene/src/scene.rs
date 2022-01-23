@@ -137,9 +137,9 @@ impl Scene {
                         .ok_or(CreateSceneError::NotFoundTexture(name))?,
                 };
 
-                Ok(EnumMaterial::new_lambertian(texture_index))
+                Ok(EnumMaterial::new_matte(texture_index))
             }
-            Material::Glass => Ok(EnumMaterial::new_dielectric(1.5)),
+            Material::Glass => Ok(EnumMaterial::new_glass(1.5)),
         }
     }
 

@@ -16,7 +16,7 @@ pub struct SampledF {
 mod bxdf;
 mod onb;
 
-use bxdf::{Dielectric, Lambertian};
+use bxdf::{FresnelSpecular, LambertianReflection};
 
 pub trait Bxdf {
     fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A;
@@ -43,8 +43,8 @@ pub struct EnumBxdfData {
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 enum BxdfType {
-    Lambertian,
-    Dielectric,
+    LambertianReflection,
+    FresnelSpecular,
 }
 
 #[derive(Clone, Copy)]
@@ -57,8 +57,8 @@ pub struct EnumBxdf {
 impl Bxdf for EnumBxdf {
     fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A {
         match self.t {
-            BxdfType::Lambertian => Lambertian { data: &self.data }.f(wo, wi),
-            BxdfType::Dielectric => Dielectric { data: &self.data }.f(wo, wi),
+            BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.f(wo, wi),
+            BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.f(wo, wi),
         }
     }
 
@@ -70,35 +70,37 @@ impl Bxdf for EnumBxdf {
         rng: &mut DefaultRng,
     ) -> SampledF {
         match self.t {
-            BxdfType::Lambertian => {
-                Lambertian { data: &self.data }.sample_f(wo, normal, front_face, rng)
+            BxdfType::LambertianReflection => {
+                LambertianReflection { data: &self.data }.sample_f(wo, normal, front_face, rng)
             }
-            BxdfType::Dielectric => {
-                Dielectric { data: &self.data }.sample_f(wo, normal, front_face, rng)
+            BxdfType::FresnelSpecular => {
+                FresnelSpecular { data: &self.data }.sample_f(wo, normal, front_face, rng)
             }
         }
     }
 
     fn pdf(&self, wi: Vec3A, normal: Vec3A) -> f32 {
         match self.t {
-            BxdfType::Lambertian => Lambertian { data: &self.data }.pdf(wi, normal),
-            BxdfType::Dielectric => Dielectric { data: &self.data }.pdf(wi, normal),
+            BxdfType::LambertianReflection => {
+                LambertianReflection { data: &self.data }.pdf(wi, normal)
+            }
+            BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.pdf(wi, normal),
         }
     }
 }
 
 impl EnumBxdf {
-    pub fn new_lambertian(albedo: Vec3A) -> Self {
+    pub fn new_lambertian_reflection(albedo: Vec3A) -> Self {
         Self {
-            t: BxdfType::Lambertian,
-            data: Lambertian::new(albedo),
+            t: BxdfType::LambertianReflection,
+            data: LambertianReflection::new(albedo),
         }
     }
 
-    pub fn new_dielectric(ir: f32) -> Self {
+    pub fn new_fresnel_specular(ir: f32) -> Self {
         Self {
-            t: BxdfType::Dielectric,
-            data: Dielectric::new(ir),
+            t: BxdfType::FresnelSpecular,
+            data: FresnelSpecular::new(ir),
         }
     }
 }
@@ -114,7 +116,7 @@ impl Bsdf {
     pub fn new() -> Self {
         Self {
             len: 0,
-            bxdfs: [EnumBxdf::new_lambertian(vec3a(0.0, 0.0, 0.0)); BXDF_LEN],
+            bxdfs: [EnumBxdf::new_lambertian_reflection(vec3a(0.0, 0.0, 0.0)); BXDF_LEN],
         }
     }
 

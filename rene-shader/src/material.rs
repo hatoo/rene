@@ -46,8 +46,8 @@ pub struct EnumMaterialData {
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 enum MaterialType {
-    Lambertian,
-    Dielectric,
+    Matte,
+    Glass,
 }
 
 #[derive(Clone, Copy)]
@@ -58,7 +58,7 @@ pub struct EnumMaterial {
 }
 
 #[repr(transparent)]
-struct Lambertian<'a> {
+struct Matte<'a> {
     data: &'a EnumMaterialData,
 }
 
@@ -70,11 +70,11 @@ struct Metal<'a> {
 */
 
 #[repr(transparent)]
-struct Dielectric<'a> {
+struct Glass<'a> {
     data: &'a EnumMaterialData,
 }
 
-impl<'a> Material for Lambertian<'a> {
+impl<'a> Material for Matte<'a> {
     fn albedo(
         &self,
         uv: Vec2,
@@ -91,7 +91,9 @@ impl<'a> Material for Lambertian<'a> {
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
     ) {
-        bsdf.add(EnumBxdf::new_lambertian(self.albedo(uv, textures, images)));
+        bsdf.add(EnumBxdf::new_lambertian_reflection(
+            self.albedo(uv, textures, images),
+        ));
     }
 }
 
@@ -145,13 +147,13 @@ impl<'a> Material for Metal<'a> {
 }
 */
 
-impl<'a> Dielectric<'a> {
+impl<'a> Glass<'a> {
     fn ir(&self) -> f32 {
         self.data.v0.x
     }
 }
 
-impl<'a> Material for Dielectric<'a> {
+impl<'a> Material for Glass<'a> {
     fn albedo(
         &self,
         _uv: Vec2,
@@ -168,14 +170,14 @@ impl<'a> Material for Dielectric<'a> {
         _textures: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
     ) {
-        bsdf.add(EnumBxdf::new_dielectric(self.ir()))
+        bsdf.add(EnumBxdf::new_fresnel_specular(self.ir()))
     }
 }
 
 impl EnumMaterial {
-    pub fn new_lambertian(albedo_index: u32) -> Self {
+    pub fn new_matte(albedo_index: u32) -> Self {
         Self {
-            t: MaterialType::Lambertian,
+            t: MaterialType::Matte,
             data: EnumMaterialData {
                 u0: uvec4(albedo_index, 0, 0, 0),
                 v0: Vec4::ZERO,
@@ -195,9 +197,9 @@ impl EnumMaterial {
     }
     */
 
-    pub fn new_dielectric(ir: f32) -> Self {
+    pub fn new_glass(ir: f32) -> Self {
         Self {
-            t: MaterialType::Dielectric,
+            t: MaterialType::Glass,
             data: EnumMaterialData {
                 u0: UVec4::ZERO,
                 v0: vec4(ir, 0.0, 0.0, 0.0),
@@ -214,12 +216,8 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
         match self.t {
-            MaterialType::Lambertian => {
-                Lambertian { data: &self.data }.albedo(uv, textures, images)
-            }
-            MaterialType::Dielectric => {
-                Dielectric { data: &self.data }.albedo(uv, textures, images)
-            }
+            MaterialType::Matte => Matte { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Glass => Glass { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
@@ -231,11 +229,11 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) {
         match self.t {
-            MaterialType::Lambertian => {
-                Lambertian { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            MaterialType::Matte => {
+                Matte { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }
-            MaterialType::Dielectric => {
-                Dielectric { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            MaterialType::Glass => {
+                Glass { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }
         }
     }

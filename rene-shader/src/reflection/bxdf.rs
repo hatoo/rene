@@ -8,16 +8,16 @@ use crate::{math::random_cosine_direction, rand::DefaultRng};
 use super::{onb::Onb, Bxdf, EnumBxdfData, SampledF};
 
 #[repr(transparent)]
-pub struct Lambertian<'a> {
+pub struct LambertianReflection<'a> {
     pub data: &'a EnumBxdfData,
 }
 
 #[repr(transparent)]
-pub struct Dielectric<'a> {
+pub struct FresnelSpecular<'a> {
     pub data: &'a EnumBxdfData,
 }
 
-impl<'a> Lambertian<'a> {
+impl<'a> LambertianReflection<'a> {
     pub fn new(albedo: Vec3A) -> EnumBxdfData {
         EnumBxdfData {
             v0: albedo.extend(0.0),
@@ -29,7 +29,7 @@ impl<'a> Lambertian<'a> {
     }
 }
 
-impl<'a> Bxdf for Lambertian<'a> {
+impl<'a> Bxdf for LambertianReflection<'a> {
     fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
         self.albedo() / PI
     }
@@ -76,7 +76,7 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
     r0 + (1.0 - r0) * (1.0 - cosine).powf(5.0)
 }
 
-impl<'a> Dielectric<'a> {
+impl<'a> FresnelSpecular<'a> {
     pub fn new(ir: f32) -> EnumBxdfData {
         EnumBxdfData {
             v0: vec4(ir, 0.0, 0.0, 0.0),
@@ -88,7 +88,7 @@ impl<'a> Dielectric<'a> {
     }
 }
 
-impl<'a> Bxdf for Dielectric<'a> {
+impl<'a> Bxdf for FresnelSpecular<'a> {
     fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
         Vec3A::ZERO
     }
