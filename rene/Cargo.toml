@@ -17,7 +17,7 @@ clap = { version = "3.0.0", features = ["derive"] }
 thiserror = "1.0.30"
 nom = "7.1.0"
 log = "0.4.14"
-simple_logger = "1.16.0"
+simple_logger = "2.1.0"
 blackbody = "0.0.0"
 ply-rs = "0.1.3"
 

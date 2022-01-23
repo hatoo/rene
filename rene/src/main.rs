@@ -1647,13 +1647,13 @@ fn optix_denoise(
     use cust::memory::DeviceBuffer;
     use cust::prelude::{Stream, StreamFlags};
     use cust::util::SliceExt;
-    use optix::context::OptixContext;
+    use optix::context::DeviceContext;
     use optix::denoiser::DenoiserOptions;
     use optix::denoiser::{Denoiser, DenoiserModelKind, DenoiserParams, Image, ImageFormat};
     // set up CUDA and OptiX then make the needed structs/contexts.
     let cuda_ctx = cust::quick_init()?;
     optix::init()?;
-    let optix_ctx = OptixContext::new(&cuda_ctx)?;
+    let optix_ctx = DeviceContext::new(&cuda_ctx, false)?;
 
     let stream = Stream::new(StreamFlags::NON_BLOCKING, None)?;
 
@@ -1673,9 +1673,7 @@ fn optix_denoise(
     let in_buf_normal = linear_normal.as_dbuf()?;
     let in_buf_albedo = linear_albedo.as_dbuf()?;
 
-    // Currently zeroed is unsafe, but in the future we will probably expose a safe way to do it
-    // using bytemuck
-    let mut out_buf = unsafe { DeviceBuffer::<[f32; 3]>::zeroed((width * height) as usize)? };
+    let mut out_buf = DeviceBuffer::<[f32; 3]>::zeroed((width * height) as usize)?;
 
     // make an image to tell OptiX about how our image buffer is represented
     let input_image = Image::new(&in_buf_image, ImageFormat::Float3, width, height);
