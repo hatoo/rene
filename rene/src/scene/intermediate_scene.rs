@@ -393,11 +393,7 @@ fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
             ]);
         }
 
-        Ok(Image {
-            width: image.width(),
-            height: image.height(),
-            data,
-        })
+        Ok(Image::new(image.width(), image.height(), data))
     }
 }
 

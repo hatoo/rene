@@ -57,12 +57,5 @@ pub fn parse_pfm_rgb(input: &[u8]) -> IResult<&[u8], Image> {
         }
     }
 
-    Ok((
-        rest,
-        Image {
-            width,
-            height,
-            data,
-        },
-    ))
+    Ok((rest, Image::new(width, height, data)))
 }
