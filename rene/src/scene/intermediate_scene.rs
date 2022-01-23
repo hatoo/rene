@@ -374,7 +374,7 @@ fn deg_to_radian(angle: f32) -> f32 {
 }
 
 fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
-    if path.as_ref().extension() == Some(&OsStr::new("pfm")) {
+    if path.as_ref().extension() == Some(OsStr::new("pfm")) {
         let mut content = Vec::new();
         File::open(path)?.read_to_end(&mut content)?;
 
