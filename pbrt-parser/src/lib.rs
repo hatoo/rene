@@ -58,7 +58,7 @@ pub enum Value<'a> {
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
     String(Vec<&'a str>),
-    Texture(&'a str),
+    Texture(Vec<&'a str>),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -254,7 +254,7 @@ impl ArgumentType {
                 ))
             }
             ArgumentType::String => map(strs, Value::String)(input),
-            ArgumentType::Texture => map(parse_str, Value::Texture)(input),
+            ArgumentType::Texture => map(strs, Value::Texture)(input),
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
             ArgumentType::BlackBody => {

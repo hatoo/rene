@@ -245,7 +245,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Ok(TextureOrColor::Color(color))
                     }
                 }
-                pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s.to_string())),
+                pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s[0].to_string())),
                 _ => Err(ArgumentError::UnmatchedType),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
