@@ -26,10 +26,16 @@ You can denoise images using Oidn Denoiser by "--denoiser=oidn" flag.
 
 ## Cornell box
 
-With Optix Denoiser
-
 ```
-cargo run --features=optix-denoiser  -- --denoiser=optix .\sample_scenes\cornell-box\scene.pbrt
+cargo run -- .\sample_scenes\cornell-box\scene.pbrt
 ```
 
 ![Cornell box](images/cornell-box.png)
+
+## Dragon
+
+```
+cargo run -- .\sample_scenes\dragon\scene.pbrt
+```
+
+![dragon](images/dragon.png)
