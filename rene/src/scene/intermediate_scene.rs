@@ -616,6 +616,10 @@ impl IntermediateScene {
                 look_at.look_at.into(),
                 look_at.up.into(),
             ))),
+            pbrt_parser::Scene::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
+                axis_angle.axis.normalize().into(),
+                deg_to_radian(axis_angle.angle),
+            ))),
             pbrt_parser::Scene::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                 pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
