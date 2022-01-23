@@ -1,12 +1,15 @@
-use std::{f32::consts::PI, path::Path};
+use std::{f32::consts::PI, ffi::OsStr, fs::File, io::Read, path::Path};
 
 use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Mat4, Vec2, Vec3A};
+use image::DynamicImage;
 use pbrt_parser::Object;
 use ply::ply::{Ply, PropertyAccess};
 use ply_rs as ply;
 use rene_shader::Vertex;
 use thiserror::Error;
+
+use crate::scene::pfm_parser::parse_pfm_rgb;
 
 use super::subdivision::loop_subdivision;
 
@@ -173,6 +176,8 @@ pub enum Error {
     IO(#[from] std::io::Error),
     #[error("Image Error {0}")]
     Image(#[from] image::error::ImageError),
+    #[error("PFM decode error")]
+    Pfm,
     #[error("Ply error")]
     Ply,
 }
@@ -368,6 +373,17 @@ fn deg_to_radian(angle: f32) -> f32 {
     angle * PI / 180.0
 }
 
+fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage, Error> {
+    if path.as_ref().extension() == Some(&OsStr::new("pfm")) {
+        let mut content = Vec::new();
+        File::open(path)?.read_to_end(&mut content)?;
+
+        Ok(parse_pfm_rgb(&content).map_err(|_| Error::Pfm)?.1)
+    } else {
+        Ok(image::io::Reader::open(path)?.decode()?)
+    }
+}
+
 fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
     let vertex = ply.payload.get("vertex").unwrap();
     let faces = ply.payload.get("face").unwrap();
@@ -452,7 +468,7 @@ impl IntermediateWorld {
                     let filename = texture.obj.get_str("filename")??;
                     let mut pathbuf = base_dir.as_ref().to_path_buf();
                     pathbuf.push(filename);
-                    let image = image::io::Reader::open(pathbuf)?.decode()?;
+                    let image = load_image(pathbuf)?;
                     Ok(Self::Texture(Texture {
                         name: texture.name.to_string(),
                         inner: InnerTexture::ImageMap(image),
@@ -471,7 +487,7 @@ impl IntermediateWorld {
                             let filename = filename?;
                             let mut pathbuf = base_dir.as_ref().to_path_buf();
                             pathbuf.push(filename);
-                            Some(image::io::Reader::open(pathbuf)?.decode()?)
+                            Some(load_image(pathbuf)?)
                         } else {
                             None
                         };

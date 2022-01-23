@@ -16,6 +16,7 @@ use self::intermediate_scene::{
 };
 
 pub mod intermediate_scene;
+mod pfm_parser;
 mod subdivision;
 
 #[derive(Debug)]
