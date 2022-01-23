@@ -68,8 +68,10 @@ pub fn random_to_sphere(radius: f32, distance_squared: f32, rng: &mut DefaultRng
 }
 
 pub fn sphere_uv(point: Vec3A) -> Vec2 {
-    let theta = (-point.y).acos();
-    let phi = (-point.z).atan2(point.x) + PI;
+    let theta = point.z.acos();
+    let phi = (point.y).atan2(point.x);
+    let phi = if phi < 0.0 { phi + 2.0 * PI } else { phi };
+
     vec2(phi / (2.0 * PI), theta / PI)
 }
 
