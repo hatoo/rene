@@ -1993,7 +1993,7 @@ impl Image {
             unsafe { device.create_image_view(&image_view_create_info, None) }.unwrap()
         };
 
-        let rgb = img.as_rgb8().unwrap();
+        let rgb = img.clone().into_rgb8();
         let mut data: Vec<u8> = Vec::new();
 
         for p in rgb.pixels() {
