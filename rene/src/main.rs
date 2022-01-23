@@ -18,7 +18,6 @@ use ash::{
 
 use clap::{ArgEnum, Parser};
 use glam::{Vec2, Vec3A};
-use image::{DynamicImage, GenericImageView};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
@@ -1946,7 +1945,7 @@ struct Image {
 
 impl Image {
     fn load(
-        img: &DynamicImage,
+        img: &crate::scene::image::Image,
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         command_pool: vk::CommandPool,
@@ -1960,8 +1959,8 @@ impl Image {
                 .format(COLOR_FORMAT)
                 .extent(
                     vk::Extent3D::builder()
-                        .width(img.width())
-                        .height(img.height())
+                        .width(img.width)
+                        .height(img.height)
                         .depth(1)
                         .build(),
                 )
@@ -2006,22 +2005,8 @@ impl Image {
             unsafe { device.create_image_view(&image_view_create_info, None) }.unwrap()
         };
 
-        let rgb = img.clone().into_rgb8();
-        let mut data: Vec<u8> = Vec::new();
-
-        for p in rgb.pixels() {
-            let rgba = [
-                p.0[0] as f32 / 255.0,
-                p.0[1] as f32 / 255.0,
-                p.0[2] as f32 / 255.0,
-                1.0,
-            ];
-
-            data.extend(bytemuck::cast_slice(rgba.as_slice()));
-        }
-
         let mut staging_buffer = BufferResource::new(
-            data.len() as u64,
+            (img.data.len() * 4 * std::mem::size_of::<f32>()) as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT
@@ -2030,7 +2015,7 @@ impl Image {
             device_memory_properties,
         );
 
-        staging_buffer.store(&data, device);
+        staging_buffer.store(&img.data, device);
 
         let command_buffer = {
             let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -2096,8 +2081,8 @@ impl Image {
             )
             .image_extent(
                 vk::Extent3D::builder()
-                    .width(img.width())
-                    .height(img.height())
+                    .width(img.width)
+                    .height(img.height)
                     .depth(1)
                     .build(),
             )
@@ -2994,7 +2979,11 @@ impl SceneBuffers {
             .collect();
 
         if images.is_empty() {
-            let dummy_image = DynamicImage::new_rgb8(1, 1);
+            let dummy_image = crate::scene::image::Image {
+                width: 1,
+                height: 1,
+                data: vec![[0.0, 0.0, 0.0, 0.0]],
+            };
             images.push(Image::load(
                 &dummy_image,
                 device,

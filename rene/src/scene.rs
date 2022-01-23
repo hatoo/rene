@@ -15,9 +15,12 @@ use self::intermediate_scene::{
     WorldObject,
 };
 
+pub mod image;
 pub mod intermediate_scene;
 mod pfm_parser;
 mod subdivision;
+
+use crate::scene::image::Image;
 
 #[derive(Debug)]
 pub struct TlasInstance {
@@ -38,7 +41,7 @@ pub struct Scene {
     pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
     pub lights: Vec<EnumLight>,
-    pub images: Vec<image::DynamicImage>,
+    pub images: Vec<Image>,
 }
 
 #[derive(Error, Debug)]

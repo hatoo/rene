@@ -2,7 +2,7 @@ use std::{f32::consts::PI, ffi::OsStr, fs::File, io::Read, path::Path};
 
 use blackbody::temperature_to_rgb;
 use glam::{vec2, vec3a, Mat4, Vec2, Vec3A};
-use image::DynamicImage;
+use image::GenericImageView;
 use pbrt_parser::Object;
 use ply::ply::{Ply, PropertyAccess};
 use ply_rs as ply;
@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::scene::pfm_parser::parse_pfm_rgb;
 
-use super::subdivision::loop_subdivision;
+use super::{image::Image, subdivision::loop_subdivision};
 
 #[derive(PartialEq, Debug)]
 pub struct LookAt {
@@ -60,7 +60,7 @@ pub enum LightSource {
 
 pub struct Infinite {
     pub color: Vec3A,
-    pub image_map: Option<image::DynamicImage>,
+    pub image_map: Option<Image>,
 }
 
 pub struct Distant {
@@ -83,7 +83,7 @@ pub struct CheckerBoard {
 
 pub enum InnerTexture {
     CheckerBoard(CheckerBoard),
-    ImageMap(image::DynamicImage),
+    ImageMap(Image),
 }
 
 pub struct Texture {
@@ -373,14 +373,31 @@ fn deg_to_radian(angle: f32) -> f32 {
     angle * PI / 180.0
 }
 
-fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage, Error> {
+fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
     if path.as_ref().extension() == Some(&OsStr::new("pfm")) {
         let mut content = Vec::new();
         File::open(path)?.read_to_end(&mut content)?;
 
         Ok(parse_pfm_rgb(&content).map_err(|_| Error::Pfm)?.1)
     } else {
-        Ok(image::io::Reader::open(path)?.decode()?)
+        let image = image::io::Reader::open(path)?.decode()?;
+
+        let mut data = Vec::new();
+
+        for (_, _, p) in image.pixels() {
+            data.push([
+                p.0[0] as f32 / 255.0,
+                p.0[1] as f32 / 255.0,
+                p.0[2] as f32 / 255.0,
+                p.0[3] as f32 / 255.0,
+            ]);
+        }
+
+        Ok(Image {
+            width: image.width(),
+            height: image.height(),
+            data,
+        })
     }
 }
 

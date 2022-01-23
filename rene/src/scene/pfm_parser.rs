@@ -1,4 +1,3 @@
-use image::{DynamicImage, Rgb, RgbImage};
 use nom::{
     bytes::complete::{tag, take_while},
     character::is_digit,
@@ -6,7 +5,9 @@ use nom::{
     IResult,
 };
 
-pub fn parse_pfm_rgb(input: &[u8]) -> IResult<&[u8], DynamicImage> {
+use super::image::Image;
+
+pub fn parse_pfm_rgb(input: &[u8]) -> IResult<&[u8], Image> {
     let (rest, _) = tag("PF\n")(input)?;
     let (rest, width) = take_while(is_digit)(rest)?;
     let (rest, _) = tag(" ")(rest)?;
@@ -29,7 +30,7 @@ pub fn parse_pfm_rgb(input: &[u8]) -> IResult<&[u8], DynamicImage> {
         .parse()
         .unwrap();
 
-    let mut image = RgbImage::new(width, height);
+    let mut data = vec![[0.0; 4]; (width * height) as usize];
 
     let mut rest = rest;
 
@@ -51,17 +52,17 @@ pub fn parse_pfm_rgb(input: &[u8]) -> IResult<&[u8], DynamicImage> {
 
             rest = r;
 
-            image.put_pixel(
-                x,
-                y,
-                Rgb([
-                    (rgb[0] * 255.0) as u8,
-                    (rgb[1] * 255.0) as u8,
-                    (rgb[2] * 255.0) as u8,
-                ]),
-            );
+            data[(y * width + x) as usize][..3].copy_from_slice(rgb.as_slice());
+            data[(y * width + x) as usize][3] = 1.0;
         }
     }
 
-    Ok((rest, DynamicImage::ImageRgb8(image)))
+    Ok((
+        rest,
+        Image {
+            width,
+            height,
+            data,
+        },
+    ))
 }
