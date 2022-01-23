@@ -56,7 +56,7 @@ pub enum CreateSceneError {
 struct WorldState {
     current_material_index: Option<usize>,
     current_area_light_index: usize,
-    current_matrix: Affine3A,
+    current_matrix: Mat4,
     textures: HashMap<String, u32>,
     materials: HashMap<String, u32>,
 }
@@ -233,6 +233,7 @@ impl Scene {
                                     self.textures
                                         .push(EnumTexture::new_image_map(image_index as u32));
 
+                                    self.uniform.background_matrix = state.current_matrix;
                                     self.uniform.background_texture = texture_index as u32;
                                 }
                             }
@@ -258,8 +259,10 @@ impl Scene {
                         WorldObject::Shape(shape) => match shape {
                             Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
                                 shader_offset: ShaderOffset::Sphere,
-                                matrix: state.current_matrix
-                                    * Affine3A::from_scale(vec3(radius, radius, radius)),
+                                matrix: Affine3A::from_mat4(
+                                    state.current_matrix
+                                        * Mat4::from_scale(vec3(radius, radius, radius)),
+                                ),
                                 material_index: state
                                     .current_material_index
                                     .ok_or(CreateSceneError::NoMaterial)?,
@@ -271,7 +274,7 @@ impl Scene {
                                 self.blases.push(trianglemesh);
                                 self.tlas.push(TlasInstance {
                                     shader_offset: ShaderOffset::Triangle,
-                                    matrix: state.current_matrix,
+                                    matrix: Affine3A::from_mat4(state.current_matrix),
                                     material_index: state
                                         .current_material_index
                                         .ok_or(CreateSceneError::NoMaterial)?,

@@ -89,6 +89,7 @@ impl RayPayload {
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Uniform {
     pub camera_to_world: Mat4,
+    pub background_matrix: Mat4,
     pub background_color: Vec3A,
     pub background_texture: u32,
     pub camera: PerspectiveCamera,
@@ -118,7 +119,12 @@ pub fn main_miss(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
 ) {
-    let uv = sphere_uv(ray_direction.normalize());
+    let uv = sphere_uv(
+        uniform
+            .background_matrix
+            .transform_vector3a(ray_direction)
+            .normalize(),
+    );
     let color = uniform.background_color
         * unsafe { textures.index_unchecked(uniform.background_texture as usize) }
             .color(textures, images, uv);
