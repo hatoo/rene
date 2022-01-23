@@ -248,7 +248,6 @@ pub fn main_ray_generation(
 
                 color /= pdf;
             } else {
-                let front_face = wo.dot(normal) > 0.0;
                 let sampled_f = bsdf.sample_f(wo, front_normal, front_face, &mut rng);
 
                 if sampled_f.pdf < 1e-5 {
