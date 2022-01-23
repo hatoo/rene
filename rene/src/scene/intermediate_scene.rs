@@ -56,6 +56,7 @@ pub enum LightSource {
 
 pub struct Infinite {
     pub color: Vec3A,
+    pub image_map: Option<image::DynamicImage>,
 }
 
 pub struct Distant {
@@ -463,8 +464,17 @@ impl IntermediateWorld {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
                     "infinite" => {
                         let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+
+                        let image_map = if let Ok(filename) = obj.get_str("mapname")? {
+                            let mut pathbuf = base_dir.as_ref().to_path_buf();
+                            pathbuf.push(filename);
+                            Some(image::io::Reader::open(pathbuf)?.decode()?)
+                        } else {
+                            None
+                        };
+
                         Ok(Self::WorldObject(WorldObject::LightSource(
-                            LightSource::Infinite(Infinite { color }),
+                            LightSource::Infinite(Infinite { color, image_map }),
                         )))
                     }
                     "distant" => {

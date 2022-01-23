@@ -1,6 +1,6 @@
 use std::{collections::HashMap, f32::consts::PI, path::Path};
 
-use glam::{vec3, Affine3A, Mat4};
+use glam::{vec3, vec3a, Affine3A, Mat4};
 use rene_shader::{
     area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, texture::EnumTexture,
     Uniform,
@@ -72,6 +72,11 @@ impl Scene {
         let mut fov = 0.5 * PI;
 
         scene.area_lights.push(EnumAreaLight::new_null());
+
+        // Default infinite light texture
+        scene
+            .textures
+            .push(EnumTexture::new_solid(vec3a(1.0, 1.0, 1.0)));
 
         for desc in scene_description {
             match IntermediateScene::from_scene(desc, base_dir)? {
@@ -208,8 +213,19 @@ impl Scene {
                 IntermediateWorld::WorldObject(obj) => {
                     match obj {
                         WorldObject::LightSource(lightsource) => match lightsource {
-                            LightSource::Infinite(Infinite { color }) => {
-                                self.uniform.background += color;
+                            LightSource::Infinite(Infinite { color, image_map }) => {
+                                self.uniform.background_color = color;
+
+                                if let Some(image) = image_map {
+                                    let image_index = self.images.len();
+                                    self.images.push(image);
+
+                                    let texture_index = self.textures.len();
+                                    self.textures
+                                        .push(EnumTexture::new_image_map(image_index as u32));
+
+                                    self.uniform.background_texture = texture_index as u32;
+                                }
                             }
                             LightSource::Distant(distant) => self.lights.push(
                                 EnumLight::new_distant(distant.from, distant.to, distant.color),

@@ -11,6 +11,7 @@ use camera::PerspectiveCamera;
 use core::f32::consts::PI;
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
+use math::sphere_uv;
 use reflection::{Bsdf, Bxdf};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -88,7 +89,8 @@ impl RayPayload {
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Uniform {
     pub camera_to_world: Mat4,
-    pub background: Vec3A,
+    pub background_color: Vec3A,
+    pub background_texture: u32,
     pub camera: PerspectiveCamera,
     pub lights_len: u32,
     pub emit_object_len: u32,
@@ -111,9 +113,17 @@ pub struct IndexData {
 #[spirv(miss)]
 pub fn main_miss(
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
+    #[spirv(world_ray_direction)] ray_direction: Vec3A,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] uniform: &Uniform,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
+    #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
 ) {
-    *out = RayPayload::new_miss(uniform.background);
+    let uv = sphere_uv(ray_direction.normalize());
+    let color = uniform.background_color
+        * unsafe { textures.index_unchecked(uniform.background_texture as usize) }
+            .color(textures, images, uv);
+
+    *out = RayPayload::new_miss(color);
 }
 
 #[spirv(ray_generation)]

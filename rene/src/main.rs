@@ -472,6 +472,7 @@ fn main() {
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(
                                 vk::ShaderStageFlags::RAYGEN_KHR
+                                    | vk::ShaderStageFlags::MISS_KHR
                                     | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
                             )
                             .binding(7)
@@ -480,7 +481,9 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(scene_buffers.images.len() as u32)
                             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::MISS_KHR,
+                            )
                             .binding(8)
                             .build(),
                         // index data
