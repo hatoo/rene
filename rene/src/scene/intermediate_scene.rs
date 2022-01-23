@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, path::Path};
 
 use blackbody::temperature_to_rgb;
-use glam::{vec2, vec3a, Affine3A, Mat4, Vec2, Vec3A};
+use glam::{vec2, vec3a, Mat4, Vec2, Vec3A};
 use pbrt_parser::Object;
 use ply::ply::{Ply, PropertyAccess};
 use ply_rs as ply;
@@ -33,7 +33,7 @@ pub enum IntermediateWorld {
     Attribute(Vec<IntermediateWorld>),
     TransformBeginEnd(Vec<IntermediateWorld>),
     WorldObject(WorldObject),
-    Matrix(Affine3A),
+    Matrix(Mat4),
     Texture(Texture),
     NamedMaterial(String),
 }
@@ -424,6 +424,7 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
 impl IntermediateWorld {
     fn from_world<P: AsRef<Path>>(world: pbrt_parser::World, base_dir: &P) -> Result<Self, Error> {
         match world {
+            pbrt_parser::World::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
@@ -623,12 +624,10 @@ impl IntermediateWorld {
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(IntermediateWorld::TransformBeginEnd),
             pbrt_parser::World::Translate(translation) => {
-                Ok(Self::Matrix(Affine3A::from_translation(translation.into())))
+                Ok(Self::Matrix(Mat4::from_translation(translation.into())))
             }
-            pbrt_parser::World::Scale(scale) => {
-                Ok(Self::Matrix(Affine3A::from_scale(scale.into())))
-            }
-            pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Affine3A::from_axis_angle(
+            pbrt_parser::World::Scale(scale) => Ok(Self::Matrix(Mat4::from_scale(scale.into()))),
+            pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
                 axis_angle.axis.normalize().into(),
                 deg_to_radian(axis_angle.angle),
             ))),
