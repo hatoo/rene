@@ -1007,13 +1007,13 @@ fn main() {
             unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
 
         let sbt_raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 0)
+            .device_address(sbt_address)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
         let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 1 * handle_size_aligned)
+            .device_address(sbt_address + handle_size_aligned)
             .size(2 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
@@ -1642,7 +1642,7 @@ fn oidn_denoise(
 
     filter.filter(
         bytemuck::cast_slice(linear_image),
-        &mut bytemuck::cast_slice_mut(&mut output),
+        bytemuck::cast_slice_mut(&mut output),
     )?;
 
     Ok(output)
@@ -1746,17 +1746,21 @@ fn pick_physical_device_and_queue_family_indices(
     Ok(unsafe { instance.enumerate_physical_devices() }?
         .into_iter()
         .find_map(|physical_device| {
-            if unsafe { instance.enumerate_device_extension_properties(physical_device) }.map(
-                |exts| {
-                    let set: HashSet<&CStr> = exts
-                        .iter()
-                        .map(|ext| unsafe { CStr::from_ptr(&ext.extension_name as *const c_char) })
-                        .collect();
+            let has_extensions =
+                unsafe { instance.enumerate_device_extension_properties(physical_device) }.map(
+                    |exts| {
+                        let set: HashSet<&CStr> = exts
+                            .iter()
+                            .map(|ext| unsafe {
+                                CStr::from_ptr(&ext.extension_name as *const c_char)
+                            })
+                            .collect();
 
-                    extensions.iter().all(|ext| set.contains(ext))
-                },
-            ) != Ok(true)
-            {
+                        extensions.iter().all(|ext| set.contains(ext))
+                    },
+                );
+
+            if has_extensions != Ok(true) {
                 return None;
             }
 
@@ -1793,18 +1797,18 @@ fn get_memory_type_index(
     properties: vk::MemoryPropertyFlags,
 ) -> u32 {
     for i in 0..device_memory_properties.memory_type_count {
-        if (type_bits & 1) == 1 {
-            if (device_memory_properties.memory_types[i as usize].property_flags & properties)
+        if (type_bits & 1) == 1
+            && (device_memory_properties.memory_types[i as usize].property_flags & properties)
                 == properties
-            {
-                return i;
-            }
+        {
+            return i;
         }
         type_bits >>= 1;
     }
     0
 }
 
+#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn default_vulkan_debug_utils_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -1896,7 +1900,7 @@ impl BufferResource {
             assert!(self.size >= size);
             let mapped_ptr = self.map(size, device);
             let mut mapped_slice = Align::new(mapped_ptr, std::mem::align_of::<T>() as u64, size);
-            mapped_slice.copy_from_slice(&data);
+            mapped_slice.copy_from_slice(data);
             self.unmap(device);
         }
     }
@@ -2217,7 +2221,7 @@ impl SceneBuffers {
             device_memory_properties,
         );
 
-        aabb_buffer.store(&[aabb], &device);
+        aabb_buffer.store(&[aabb], device);
 
         let geometry = vk::AccelerationStructureGeometryKHR::builder()
             .geometry_type(vk::GeometryTypeKHR::AABBS)
@@ -2225,7 +2229,7 @@ impl SceneBuffers {
                 aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
                     .data(vk::DeviceOrHostAddressConstKHR {
                         device_address: unsafe {
-                            get_buffer_device_address(&device, aabb_buffer.buffer)
+                            get_buffer_device_address(device, aabb_buffer.buffer)
                         },
                     })
                     .stride(std::mem::size_of::<vk::AabbPositionsKHR>() as u64)
@@ -2264,7 +2268,7 @@ impl SceneBuffers {
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
+            device,
             device_memory_properties,
         );
 
@@ -2285,12 +2289,12 @@ impl SceneBuffers {
             size_info.build_scratch_size,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
+            device,
             device_memory_properties,
         );
 
         build_info.scratch_data = vk::DeviceOrHostAddressKHR {
-            device_address: unsafe { get_buffer_device_address(&device, scratch_buffer.buffer) },
+            device_address: unsafe { get_buffer_device_address(device, scratch_buffer.buffer) },
         };
 
         let build_command_buffer = {
@@ -2336,11 +2340,12 @@ impl SceneBuffers {
 
             device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
-            scratch_buffer.destroy(&device);
+            scratch_buffer.destroy(device);
         }
         (bottom_as, bottom_as_buffer, aabb_buffer)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn triangle_blas(
         index_offset: u32,
         primitive_count: u32,
@@ -2362,7 +2367,7 @@ impl SceneBuffers {
                 triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
                     .vertex_data(vk::DeviceOrHostAddressConstKHR {
                         device_address: unsafe {
-                            get_buffer_device_address(&device, vertices.buffer)
+                            get_buffer_device_address(device, vertices.buffer)
                         },
                     })
                     .max_vertex(vertex_len as u32 - 1)
@@ -2370,7 +2375,7 @@ impl SceneBuffers {
                     .vertex_format(vk::Format::R32G32B32_SFLOAT)
                     .index_data(vk::DeviceOrHostAddressConstKHR {
                         device_address: unsafe {
-                            get_buffer_device_address(&device, indices.buffer)
+                            get_buffer_device_address(device, indices.buffer)
                         } + (index_stride * index_offset as usize) as u64,
                     })
                     .index_type(vk::IndexType::UINT32)
@@ -2408,7 +2413,7 @@ impl SceneBuffers {
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
+            device,
             device_memory_properties,
         );
 
@@ -2429,12 +2434,12 @@ impl SceneBuffers {
             size_info.build_scratch_size,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
+            device,
             device_memory_properties,
         );
 
         build_info.scratch_data = vk::DeviceOrHostAddressKHR {
-            device_address: unsafe { get_buffer_device_address(&device, scratch_buffer.buffer) },
+            device_address: unsafe { get_buffer_device_address(device, scratch_buffer.buffer) },
         };
 
         let build_command_buffer = {
@@ -2480,7 +2485,7 @@ impl SceneBuffers {
 
             device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
-            scratch_buffer.destroy(&device);
+            scratch_buffer.destroy(device);
         }
         (bottom_as, bottom_as_buffer)
     }
@@ -2506,11 +2511,11 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
 
-            instance_buffer.store(&instances, &device);
+            instance_buffer.store(instances, device);
 
             (instances.len(), instance_buffer)
         };
@@ -2562,7 +2567,7 @@ impl SceneBuffers {
             .array_of_pointers(false)
             .data(vk::DeviceOrHostAddressConstKHR {
                 device_address: unsafe {
-                    get_buffer_device_address(&device, instance_buffer.buffer)
+                    get_buffer_device_address(device, instance_buffer.buffer)
                 },
             })
             .build();
@@ -2595,7 +2600,7 @@ impl SceneBuffers {
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
+            device,
             device_memory_properties,
         );
 
@@ -2616,12 +2621,12 @@ impl SceneBuffers {
             size_info.build_scratch_size,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
+            device,
             device_memory_properties,
         );
 
         build_info.scratch_data = vk::DeviceOrHostAddressKHR {
-            device_address: unsafe { get_buffer_device_address(&device, scratch_buffer.buffer) },
+            device_address: unsafe { get_buffer_device_address(device, scratch_buffer.buffer) },
         };
 
         unsafe {
@@ -2645,7 +2650,7 @@ impl SceneBuffers {
 
             device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
-            scratch_buffer.destroy(&device);
+            scratch_buffer.destroy(device);
         }
 
         (top_as, top_as_buffer, instance_buffer)
@@ -2729,10 +2734,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            index_buffer.store(&global_indices, &device);
+            index_buffer.store(&global_indices, device);
 
             index_buffer
         };
@@ -2749,10 +2754,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            vertex_buffer.store(&global_vertices, &device);
+            vertex_buffer.store(&global_vertices, device);
 
             vertex_buffer
         };
@@ -2790,10 +2795,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            material_buffer.store(&scene.materials, &device);
+            material_buffer.store(&scene.materials, device);
 
             material_buffer
         };
@@ -2904,10 +2909,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            index_data_buffer.store(&index_data, &device);
+            index_data_buffer.store(&index_data, device);
 
             index_data_buffer
         };
@@ -2922,10 +2927,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            textures_buffer.store(&scene.textures, &device);
+            textures_buffer.store(&scene.textures, device);
 
             textures_buffer
         };
@@ -2948,10 +2953,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            lights_buffer.store(&lights, &device);
+            lights_buffer.store(&lights, device);
 
             lights_buffer
         };
@@ -2966,10 +2971,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            area_lights_buffer.store(&scene.area_lights, &device);
+            area_lights_buffer.store(&scene.area_lights, device);
 
             area_lights_buffer
         };
@@ -3012,10 +3017,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            uniform_buffer.store(&[uniform], &device);
+            uniform_buffer.store(&[uniform], device);
 
             uniform_buffer
         };
@@ -3034,10 +3039,10 @@ impl SceneBuffers {
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &device,
+                device,
                 device_memory_properties,
             );
-            emit_objects_buffer.store(&emit_objects, &device);
+            emit_objects_buffer.store(&emit_objects, device);
 
             emit_objects_buffer
         };

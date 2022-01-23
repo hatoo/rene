@@ -18,7 +18,7 @@ pub struct FresnelSpecular<'a> {
 }
 
 impl<'a> LambertianReflection<'a> {
-    pub fn new(albedo: Vec3A) -> EnumBxdfData {
+    pub fn new_data(albedo: Vec3A) -> EnumBxdfData {
         EnumBxdfData {
             v0: albedo.extend(0.0),
         }
@@ -77,7 +77,7 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
 }
 
 impl<'a> FresnelSpecular<'a> {
-    pub fn new(ir: f32) -> EnumBxdfData {
+    pub fn new_data(ir: f32) -> EnumBxdfData {
         EnumBxdfData {
             v0: vec4(ir, 0.0, 0.0, 0.0),
         }

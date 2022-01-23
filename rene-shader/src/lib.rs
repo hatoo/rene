@@ -28,7 +28,6 @@ use spirv_std::{
     RuntimeArray,
 };
 
-pub mod aabb;
 pub mod area_light;
 pub mod camera;
 pub mod light;
@@ -133,6 +132,7 @@ pub fn main_miss(
 }
 
 #[spirv(ray_generation)]
+#[allow(clippy::too_many_arguments)]
 pub fn main_ray_generation(
     #[spirv(launch_id)] launch_id: UVec3,
     #[spirv(launch_size)] launch_size: UVec3,
@@ -164,7 +164,7 @@ pub fn main_ray_generation(
     let tmin = 0.001;
     let tmax = 100000.0;
 
-    let mut bsdf = Bsdf::new();
+    let mut bsdf = Bsdf::default();
 
     let mut color = vec3a(1.0, 1.0, 1.0);
     let mut color_sum = vec3a(0.0, 0.0, 0.0);
@@ -389,6 +389,7 @@ pub struct Affine3 {
 }
 
 #[spirv(closest_hit)]
+#[allow(clippy::too_many_arguments)]
 pub fn sphere_closest_hit(
     #[spirv(ray_tmax)] t: f32,
     #[spirv(world_to_object)] world_to_object: Affine3,
@@ -441,6 +442,7 @@ pub struct Vertex {
 }
 
 #[spirv(closest_hit)]
+#[allow(clippy::too_many_arguments)]
 pub fn triangle_closest_hit(
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
@@ -460,7 +462,7 @@ pub fn triangle_closest_hit(
 
     let v0 = *unsafe {
         vertices.index_unchecked(
-            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 0) as usize,
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize) as usize,
         )
     };
     let v1 = *unsafe {
@@ -515,6 +517,7 @@ pub fn main_miss_pdf(#[spirv(incoming_ray_payload)] out: &mut RayPayloadPDF) {
 }
 
 #[spirv(closest_hit)]
+#[allow(clippy::too_many_arguments)]
 pub fn triangle_closest_hit_pdf(
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
@@ -534,7 +537,7 @@ pub fn triangle_closest_hit_pdf(
 
     let v0 = *unsafe {
         vertices.index_unchecked(
-            *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 0) as usize,
+            *indices.index_unchecked(index_offset + 3 * primitive_id as usize) as usize,
         )
     };
     let v1 = *unsafe {

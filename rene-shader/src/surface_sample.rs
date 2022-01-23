@@ -54,7 +54,7 @@ impl SurfaceSample {
 
                 let v0 = unsafe {
                     vertices.index_unchecked(
-                        *indices.index_unchecked((self.index_offset + 3 * p + 0) as usize) as usize,
+                        *indices.index_unchecked((self.index_offset + 3 * p) as usize) as usize,
                     )
                 };
                 let v1 = unsafe {

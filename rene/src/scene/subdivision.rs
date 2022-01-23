@@ -66,7 +66,7 @@ pub fn loop_subdivision(mut mesh: TriangleMesh, level: usize) -> TriangleMesh {
 
     mesh.indices = last_level
         .face_vertices_iter()
-        .flat_map(|f| f.into_iter().copied())
+        .flat_map(|f| f.iter().copied())
         .collect();
 
     // TODO always generate normal?

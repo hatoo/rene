@@ -166,14 +166,14 @@ impl Scene {
                     state.current_matrix = matrix;
                 }
                 IntermediateWorld::Matrix(m) => {
-                    state.current_matrix = state.current_matrix * m;
+                    state.current_matrix *= m;
                 }
                 IntermediateWorld::NamedMaterial(name) => {
                     state.current_material_index = Some(
                         *state
                             .materials
                             .get(&name)
-                            .ok_or_else(|| CreateSceneError::UnknownMaterial(name))?
+                            .ok_or(CreateSceneError::UnknownMaterial(name))?
                             as usize,
                     );
                 }
@@ -246,12 +246,12 @@ impl Scene {
                             self.area_lights.push(EnumAreaLight::new_diffuse(l));
                         }
                         WorldObject::Material(material) => {
-                            let material = self.material(&state, material)?;
+                            let material = self.material(state, material)?;
                             state.current_material_index = Some(self.materials.len());
                             self.materials.push(material);
                         }
                         WorldObject::MakeNamedMaterial(name, material) => {
-                            let material = self.material(&state, material)?;
+                            let material = self.material(state, material)?;
                             state.materials.insert(name, self.materials.len() as u32);
                             state.current_material_index = Some(self.materials.len());
                             self.materials.push(material);

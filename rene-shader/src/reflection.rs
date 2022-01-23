@@ -93,14 +93,14 @@ impl EnumBxdf {
     pub fn new_lambertian_reflection(albedo: Vec3A) -> Self {
         Self {
             t: BxdfType::LambertianReflection,
-            data: LambertianReflection::new(albedo),
+            data: LambertianReflection::new_data(albedo),
         }
     }
 
     pub fn new_fresnel_specular(ir: f32) -> Self {
         Self {
             t: BxdfType::FresnelSpecular,
-            data: FresnelSpecular::new(ir),
+            data: FresnelSpecular::new_data(ir),
         }
     }
 }
@@ -112,14 +112,16 @@ pub struct Bsdf {
     bxdfs: [EnumBxdf; BXDF_LEN],
 }
 
-impl Bsdf {
-    pub fn new() -> Self {
+impl Default for Bsdf {
+    fn default() -> Self {
         Self {
             len: 0,
             bxdfs: [EnumBxdf::new_lambertian_reflection(vec3a(0.0, 0.0, 0.0)); BXDF_LEN],
         }
     }
+}
 
+impl Bsdf {
     pub fn clear(&mut self) {
         self.len = 0;
     }

@@ -83,7 +83,7 @@ impl PerspectiveCamera {
         let target = camera_to_world.transform_point3a(target);
 
         Ray {
-            origin: origin.into(),
+            origin,
             direction: (target - origin).normalize(),
         }
     }

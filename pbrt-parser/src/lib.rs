@@ -431,15 +431,15 @@ fn parse_texture<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
 
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
-        map(parse_texture, |w| World::Texture(w)),
-        map(parse_named_material, |w| World::NamedMaterial(w)),
-        map(parse_world_object, |w| World::WorldObject(w)),
-        map(parse_attribute_statement, |w| World::Attribute(w)),
-        map(parse_transform_statement, |w| World::TransformBeginEnd(w)),
-        map(parse_transform, |m| World::Transform(m)),
-        map(parse_transrate, |v| World::Translate(v)),
-        map(parse_scale, |v| World::Scale(v)),
-        map(parse_rotate, |v| World::Rotate(v)),
+        map(parse_texture, World::Texture),
+        map(parse_named_material, World::NamedMaterial),
+        map(parse_world_object, World::WorldObject),
+        map(parse_attribute_statement, World::Attribute),
+        map(parse_transform_statement, World::TransformBeginEnd),
+        map(parse_transform, World::Transform),
+        map(parse_transrate, World::Translate),
+        map(parse_scale, World::Scale),
+        map(parse_rotate, World::Rotate),
     ))(input)
 }
 
@@ -455,11 +455,11 @@ fn parse_world_statement<'a, E: ParseError<&'a str>>(
 
 fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Scene, E> {
     alt((
-        map(parse_look_at, |l| Scene::LookAt(l)),
-        map(parse_rotate, |aa| Scene::Rotate(aa)),
-        map(parse_transform, |m| Scene::Transform(m)),
-        map(parse_scene_object, |o| Scene::SceneObject(o)),
-        map(parse_world_statement, |w| Scene::World(w)),
+        map(parse_look_at, Scene::LookAt),
+        map(parse_rotate, Scene::Rotate),
+        map(parse_transform, Scene::Transform),
+        map(parse_scene_object, Scene::SceneObject),
+        map(parse_world_statement, Scene::World),
     ))(input)
 }
 

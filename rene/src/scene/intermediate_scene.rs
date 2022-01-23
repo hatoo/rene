@@ -170,11 +170,11 @@ pub enum Error {
     #[error("Argument not found {0}")]
     ArgumentNotFound(String),
     #[error("IO Error {0}")]
-    IOError(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error("Image Error {0}")]
-    ImageError(#[from] image::error::ImageError),
+    Image(#[from] image::error::ImageError),
     #[error("Ply error")]
-    PlyError,
+    Ply,
 }
 
 trait GetValue {
@@ -354,7 +354,7 @@ impl<'a, T> GetValue for Object<'a, T> {
             "matte" => {
                 let albedo = self
                     .get_texture_or_color("Kd")
-                    .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
                 Ok(Material::Matte(Matte { albedo }))
             }
@@ -385,9 +385,9 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
     let vertices: Vec<Vertex> = vertex
         .iter()
         .map(|e| {
-            let x = e.get_float(&x_string).ok_or(Error::PlyError)?;
-            let y = e.get_float(&y_string).ok_or(Error::PlyError)?;
-            let z = e.get_float(&z_string).ok_or(Error::PlyError)?;
+            let x = e.get_float(&x_string).ok_or(Error::Ply)?;
+            let y = e.get_float(&y_string).ok_or(Error::Ply)?;
+            let z = e.get_float(&z_string).ok_or(Error::Ply)?;
 
             let normal = if let (Some(nx), Some(ny), Some(nz)) = (
                 e.get_float(&nx_string),
@@ -410,9 +410,7 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
     let mut indices = Vec::new();
 
     for e in faces {
-        let face = e
-            .get_list_int(&vertex_indices_string)
-            .ok_or(Error::PlyError)?;
+        let face = e.get_list_int(&vertex_indices_string).ok_or(Error::Ply)?;
 
         assert_eq!(face.len(), 3);
         assert!(face.iter().all(|&i| (i as usize) < vertices.len()));
@@ -431,11 +429,11 @@ impl IntermediateWorld {
                     let tex1 = texture
                         .obj
                         .get_texture_or_color("tex1")
-                        .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.0, 0.0, 0.0))))?;
+                        .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.0, 0.0, 0.0))))?;
                     let tex2 = texture
                         .obj
                         .get_texture_or_color("tex2")
-                        .unwrap_or(Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
+                        .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
 
                     let uscale = texture.obj.get_float("uscale").unwrap_or(Ok(2.0))?;
                     let vscale = texture.obj.get_float("vscale").unwrap_or(Ok(2.0))?;
@@ -465,7 +463,9 @@ impl IntermediateWorld {
             pbrt_parser::World::WorldObject(obj) => match obj.object_type {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
                     "infinite" => {
-                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        let color = obj
+                            .get_rgb("L")
+                            .unwrap_or_else(|_| Ok(vec3a(1.0, 1.0, 1.0)))?;
 
                         let image_map = if let Ok(filename) = obj.get_str("mapname")? {
                             let mut pathbuf = base_dir.as_ref().to_path_buf();
@@ -480,9 +480,15 @@ impl IntermediateWorld {
                         )))
                     }
                     "distant" => {
-                        let from = obj.get_point("from").unwrap_or(Ok(vec3a(0.0, 0.0, 0.0)))?;
-                        let to = obj.get_point("to").unwrap_or(Ok(vec3a(0.0, 0.0, 1.0)))?;
-                        let color = obj.get_rgb("L").unwrap_or(Ok(vec3a(1.0, 1.0, 1.0)))?;
+                        let from = obj
+                            .get_point("from")
+                            .unwrap_or_else(|_| Ok(vec3a(0.0, 0.0, 0.0)))?;
+                        let to = obj
+                            .get_point("to")
+                            .unwrap_or_else(|_| Ok(vec3a(0.0, 0.0, 1.0)))?;
+                        let color = obj
+                            .get_rgb("L")
+                            .unwrap_or_else(|_| Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Distant(Distant { from, to, color }),
                         )))
@@ -505,7 +511,7 @@ impl IntermediateWorld {
                     let t = obj.get_str("type")??;
                     let name = obj.t.to_string();
                     let mut obj = obj.clone();
-                    obj.t = &t;
+                    obj.t = t;
 
                     Ok(Self::WorldObject(WorldObject::MakeNamedMaterial(
                         name,
@@ -521,7 +527,7 @@ impl IntermediateWorld {
                     }
                     "trianglemesh" | "loopsubdiv" => {
                         let indices = obj.get_integers("indices")??;
-                        let indices: Vec<u32> = indices.into_iter().map(|&i| i as u32).collect();
+                        let indices: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
                         let vertices = obj.get_points("P")??;
 
                         let normal = obj
