@@ -517,8 +517,9 @@ impl IntermediateWorld {
                             .map(|r| r.map(Some))
                             .unwrap_or(Ok(None))?;
 
-                        let st = obj
+                        let uv = obj
                             .get_floats("st")
+                            .or_else(|_| obj.get_floats("uv"))
                             .map(|r| r.map(Some))
                             .unwrap_or(Ok(None))?;
 
@@ -546,8 +547,8 @@ impl IntermediateWorld {
                                     .map(|(i, (position, normal))| Vertex {
                                         position: *position,
                                         normal: *normal,
-                                        uv: st
-                                            .map(|st| vec2(st[2 * i], st[2 * i + 1]))
+                                        uv: uv
+                                            .map(|uv| vec2(uv[2 * i], uv[2 * i + 1]))
                                             .unwrap_or(Vec2::ZERO),
                                     })
                                     .collect(),
@@ -561,7 +562,7 @@ impl IntermediateWorld {
                                     .map(|(i, position)| Vertex {
                                         position: *position,
                                         normal: Vec3A::ZERO,
-                                        uv: st
+                                        uv: uv
                                             .map(|st| vec2(st[2 * i], st[2 * i + 1]))
                                             .unwrap_or(Vec2::ZERO),
                                     })
