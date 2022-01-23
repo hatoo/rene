@@ -467,7 +467,8 @@ impl IntermediateWorld {
                             .get_rgb("L")
                             .unwrap_or_else(|_| Ok(vec3a(1.0, 1.0, 1.0)))?;
 
-                        let image_map = if let Ok(filename) = obj.get_str("mapname")? {
+                        let image_map = if let Ok(filename) = obj.get_str("mapname") {
+                            let filename = filename?;
                             let mut pathbuf = base_dir.as_ref().to_path_buf();
                             pathbuf.push(filename);
                             Some(image::io::Reader::open(pathbuf)?.decode()?)
