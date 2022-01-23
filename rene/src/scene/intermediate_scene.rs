@@ -374,6 +374,10 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
     let y_string = "y".to_string();
     let z_string = "z".to_string();
 
+    let nx_string = "nx".to_string();
+    let ny_string = "ny".to_string();
+    let nz_string = "nz".to_string();
+
     let vertex_indices_string = "vertex_indices".to_string();
 
     let vertices: Vec<Vertex> = vertex
@@ -383,9 +387,19 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
             let y = e.get_float(&y_string).ok_or(Error::PlyError)?;
             let z = e.get_float(&z_string).ok_or(Error::PlyError)?;
 
+            let normal = if let (Some(nx), Some(ny), Some(nz)) = (
+                e.get_float(&nx_string),
+                e.get_float(&ny_string),
+                e.get_float(&nz_string),
+            ) {
+                vec3a(nx, ny, nz)
+            } else {
+                Vec3A::ZERO
+            };
+
             Ok(Vertex {
                 position: vec3a(x, y, z),
-                normal: Vec3A::ZERO,
+                normal,
                 uv: Vec2::ZERO,
             })
         })
