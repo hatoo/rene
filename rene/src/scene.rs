@@ -273,7 +273,7 @@ impl Scene {
                                     self.textures
                                         .push(EnumTexture::new_image_map(image_index as u32));
 
-                                    self.uniform.background_matrix = state.current_matrix;
+                                    self.uniform.background_matrix = state.current_matrix.inverse();
                                     self.uniform.background_texture = texture_index as u32;
                                 }
                             }
