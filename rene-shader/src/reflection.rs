@@ -16,11 +16,12 @@ pub struct SampledF {
 }
 
 mod bxdf;
+pub mod microfacet;
 pub mod onb;
 
 use bxdf::{FresnelSpecular, LambertianReflection};
 
-use self::onb::Onb;
+use self::{bxdf::FresnelBlend, microfacet::EnumMicrofacetDistribution, onb::Onb};
 
 pub struct BxdfKind(u32);
 
@@ -56,6 +57,8 @@ pub trait Bxdf {
 #[repr(C)]
 pub struct EnumBxdfData {
     v0: Vec4,
+    v1: Vec4,
+    microfacet_distribution: EnumMicrofacetDistribution,
 }
 
 #[repr(u32)]
@@ -64,6 +67,7 @@ pub struct EnumBxdfData {
 enum BxdfType {
     LambertianReflection,
     FresnelSpecular,
+    FresnelBlend,
 }
 
 #[derive(Clone, Copy)]
@@ -78,6 +82,7 @@ impl Bxdf for EnumBxdf {
         match self.t {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.kind(),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.kind(),
+            BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.kind(),
         }
     }
 
@@ -85,6 +90,7 @@ impl Bxdf for EnumBxdf {
         match self.t {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.f(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.f(wo, wi),
+            BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.f(wo, wi),
         }
     }
 
@@ -94,6 +100,7 @@ impl Bxdf for EnumBxdf {
                 LambertianReflection { data: &self.data }.sample_f(wo, rng)
             }
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.sample_f(wo, rng),
+            BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.sample_f(wo, rng),
         }
     }
 
@@ -101,6 +108,7 @@ impl Bxdf for EnumBxdf {
         match self.t {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.pdf(wo, wi),
+            BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.pdf(wo, wi),
         }
     }
 }
@@ -117,6 +125,17 @@ impl EnumBxdf {
         Self {
             t: BxdfType::FresnelSpecular,
             data: FresnelSpecular::new_data(ir),
+        }
+    }
+
+    pub fn new_fresnel_blend(
+        rd: Vec3A,
+        rs: Vec3A,
+        distribution: EnumMicrofacetDistribution,
+    ) -> Self {
+        Self {
+            t: BxdfType::FresnelBlend,
+            data: FresnelBlend::new_data(rd, rs, distribution),
         }
     }
 }

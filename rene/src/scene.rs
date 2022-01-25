@@ -11,8 +11,8 @@ use crate::ShaderOffset;
 
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld,
-    LightSource, Material, Matte, SceneObject, Shape, Sphere, TextureOrColor, TriangleMesh,
-    WorldObject,
+    LightSource, Material, Matte, SceneObject, Shape, Sphere, Substrate, TextureOrColor,
+    TriangleMesh, WorldObject,
 };
 
 pub mod image;
@@ -150,6 +150,42 @@ impl Scene {
                 Ok(EnumMaterial::new_matte(texture_index))
             }
             Material::Glass => Ok(EnumMaterial::new_glass(1.5)),
+            Material::Substrate(Substrate {
+                diffuse,
+                specular,
+                rough_u,
+                rough_v,
+            }) => {
+                let diffuse_index = match diffuse {
+                    TextureOrColor::Color(color) => {
+                        let texture_index = self.textures.len();
+                        self.textures.push(EnumTexture::new_solid(color));
+                        texture_index as u32
+                    }
+                    TextureOrColor::Texture(name) => *state
+                        .textures
+                        .get(&name)
+                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                };
+                let specular_index = match specular {
+                    TextureOrColor::Color(color) => {
+                        let texture_index = self.textures.len();
+                        self.textures.push(EnumTexture::new_solid(color));
+                        texture_index as u32
+                    }
+                    TextureOrColor::Texture(name) => *state
+                        .textures
+                        .get(&name)
+                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
+                };
+
+                Ok(EnumMaterial::new_substrate(
+                    diffuse_index,
+                    specular_index,
+                    rough_u,
+                    rough_v,
+                ))
+            }
         }
     }
 

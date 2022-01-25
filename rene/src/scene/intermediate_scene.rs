@@ -93,10 +93,18 @@ pub struct Texture {
 pub enum Material {
     Matte(Matte),
     Glass,
+    Substrate(Substrate),
 }
 
 pub struct Matte {
     pub albedo: TextureOrColor,
+}
+
+pub struct Substrate {
+    pub diffuse: TextureOrColor,
+    pub specular: TextureOrColor,
+    pub rough_u: f32,
+    pub rough_v: f32,
 }
 
 pub enum Shape {
@@ -364,6 +372,24 @@ impl<'a, T> GetValue for Object<'a, T> {
                 Ok(Material::Matte(Matte { albedo }))
             }
             "glass" => Ok(Material::Glass),
+            "substrate" => {
+                let diffuse = self
+                    .get_texture_or_color("Kd")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+                let specular = self
+                    .get_texture_or_color("Ks")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+
+                let rough_u = self.get_float("uroughness")??;
+                let rough_v = self.get_float("vroughness")??;
+
+                Ok(Material::Substrate(Substrate {
+                    diffuse,
+                    specular,
+                    rough_u,
+                    rough_v,
+                }))
+            }
             t => Err(Error::InvalidMaterial(t.to_string())),
         }
     }

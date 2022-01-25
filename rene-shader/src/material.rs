@@ -6,7 +6,7 @@ use spirv_std::{
 };
 
 use crate::{
-    reflection::{Bsdf, EnumBxdf},
+    reflection::{microfacet::EnumMicrofacetDistribution, Bsdf, EnumBxdf},
     texture::EnumTexture,
     InputImage,
 };
@@ -48,6 +48,7 @@ pub struct EnumMaterialData {
 enum MaterialType {
     Matte,
     Glass,
+    Substrate,
 }
 
 #[derive(Clone, Copy)]
@@ -59,6 +60,11 @@ pub struct EnumMaterial {
 
 #[repr(transparent)]
 struct Matte<'a> {
+    data: &'a EnumMaterialData,
+}
+
+#[repr(transparent)]
+struct Substrate<'a> {
     data: &'a EnumMaterialData,
 }
 
@@ -94,6 +100,54 @@ impl<'a> Material for Matte<'a> {
         bsdf.add(EnumBxdf::new_lambertian_reflection(
             self.albedo(uv, textures, images),
         ));
+    }
+}
+
+impl<'a> Substrate<'a> {
+    fn d(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
+        textures[self.data.u0.x as usize].color(textures, images, uv)
+    }
+
+    fn s(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
+        textures[self.data.u0.y as usize].color(textures, images, uv)
+    }
+
+    fn rough_u(&self) -> f32 {
+        self.data.v0.x
+    }
+
+    fn rough_v(&self) -> f32 {
+        self.data.v0.y
+    }
+}
+
+impl<'a> Material for Substrate<'a> {
+    fn compute_bsdf(
+        &self,
+        bsdf: &mut Bsdf,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) {
+        let d = self.d(uv, textures, images);
+        let s = self.s(uv, textures, images);
+        let rough_u = self.rough_u();
+        let rough_v = self.rough_v();
+
+        bsdf.add(EnumBxdf::new_fresnel_blend(
+            d,
+            s,
+            EnumMicrofacetDistribution::new_trowbridge_reitz(rough_u, rough_v),
+        ))
+    }
+
+    fn albedo(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> Vec3A {
+        self.d(uv, textures, images)
     }
 }
 
@@ -185,6 +239,21 @@ impl EnumMaterial {
         }
     }
 
+    pub fn new_substrate(
+        diffuse_index: u32,
+        specular_index: u32,
+        rough_u: f32,
+        rough_v: f32,
+    ) -> Self {
+        Self {
+            t: MaterialType::Substrate,
+            data: EnumMaterialData {
+                u0: uvec4(diffuse_index, specular_index, 0, 0),
+                v0: vec4(rough_u, rough_v, 0.0, 0.0),
+            },
+        }
+    }
+
     /*
     pub fn new_metal(albedo: Vec3A, fuzz: f32) -> Self {
         Self {
@@ -218,6 +287,7 @@ impl Material for EnumMaterial {
         match self.t {
             MaterialType::Matte => Matte { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Glass => Glass { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Substrate => Substrate { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
@@ -234,6 +304,9 @@ impl Material for EnumMaterial {
             }
             MaterialType::Glass => {
                 Glass { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Substrate => {
+                Substrate { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }
         }
     }
