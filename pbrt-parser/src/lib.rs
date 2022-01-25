@@ -54,6 +54,7 @@ pub struct LookAt {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value<'a> {
     Float(Vec<f32>),
+    Bool(Vec<bool>),
     Integer(Vec<i32>),
     Rgb(Vec<f32>),
     BlackBody(Vec<f32>),
@@ -162,6 +163,7 @@ pub(crate) fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a s
 #[derive(Clone, Copy, Debug)]
 enum ArgumentType {
     Float,
+    Bool,
     Rgb,
     BlackBody,
     Integer,
@@ -176,6 +178,7 @@ fn parse_argument_type<'a, E: ParseError<&'a str>>(
 ) -> IResult<&'a str, ArgumentType, E> {
     alt((
         value(ArgumentType::Float, tag("float")),
+        value(ArgumentType::Bool, tag("bool")),
         value(ArgumentType::Integer, tag("integer")),
         value(ArgumentType::String, tag("string")),
         value(ArgumentType::Point, tag("point")),
@@ -219,6 +222,17 @@ fn integers<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<
     alt((map(integer, |f| vec![f]), |i| bracket(integer, i)))(input)
 }
 
+fn bool<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, bool, E> {
+    alt((
+        map(tag("\"true\""), |_| true),
+        map(tag("\"false\""), |_| false),
+    ))(input)
+}
+
+fn bools<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec<bool>, E> {
+    alt((map(bool, |b| vec![b]), |i| bracket(bool, i)))(input)
+}
+
 impl ArgumentType {
     fn parse_value<'a, E: ParseError<&'a str>>(self, input: &'a str) -> IResult<&'a str, Value, E> {
         match self {
@@ -258,6 +272,7 @@ impl ArgumentType {
             ArgumentType::String => map(strs, Value::String)(input),
             ArgumentType::Texture => map(strs, Value::Texture)(input),
             ArgumentType::Integer => integers(input).map(|(rest, f)| (rest, Value::Integer(f))),
+            ArgumentType::Bool => bools(input).map(|(rest, f)| (rest, Value::Bool(f))),
             ArgumentType::Rgb => bracket(&float, input).map(|(rest, v)| (rest, Value::Rgb(v))),
             ArgumentType::BlackBody => {
                 bracket(&float, input).map(|(rest, v)| (rest, Value::BlackBody(v)))
