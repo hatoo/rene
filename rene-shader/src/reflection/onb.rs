@@ -84,4 +84,8 @@ impl Onb {
         let sin_phi = Self::local_sin_phi(w);
         sin_phi * sin_phi
     }
+
+    pub fn local_same_hemisphere(v1: Vec3A, v2: Vec3A) -> bool {
+        v1.z * v2.z > 0.0
+    }
 }
