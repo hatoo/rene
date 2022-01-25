@@ -12,7 +12,7 @@ use core::f32::consts::PI;
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
 use math::sphere_uv;
-use reflection::{Bsdf, Bxdf};
+use reflection::{onb::Onb, Bsdf};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 use surface_sample::SurfaceSample;
@@ -202,13 +202,11 @@ pub fn main_ray_generation(
             let uv = payload.uv;
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
-            let front_face = wo.dot(normal) > 0.0;
-            let front_normal = if front_face { normal } else { -normal };
 
-            bsdf.clear();
+            bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
 
-            color_sum += color * area_light.emit(wo, front_normal, front_face);
+            color_sum += color * area_light.emit(wo, normal);
 
             if i == 0 {
                 aov_normal = normal;
@@ -227,7 +225,7 @@ pub fn main_ray_generation(
 
                     (wi, bsdf.pdf(wi, normal))
                 } else {
-                    let sampled_f = bsdf.sample_f(wo, front_normal, front_face, &mut rng);
+                    let sampled_f = bsdf.sample_f(wo, &mut rng);
 
                     (sampled_f.wi, sampled_f.pdf)
                 };
@@ -264,7 +262,7 @@ pub fn main_ray_generation(
 
                 color /= pdf;
             } else {
-                let sampled_f = bsdf.sample_f(wo, front_normal, front_face, &mut rng);
+                let sampled_f = bsdf.sample_f(wo, &mut rng);
 
                 if sampled_f.pdf < 1e-5 {
                     break;
