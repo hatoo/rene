@@ -34,7 +34,7 @@ pub mod light;
 pub mod material;
 pub mod math;
 pub mod rand;
-mod reflection;
+pub mod reflection;
 pub mod surface_sample;
 pub mod texture;
 

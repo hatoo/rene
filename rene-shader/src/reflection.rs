@@ -14,7 +14,7 @@ pub struct SampledF {
 }
 
 mod bxdf;
-mod onb;
+pub mod onb;
 
 use bxdf::{FresnelSpecular, LambertianReflection};
 
