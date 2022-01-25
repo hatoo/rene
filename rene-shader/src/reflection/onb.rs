@@ -19,7 +19,11 @@ impl Onb {
         Self { u, v, w }
     }
 
-    pub fn local(&self, v: Vec3A) -> Vec3A {
+    pub fn local_to_world(&self, v: Vec3A) -> Vec3A {
         v.x * self.u + v.y * self.v + v.z * self.w
+    }
+
+    pub fn world_to_local(&self, v: Vec3A) -> Vec3A {
+        vec3a(v.dot(self.u), v.dot(self.v), v.dot(self.w))
     }
 }

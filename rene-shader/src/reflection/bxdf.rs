@@ -42,7 +42,7 @@ impl<'a> Bxdf for LambertianReflection<'a> {
         rng: &mut DefaultRng,
     ) -> SampledF {
         let onb = Onb::from_w(normal);
-        let scatter_direction = onb.local(random_cosine_direction(rng)).normalize();
+        let scatter_direction = onb.local_to_world(random_cosine_direction(rng)).normalize();
 
         let wi = scatter_direction.normalize();
         let pdf = (normal.dot(wi) / PI).max(0.0);
