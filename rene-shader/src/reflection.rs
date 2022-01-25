@@ -41,15 +41,6 @@ impl BitOr for BxdfKind {
     }
 }
 
-/*
-bitflags! {
-    pub struct BxdfKind: u32 {
-        const REFLECTION = 1 << 0;
-        const TRANSMISSION = 1 << 1;
-    }
-}
-*/
-
 pub trait Bxdf {
     fn kind(&self) -> BxdfKind;
 
