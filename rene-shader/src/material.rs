@@ -6,7 +6,10 @@ use spirv_std::{
 };
 
 use crate::{
-    reflection::{microfacet::EnumMicrofacetDistribution, Bsdf, EnumBxdf},
+    reflection::{
+        microfacet::{EnumMicrofacetDistribution, TrowbridgeReitz},
+        Bsdf, EnumBxdf,
+    },
     texture::EnumTexture,
     InputImage,
 };
@@ -119,6 +122,10 @@ impl<'a> Substrate<'a> {
     fn rough_v(&self) -> f32 {
         self.data.v0.y
     }
+
+    fn remap_roughness(&self) -> bool {
+        self.data.u0.z != 0
+    }
 }
 
 impl<'a> Material for Substrate<'a> {
@@ -131,8 +138,15 @@ impl<'a> Material for Substrate<'a> {
     ) {
         let d = self.d(uv, textures, images);
         let s = self.s(uv, textures, images);
-        let rough_u = self.rough_u();
-        let rough_v = self.rough_v();
+
+        let (rough_u, rough_v) = if self.remap_roughness() {
+            (
+                TrowbridgeReitz::roughness_to_alpha(self.rough_u()),
+                TrowbridgeReitz::roughness_to_alpha(self.rough_v()),
+            )
+        } else {
+            (self.rough_u(), self.rough_v())
+        };
 
         bsdf.add(EnumBxdf::new_fresnel_blend(
             d,
@@ -244,11 +258,17 @@ impl EnumMaterial {
         specular_index: u32,
         rough_u: f32,
         rough_v: f32,
+        remap_roughness: bool,
     ) -> Self {
         Self {
             t: MaterialType::Substrate,
             data: EnumMaterialData {
-                u0: uvec4(diffuse_index, specular_index, 0, 0),
+                u0: uvec4(
+                    diffuse_index,
+                    specular_index,
+                    if remap_roughness { 1 } else { 0 },
+                    0,
+                ),
                 v0: vec4(rough_u, rough_v, 0.0, 0.0),
             },
         }

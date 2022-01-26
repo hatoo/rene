@@ -155,6 +155,7 @@ impl Scene {
                 specular,
                 rough_u,
                 rough_v,
+                remap_roughness,
             }) => {
                 let diffuse_index = match diffuse {
                     TextureOrColor::Color(color) => {
@@ -184,6 +185,7 @@ impl Scene {
                     specular_index,
                     rough_u,
                     rough_v,
+                    remap_roughness,
                 ))
             }
         }

@@ -58,6 +58,17 @@ impl<'a> TrowbridgeReitz<'a> {
     fn alpha_y(&self) -> f32 {
         self.data.v0.y
     }
+
+    pub fn roughness_to_alpha(roughness: f32) -> f32 {
+        let roughness = roughness.max(1e-3);
+        let x = roughness.ln();
+
+        1.62142
+            + 0.819955 * x
+            + 0.1734 * x * x
+            + 0.0171201 * x * x * x
+            + 0.000640711 * x * x * x * x
+    }
 }
 
 fn trowbridge_reitz_sample11(cos_theta: f32, rng: &mut DefaultRng) -> Vec2 {

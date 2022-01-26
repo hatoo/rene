@@ -105,6 +105,7 @@ pub struct Substrate {
     pub specular: TextureOrColor,
     pub rough_u: f32,
     pub rough_v: f32,
+    pub remap_roughness: bool,
 }
 
 pub enum Shape {
@@ -191,6 +192,7 @@ pub enum Error {
 }
 
 trait GetValue {
+    fn get_bool(&self, name: &str) -> Result<Result<bool, ArgumentError>, Error>;
     fn get_float(&self, name: &str) -> Result<Result<f32, ArgumentError>, Error>;
     fn get_floats(&self, name: &str) -> Result<Result<&[f32], ArgumentError>, Error>;
     fn get_integer(&self, name: &str) -> Result<Result<i32, ArgumentError>, Error>;
@@ -383,15 +385,33 @@ impl<'a, T> GetValue for Object<'a, T> {
                 let rough_u = self.get_float("uroughness")??;
                 let rough_v = self.get_float("vroughness")??;
 
+                let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
+
                 Ok(Material::Substrate(Substrate {
                     diffuse,
                     specular,
                     rough_u,
                     rough_v,
+                    remap_roughness,
                 }))
             }
             t => Err(Error::InvalidMaterial(t.to_string())),
         }
+    }
+
+    fn get_bool(&self, name: &str) -> Result<Result<bool, ArgumentError>, Error> {
+        self.get_value(name)
+            .map(|value| match value {
+                pbrt_parser::Value::Bool(v) => {
+                    if v.len() == 1 {
+                        Ok(v[0])
+                    } else {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    }
+                }
+                _ => Err(ArgumentError::UnmatchedType),
+            })
+            .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
 }
 
