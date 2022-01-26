@@ -83,6 +83,15 @@ struct Glass<'a> {
     data: &'a EnumMaterialData,
 }
 
+impl<'a> Matte<'a> {
+    pub fn new_data(albedo_index: u32) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: uvec4(albedo_index, 0, 0, 0),
+            v0: Vec4::ZERO,
+        }
+    }
+}
+
 impl<'a> Material for Matte<'a> {
     fn albedo(
         &self,
@@ -107,6 +116,23 @@ impl<'a> Material for Matte<'a> {
 }
 
 impl<'a> Substrate<'a> {
+    pub fn new_data(
+        diffuse_index: u32,
+        specular_index: u32,
+        rough_u: f32,
+        rough_v: f32,
+        remap_roughness: bool,
+    ) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: uvec4(
+                diffuse_index,
+                specular_index,
+                if remap_roughness { 1 } else { 0 },
+                0,
+            ),
+            v0: vec4(rough_u, rough_v, 0.0, 0.0),
+        }
+    }
     fn d(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
         textures[self.data.u0.x as usize].color(textures, images, uv)
     }
@@ -216,6 +242,12 @@ impl<'a> Material for Metal<'a> {
 */
 
 impl<'a> Glass<'a> {
+    pub fn new_data(ir: f32) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: UVec4::ZERO,
+            v0: vec4(ir, 0.0, 0.0, 0.0),
+        }
+    }
     fn ir(&self) -> f32 {
         self.data.v0.x
     }
@@ -246,10 +278,7 @@ impl EnumMaterial {
     pub fn new_matte(albedo_index: u32) -> Self {
         Self {
             t: MaterialType::Matte,
-            data: EnumMaterialData {
-                u0: uvec4(albedo_index, 0, 0, 0),
-                v0: Vec4::ZERO,
-            },
+            data: Matte::new_data(albedo_index),
         }
     }
 
@@ -262,15 +291,13 @@ impl EnumMaterial {
     ) -> Self {
         Self {
             t: MaterialType::Substrate,
-            data: EnumMaterialData {
-                u0: uvec4(
-                    diffuse_index,
-                    specular_index,
-                    if remap_roughness { 1 } else { 0 },
-                    0,
-                ),
-                v0: vec4(rough_u, rough_v, 0.0, 0.0),
-            },
+            data: Substrate::new_data(
+                diffuse_index,
+                specular_index,
+                rough_u,
+                rough_v,
+                remap_roughness,
+            ),
         }
     }
 
@@ -289,10 +316,7 @@ impl EnumMaterial {
     pub fn new_glass(ir: f32) -> Self {
         Self {
             t: MaterialType::Glass,
-            data: EnumMaterialData {
-                u0: UVec4::ZERO,
-                v0: vec4(ir, 0.0, 0.0, 0.0),
-            },
+            data: Glass::new_data(ir),
         }
     }
 }
