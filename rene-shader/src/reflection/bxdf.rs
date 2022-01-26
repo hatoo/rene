@@ -1,5 +1,5 @@
 use core::f32::consts::PI;
-use spirv_std::glam::{vec3a, vec4, Vec3A, Vec4Swizzles};
+use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -24,6 +24,31 @@ pub struct FresnelSpecular<'a> {
 #[repr(transparent)]
 pub struct FresnelBlend<'a> {
     pub data: &'a EnumBxdfData,
+}
+
+#[allow(dead_code)]
+fn concentric_sample_disk(rng: &mut DefaultRng) -> Vec2 {
+    let u_offset = 2.0 * vec2(rng.next_f32(), rng.next_f32()) - vec2(1.0, 1.0);
+
+    if u_offset == Vec2::ZERO {
+        return Vec2::ZERO;
+    }
+
+    let (theta, r) = if u_offset.x.abs() > u_offset.y.abs() {
+        (PI / 4.0 * (u_offset.y / u_offset.x), u_offset.x)
+    } else {
+        (PI / 2.0 - PI / 4.0 * (u_offset.x / u_offset.y), u_offset.y)
+    };
+
+    r * vec2(theta.cos(), theta.sin())
+}
+
+#[allow(dead_code)]
+fn cosine_sample_hemisphere(rng: &mut DefaultRng) -> Vec3A {
+    let d = concentric_sample_disk(rng);
+    let z = (1.0 - d.x * d.x - d.y * d.y).max(0.0).sqrt();
+
+    vec3a(d.x, d.y, z)
 }
 
 impl<'a> LambertianReflection<'a> {

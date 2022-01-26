@@ -10,7 +10,7 @@ pub struct Onb {
 
 impl Onb {
     pub fn from_w(w: Vec3A) -> Self {
-        let a = if w.x > 0.9 {
+        let a = if w.x.abs() > 0.9 {
             vec3a(0.0, 1.0, 0.0)
         } else {
             vec3a(1.0, 0.0, 0.0)
