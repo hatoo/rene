@@ -39,3 +39,11 @@ cargo run -- .\sample_scenes\dragon\scene.pbrt
 ```
 
 ![dragon](images/dragon.png)
+
+## Teapot
+
+```
+cargo run --features=oidn-denoiser  -- --denoiser=oidn   .\sample_scenes\teapot\scene.pbrt
+```
+
+![dragon](images/teapot.png)
