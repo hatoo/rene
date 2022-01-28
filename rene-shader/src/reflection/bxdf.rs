@@ -103,14 +103,21 @@ fn reflect(wo: Vec3A, n: Vec3A) -> Vec3A {
     -wo + 2.0 * wo.dot(n) * n
 }
 
-fn refract(wi: Vec3A, n: Vec3A, etai_over_etat: f32) -> Vec3A {
+fn refract(wi: Vec3A, n: Vec3A, etai_over_etat: f32) -> (bool, Vec3A) {
     let cos_theta_i = n.dot(wi);
     let sin2theta_i = (1.0 - cos_theta_i * cos_theta_i).max(0.0);
     let sin2theta_t = etai_over_etat * etai_over_etat * sin2theta_i;
 
+    if sin2theta_t >= 1.0 {
+        return (false, Vec3A::ZERO);
+    }
+
     let cos_theta_t = (1.0 - sin2theta_t).sqrt();
 
-    etai_over_etat * -wi + (etai_over_etat * cos_theta_i - cos_theta_t) * n
+    (
+        true,
+        etai_over_etat * -wi + (etai_over_etat * cos_theta_i - cos_theta_t) * n,
+    )
 }
 
 fn fr_dielectric(cos_theta_i: f32, eta_i: f32, eta_t: f32) -> f32 {
@@ -172,21 +179,10 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
     }
 
     fn sample_f(&self, wo: Vec3A, rng: &mut DefaultRng) -> SampledF {
-        let (eta_i, eta_t) = if Onb::local_cos_theta(wo) > 0.0 {
-            (1.0, self.ir())
-        } else {
-            (self.ir(), 1.0)
-        };
+        let cos_theta = Onb::local_cos_theta(wo);
+        let f = fr_dielectric(cos_theta, 1.0, self.ir());
 
-        let refraction_ratio = eta_i / eta_t;
-
-        let cos_theta = Onb::local_cos_theta(wo).min(1.0);
-        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
-        let cannot_refract = refraction_ratio * sin_theta > 1.0;
-
-        let f = fr_dielectric(cos_theta, eta_i, eta_t);
-
-        if cannot_refract || f > rng.next_f32() {
+        if rng.next_f32() < f {
             let wi = vec3a(-wo.x, -wo.y, wo.z);
 
             SampledF {
@@ -195,7 +191,15 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
                 pdf: f,
             }
         } else {
-            let wi = refract(
+            let (eta_i, eta_t) = if Onb::local_cos_theta(wo) > 0.0 {
+                (1.0, self.ir())
+            } else {
+                (self.ir(), 1.0)
+            };
+
+            let refraction_ratio = eta_i / eta_t;
+
+            let (b, wi) = refract(
                 wo,
                 if wo.z > 0.0 {
                     vec3a(0.0, 0.0, 1.0)
@@ -208,7 +212,7 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
             SampledF {
                 wi,
                 f: vec3a(1.0, 1.0, 1.0) * (1.0 - f) / Onb::local_abs_cos_theta(wi),
-                pdf: 1.0 - f,
+                pdf: if !b { 0.0 } else { 1.0 - f },
             }
         }
     }
