@@ -15,7 +15,7 @@ use math::sphere_uv;
 use reflection::{onb::Onb, Bsdf};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
-use surface_sample::SurfaceSample;
+use surface_sample::{EnumSurfaceSample, SurfaceSample};
 use texture::EnumTexture;
 
 #[allow(unused_imports)]
@@ -142,7 +142,7 @@ pub fn main_ray_generation(
     #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false, arrayed=true),
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] emit_objects: &[SurfaceSample],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] emit_objects: &[EnumSurfaceSample],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,

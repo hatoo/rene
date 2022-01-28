@@ -22,8 +22,12 @@ use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
-    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial,
-    surface_sample::SurfaceSample, texture::EnumTexture, IndexData, Uniform, Vertex,
+    area_light::EnumAreaLight,
+    light::EnumLight,
+    material::EnumMaterial,
+    surface_sample::{EnumSurfaceSample, SurfaceSample},
+    texture::EnumTexture,
+    IndexData, Uniform, Vertex,
 };
 use scene::Scene;
 
@@ -2868,15 +2872,19 @@ impl SceneBuffers {
             graphics_queue,
         );
 
-        let mut emit_objects: Vec<SurfaceSample> = scene
+        let mut emit_objects: Vec<EnumSurfaceSample> = scene
             .tlas
             .iter()
             .filter(|t| !scene.area_lights[t.area_light_index].is_null())
             .map(|t| match t.shader_offset {
-                ShaderOffset::Sphere => SurfaceSample::new_sphere(t.matrix),
+                ShaderOffset::Sphere => EnumSurfaceSample::new_sphere(t.matrix),
                 ShaderOffset::Triangle => {
                     let blas = &blas_args[t.blas_index.unwrap() as usize];
-                    SurfaceSample::new_triangle(blas.index_offset, blas.primitive_count, t.matrix)
+                    EnumSurfaceSample::new_triangle(
+                        blas.index_offset,
+                        blas.primitive_count,
+                        t.matrix,
+                    )
                 }
             })
             .collect();
@@ -3015,12 +3023,12 @@ impl SceneBuffers {
         };
 
         if emit_objects.is_empty() {
-            emit_objects.push(SurfaceSample::new_sphere(Default::default()));
+            emit_objects.push(EnumSurfaceSample::new_sphere(Default::default()));
         }
 
         let emit_objects = {
             let buffer_size =
-                (emit_objects.len() * std::mem::size_of::<SurfaceSample>()) as vk::DeviceSize;
+                (emit_objects.len() * std::mem::size_of::<EnumSurfaceSample>()) as vk::DeviceSize;
 
             let mut emit_objects_buffer = BufferResource::new(
                 buffer_size,
