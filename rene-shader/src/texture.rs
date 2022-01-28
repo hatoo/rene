@@ -53,6 +53,33 @@ struct ColorOrTarget {
     color_or_uv: Vec3A,
 }
 
+impl<'a> Solid<'a> {
+    pub fn new_data(color: Vec3A) -> EnumTextureData {
+        EnumTextureData {
+            u0: UVec4::ZERO,
+            v0: vec4(color.x, color.y, color.z, 0.0),
+        }
+    }
+}
+
+impl<'a> CheckerBoard<'a> {
+    pub fn new_data(tex1: u32, tex2: u32, uscale: f32, vscale: f32) -> EnumTextureData {
+        EnumTextureData {
+            u0: uvec4(tex1, tex2, 0, 0),
+            v0: vec4(uscale, vscale, 0.0, 0.0),
+        }
+    }
+}
+
+impl<'a> ImageMap<'a> {
+    pub fn new_data(image: u32) -> EnumTextureData {
+        EnumTextureData {
+            u0: uvec4(image, 0, 0, 0),
+            v0: Vec4::ZERO,
+        }
+    }
+}
+
 impl<'a> Texture for CheckerBoard<'a> {
     fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
         let w = self.data.v0.x;
@@ -106,30 +133,21 @@ impl EnumTexture {
     pub fn new_solid(color: Vec3A) -> Self {
         Self {
             t: TextureType::Solid,
-            data: EnumTextureData {
-                u0: UVec4::ZERO,
-                v0: vec4(color.x, color.y, color.z, 0.0),
-            },
+            data: Solid::new_data(color),
         }
     }
 
     pub fn new_checkerboard(tex1: u32, tex2: u32, uscale: f32, vscale: f32) -> Self {
         Self {
             t: TextureType::CheckerBoard,
-            data: EnumTextureData {
-                u0: uvec4(tex1, tex2, 0, 0),
-                v0: vec4(uscale, vscale, 0.0, 0.0),
-            },
+            data: CheckerBoard::new_data(tex1, tex2, uscale, vscale),
         }
     }
 
     pub fn new_image_map(image: u32) -> Self {
         Self {
             t: TextureType::ImageMap,
-            data: EnumTextureData {
-                u0: uvec4(image, 0, 0, 0),
-                v0: Vec4::ZERO,
-            },
+            data: ImageMap::new_data(image),
         }
     }
 }
