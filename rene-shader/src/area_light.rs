@@ -50,9 +50,15 @@ impl EnumAreaLight {
     pub fn new_diffuse(color: Vec3A) -> Self {
         Self {
             t: AreaLightType::Diffuse,
-            data: EnumAreaLightData {
-                v0: color.extend(0.0),
-            },
+            data: Diffuse::new_data(color),
+        }
+    }
+}
+
+impl<'a> Diffuse<'a> {
+    pub fn new_data(color: Vec3A) -> EnumAreaLightData {
+        EnumAreaLightData {
+            v0: color.extend(0.0),
         }
     }
 }
