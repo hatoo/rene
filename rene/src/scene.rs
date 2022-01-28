@@ -66,6 +66,25 @@ struct WorldState {
 }
 
 impl Scene {
+    fn texture(
+        &mut self,
+        texture_or_color: TextureOrColor,
+        state: &WorldState,
+    ) -> Result<u32, CreateSceneError> {
+        match texture_or_color {
+            TextureOrColor::Color(color) => {
+                let texture_index = self.textures.len();
+                self.textures.push(EnumTexture::new_solid(color));
+                Ok(texture_index as u32)
+            }
+            TextureOrColor::Texture(name) => state
+                .textures
+                .get(&name)
+                .ok_or(CreateSceneError::NotFoundTexture(name))
+                .copied(),
+        }
+    }
+
     pub fn create<P: AsRef<Path>>(
         scene_description: Vec<pbrt_parser::Scene>,
         base_dir: &P,
@@ -135,18 +154,7 @@ impl Scene {
     ) -> Result<EnumMaterial, CreateSceneError> {
         match material {
             Material::Matte(Matte { albedo }) => {
-                let texture_index = match albedo {
-                    TextureOrColor::Color(color) => {
-                        let texture_index = self.textures.len();
-                        self.textures.push(EnumTexture::new_solid(color));
-                        texture_index as u32
-                    }
-                    TextureOrColor::Texture(name) => *state
-                        .textures
-                        .get(&name)
-                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                };
-
+                let texture_index = self.texture(albedo, state)?;
                 Ok(EnumMaterial::new_matte(texture_index))
             }
             Material::Glass => Ok(EnumMaterial::new_glass(1.5)),
@@ -157,28 +165,8 @@ impl Scene {
                 rough_v,
                 remap_roughness,
             }) => {
-                let diffuse_index = match diffuse {
-                    TextureOrColor::Color(color) => {
-                        let texture_index = self.textures.len();
-                        self.textures.push(EnumTexture::new_solid(color));
-                        texture_index as u32
-                    }
-                    TextureOrColor::Texture(name) => *state
-                        .textures
-                        .get(&name)
-                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                };
-                let specular_index = match specular {
-                    TextureOrColor::Color(color) => {
-                        let texture_index = self.textures.len();
-                        self.textures.push(EnumTexture::new_solid(color));
-                        texture_index as u32
-                    }
-                    TextureOrColor::Texture(name) => *state
-                        .textures
-                        .get(&name)
-                        .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                };
+                let diffuse_index = self.texture(diffuse, state)?;
+                let specular_index = self.texture(specular, state)?;
 
                 Ok(EnumMaterial::new_substrate(
                     diffuse_index,
@@ -222,28 +210,8 @@ impl Scene {
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
                         InnerTexture::CheckerBoard(checkerboard) => {
-                            let tex1 = match checkerboard.tex1 {
-                                TextureOrColor::Color(color) => {
-                                    let texture_index = self.textures.len();
-                                    self.textures.push(EnumTexture::new_solid(color));
-                                    texture_index as u32
-                                }
-                                TextureOrColor::Texture(name) => *state
-                                    .textures
-                                    .get(&name)
-                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                            };
-                            let tex2 = match checkerboard.tex2 {
-                                TextureOrColor::Color(color) => {
-                                    let texture_index = self.textures.len();
-                                    self.textures.push(EnumTexture::new_solid(color));
-                                    texture_index as u32
-                                }
-                                TextureOrColor::Texture(name) => *state
-                                    .textures
-                                    .get(&name)
-                                    .ok_or(CreateSceneError::NotFoundTexture(name))?,
-                            };
+                            let tex1 = self.texture(checkerboard.tex1, state)?;
+                            let tex2 = self.texture(checkerboard.tex2, state)?;
                             EnumTexture::new_checkerboard(
                                 tex1,
                                 tex2,
