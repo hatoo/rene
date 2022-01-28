@@ -189,6 +189,8 @@ pub enum Error {
     Pfm,
     #[error("Ply error")]
     Ply,
+    #[error("Exr Error")]
+    Exr(#[from] exr::error::Error),
 }
 
 trait GetValue {
@@ -420,26 +422,50 @@ fn deg_to_radian(angle: f32) -> f32 {
 }
 
 fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
-    if path.as_ref().extension() == Some(OsStr::new("pfm")) {
-        let mut content = Vec::new();
-        File::open(path)?.read_to_end(&mut content)?;
+    let pfm = OsStr::new("pfm");
+    let exr = OsStr::new("exr");
 
-        Ok(parse_pfm_rgb(&content).map_err(|_| Error::Pfm)?.1)
-    } else {
-        let image = image::io::Reader::open(path)?.decode()?;
+    match path.as_ref().extension() {
+        Some(ext) if ext == pfm => {
+            let mut content = Vec::new();
+            File::open(path)?.read_to_end(&mut content)?;
 
-        let mut data = Vec::new();
-
-        for (_, _, p) in image.pixels() {
-            data.push([
-                p.0[0] as f32 / 255.0,
-                p.0[1] as f32 / 255.0,
-                p.0[2] as f32 / 255.0,
-                p.0[3] as f32 / 255.0,
-            ]);
+            Ok(parse_pfm_rgb(&content).map_err(|_| Error::Pfm)?.1)
         }
+        Some(ext) if ext == exr => {
+            let image = exr::prelude::read_first_rgba_layer_from_file(
+                path,
+                |resolution, _| {
+                    Image::new(
+                        resolution.width() as u32,
+                        resolution.height() as u32,
+                        vec![[0.0, 0.0, 0.0, 0.0]; resolution.width() * resolution.height()],
+                    )
+                },
+                |pixel_vector, position, (r, g, b, a): (f32, f32, f32, f32)| {
+                    pixel_vector.data[pixel_vector.width as usize * position.y() + position.x()] =
+                        [r, g, b, a];
+                },
+            )?;
 
-        Ok(Image::new(image.width(), image.height(), data))
+            Ok(image.layer_data.channel_data.pixels)
+        }
+        _ => {
+            let image = image::io::Reader::open(path)?.decode()?;
+
+            let mut data = Vec::new();
+
+            for (_, _, p) in image.pixels() {
+                data.push([
+                    p.0[0] as f32 / 255.0,
+                    p.0[1] as f32 / 255.0,
+                    p.0[2] as f32 / 255.0,
+                    p.0[3] as f32 / 255.0,
+                ]);
+            }
+
+            Ok(Image::new(image.width(), image.height(), data))
+        }
     }
 }
 
