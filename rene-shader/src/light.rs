@@ -31,16 +31,22 @@ impl EnumLight {
     pub fn new_distant(from: Vec3A, to: Vec3A, color: Vec3A) -> Self {
         Self {
             t: LightType::Distant,
-            data: EnumLightData {
-                v0: (from - to).normalize().extend(0.0),
-                v1: color.extend(0.0),
-            },
+            data: Distant::new_data(from, to, color),
         }
     }
 }
 
 struct Distant<'a> {
     data: &'a EnumLightData,
+}
+
+impl<'a> Distant<'a> {
+    pub fn new_data(from: Vec3A, to: Vec3A, color: Vec3A) -> EnumLightData {
+        EnumLightData {
+            v0: (from - to).normalize().extend(0.0),
+            v1: color.extend(0.0),
+        }
+    }
 }
 
 impl<'a> Light for Distant<'a> {
