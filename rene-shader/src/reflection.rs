@@ -4,7 +4,7 @@ use core::ops::BitOr;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::IndexUnchecked,
-    glam::{vec3a, Vec3A, Vec4},
+    glam::{Vec3A, Vec4},
 };
 
 use crate::rand::DefaultRng;
@@ -61,7 +61,6 @@ pub trait Bxdf {
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
-#[repr(C)]
 pub struct EnumBxdfData {
     v0: Vec4,
     v1: Vec4,
@@ -129,39 +128,34 @@ impl Bxdf for EnumBxdf {
 }
 
 impl EnumBxdf {
-    pub fn new_lambertian_reflection(albedo: Vec3A) -> Self {
-        Self {
-            t: BxdfType::LambertianReflection,
-            data: LambertianReflection::new_data(albedo),
-        }
+    pub fn setup_lambertian_reflection(albedo: Vec3A, bxdf: &mut EnumBxdf) {
+        bxdf.t = BxdfType::LambertianReflection;
+        LambertianReflection::setup_data(albedo, &mut bxdf.data);
     }
 
-    pub fn new_fresnel_specular(ir: f32) -> Self {
-        Self {
-            t: BxdfType::FresnelSpecular,
-            data: FresnelSpecular::new_data(ir),
-        }
+    pub fn setup_fresnel_specular(ir: f32, bxdf: &mut EnumBxdf) {
+        bxdf.t = BxdfType::FresnelSpecular;
+        FresnelSpecular::setup_data(ir, &mut bxdf.data);
     }
 
-    pub fn new_fresnel_blend(
+    pub fn setup_fresnel_blend(
         rd: Vec3A,
         rs: Vec3A,
         distribution: EnumMicrofacetDistribution,
-    ) -> Self {
-        Self {
-            t: BxdfType::FresnelBlend,
-            data: FresnelBlend::new_data(rd, rs, distribution),
-        }
+        bxdf: &mut EnumBxdf,
+    ) {
+        bxdf.t = BxdfType::FresnelBlend;
+        FresnelBlend::setup_data(rd, rs, distribution, &mut bxdf.data);
     }
-    pub fn new_microfacet_reflection(
+
+    pub fn setup_microfacet_reflection(
         r: Vec3A,
         microfacet_distribution: EnumMicrofacetDistribution,
         fresnel: EnumFresnel,
-    ) -> Self {
-        Self {
-            t: BxdfType::MicroFacetReflection,
-            data: MicrofacetReflection::new_data(r, microfacet_distribution, fresnel),
-        }
+        bxdf: &mut EnumBxdf,
+    ) {
+        bxdf.t = BxdfType::MicroFacetReflection;
+        MicrofacetReflection::setup_data(r, microfacet_distribution, fresnel, &mut bxdf.data);
     }
 }
 
@@ -170,7 +164,7 @@ const BXDF_LEN: usize = 8;
 pub struct Bsdf {
     ng: Vec3A,
     onb: Onb,
-    len: usize,
+    len: u32,
     bxdfs: [EnumBxdf; BXDF_LEN],
 }
 
@@ -180,7 +174,10 @@ impl Default for Bsdf {
             ng: Vec3A::Z,
             onb: Onb::from_w(Vec3A::Z),
             len: 0,
-            bxdfs: [EnumBxdf::new_lambertian_reflection(vec3a(0.0, 0.0, 0.0)); BXDF_LEN],
+            bxdfs: [EnumBxdf {
+                t: BxdfType::LambertianReflection,
+                data: Default::default(),
+            }; BXDF_LEN],
         }
     }
 }
@@ -193,8 +190,14 @@ impl Bsdf {
     }
 
     pub fn add(&mut self, bxdf: EnumBxdf) {
-        self.bxdfs[self.len] = bxdf;
+        *unsafe { self.bxdfs.index_unchecked_mut(self.len as usize) } = bxdf;
         self.len += 1;
+    }
+
+    pub fn add_mut(&mut self) -> &mut EnumBxdf {
+        let bxdf = unsafe { self.bxdfs.index_unchecked_mut(self.len as usize) };
+        self.len += 1;
+        bxdf
     }
 }
 
@@ -212,7 +215,7 @@ impl Bsdf {
         let mut f = Vec3A::ZERO;
 
         for i in 0..self.len {
-            let bxdf = *unsafe { self.bxdfs.index_unchecked(i) };
+            let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
             if (reflect && bxdf.kind().contains(BxdfKind::REFLECTION))
                 || (!reflect && bxdf.kind().contains(BxdfKind::TRANSMISSION))
             {
@@ -231,8 +234,8 @@ impl Bsdf {
                 pdf: 0.0,
             }
         } else {
-            let index = rng.next_u32() as usize % self.len;
-            let bxdf = *unsafe { self.bxdfs.index_unchecked(index) };
+            let index = rng.next_u32() as usize % self.len as usize;
+            let bxdf = unsafe { self.bxdfs.index_unchecked(index) };
             let wo = self.onb.world_to_local(wo_world);
             let mut sampled_f = bxdf.sample_f(wo, rng);
 
@@ -253,7 +256,7 @@ impl Bsdf {
         let wi = self.onb.world_to_local(wi_world);
 
         for i in 0..self.len {
-            let bxdf = *unsafe { self.bxdfs.index_unchecked(i) };
+            let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
             pdf += bxdf.pdf(wo, wi);
         }
 

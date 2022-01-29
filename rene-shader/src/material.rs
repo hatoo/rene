@@ -109,9 +109,7 @@ impl<'a> Material for Matte<'a> {
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
     ) {
-        bsdf.add(EnumBxdf::new_lambertian_reflection(
-            self.albedo(uv, textures, images),
-        ));
+        EnumBxdf::setup_lambertian_reflection(self.albedo(uv, textures, images), bsdf.add_mut());
     }
 }
 
@@ -174,11 +172,12 @@ impl<'a> Material for Substrate<'a> {
             (self.rough_u(), self.rough_v())
         };
 
-        bsdf.add(EnumBxdf::new_fresnel_blend(
+        EnumBxdf::setup_fresnel_blend(
             d,
             s,
             EnumMicrofacetDistribution::new_trowbridge_reitz(rough_u, rough_v),
-        ))
+            bsdf.add_mut(),
+        );
     }
 
     fn albedo(
@@ -251,11 +250,7 @@ impl<'a> Material for Metal<'a> {
 
         let dist = EnumMicrofacetDistribution::new_trowbridge_reitz(rough_u, rough_v);
 
-        bsdf.add(EnumBxdf::new_microfacet_reflection(
-            vec3a(1.0, 1.0, 1.0),
-            dist,
-            fr_mf,
-        ));
+        EnumBxdf::setup_microfacet_reflection(vec3a(1.0, 1.0, 1.0), dist, fr_mf, bsdf.add_mut())
     }
 
     fn albedo(
@@ -297,7 +292,7 @@ impl<'a> Material for Glass<'a> {
         _textures: &[EnumTexture],
         _images: &RuntimeArray<InputImage>,
     ) {
-        bsdf.add(EnumBxdf::new_fresnel_specular(self.ir()))
+        EnumBxdf::setup_fresnel_specular(self.ir(), bsdf.add_mut());
     }
 }
 

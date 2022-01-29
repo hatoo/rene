@@ -458,17 +458,17 @@ pub fn triangle_closest_hit(
     let material_index = index_data.material_index;
     let area_light_index = index_data.area_light_index;
 
-    let v0 = *unsafe {
+    let v0 = unsafe {
         vertices.index_unchecked(
             *indices.index_unchecked(index_offset + 3 * primitive_id as usize) as usize,
         )
     };
-    let v1 = *unsafe {
+    let v1 = unsafe {
         vertices.index_unchecked(
             *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 1) as usize,
         )
     };
-    let v2 = *unsafe {
+    let v2 = unsafe {
         vertices.index_unchecked(
             *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 2) as usize,
         )
@@ -533,17 +533,17 @@ pub fn triangle_closest_hit_pdf(
 
     let index_offset = index_data.index_offset as usize;
 
-    let v0 = *unsafe {
+    let v0 = unsafe {
         vertices.index_unchecked(
             *indices.index_unchecked(index_offset + 3 * primitive_id as usize) as usize,
         )
     };
-    let v1 = *unsafe {
+    let v1 = unsafe {
         vertices.index_unchecked(
             *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 1) as usize,
         )
     };
-    let v2 = *unsafe {
+    let v2 = unsafe {
         vertices.index_unchecked(
             *indices.index_unchecked(index_offset + 3 * primitive_id as usize + 2) as usize,
         )

@@ -31,7 +31,6 @@ pub enum MicrofacetDistributionType {
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
-#[repr(C)]
 pub struct EnumMicrofacetDistributionData {
     v0: Vec4,
 }

@@ -15,7 +15,6 @@ enum FresnelType {
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
-#[repr(C)]
 pub struct EnumFresnelData {
     v0: Vec4,
     v1: Vec4,
