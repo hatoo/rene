@@ -1,5 +1,5 @@
 use core::f32::consts::PI;
-use spirv_std::glam::{vec2, vec3a, Vec2, Vec3A, Vec4Swizzles};
+use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -58,6 +58,14 @@ fn cosine_sample_hemisphere(rng: &mut DefaultRng) -> Vec3A {
 }
 
 impl<'a> LambertianReflection<'a> {
+    #[allow(dead_code)]
+    pub fn new_data(albedo: Vec3A) -> EnumBxdfData {
+        EnumBxdfData {
+            v0: albedo.extend(0.0),
+            ..Default::default()
+        }
+    }
+
     pub fn setup_data(albedo: Vec3A, data: &mut EnumBxdfData) {
         data.v0.x = albedo.x;
         data.v0.y = albedo.y;
@@ -162,6 +170,14 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
 }
 
 impl<'a> FresnelSpecular<'a> {
+    #[allow(dead_code)]
+    pub fn new_data(ir: f32) -> EnumBxdfData {
+        EnumBxdfData {
+            v0: vec4(ir, 0.0, 0.0, 0.0),
+            ..Default::default()
+        }
+    }
+
     pub fn setup_data(ir: f32, data: &mut EnumBxdfData) {
         data.v0.x = ir;
     }
@@ -225,6 +241,20 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
 }
 
 impl<'a> FresnelBlend<'a> {
+    #[allow(dead_code)]
+    pub fn new_data(
+        rd: Vec3A,
+        rs: Vec3A,
+        distribution: EnumMicrofacetDistribution,
+    ) -> EnumBxdfData {
+        EnumBxdfData {
+            v0: rd.extend(0.0),
+            v1: rs.extend(0.0),
+            microfacet_distribution: distribution,
+            ..Default::default()
+        }
+    }
+
     pub fn setup_data(
         rd: Vec3A,
         rs: Vec3A,
@@ -327,6 +357,20 @@ impl<'a> Bxdf for FresnelBlend<'a> {
 }
 
 impl<'a> MicrofacetReflection<'a> {
+    #[allow(dead_code)]
+    pub fn new_data(
+        r: Vec3A,
+        microfacet_distribution: EnumMicrofacetDistribution,
+        fresnel: EnumFresnel,
+    ) -> EnumBxdfData {
+        EnumBxdfData {
+            v0: r.extend(0.0),
+            microfacet_distribution,
+            fresnel,
+            ..Default::default()
+        }
+    }
+
     pub fn setup_data(
         r: Vec3A,
         microfacet_distribution: EnumMicrofacetDistribution,
