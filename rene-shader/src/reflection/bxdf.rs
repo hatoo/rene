@@ -90,7 +90,7 @@ impl<'a> Bxdf for LambertianReflection<'a> {
         let mut wi = random_cosine_direction(rng);
 
         if wo.z < 0.0 {
-            wi.z *= -1.0;
+            wi.z = -wi.z;
         }
 
         let pdf = self.pdf(wo, wi);
