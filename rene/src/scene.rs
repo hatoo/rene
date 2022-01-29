@@ -11,7 +11,7 @@ use crate::ShaderOffset;
 
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld,
-    LightSource, Material, Matte, SceneObject, Shape, Sphere, Substrate, TextureOrColor,
+    LightSource, Material, Matte, Metal, SceneObject, Shape, Sphere, Substrate, TextureOrColor,
     TriangleMesh, WorldObject,
 };
 
@@ -171,6 +171,24 @@ impl Scene {
                 Ok(EnumMaterial::new_substrate(
                     diffuse_index,
                     specular_index,
+                    rough_u,
+                    rough_v,
+                    remap_roughness,
+                ))
+            }
+            Material::Metal(Metal {
+                eta,
+                k,
+                rough_u,
+                rough_v,
+                remap_roughness,
+            }) => {
+                let eta_index = self.texture(eta, state)?;
+                let k_index = self.texture(k, state)?;
+
+                Ok(EnumMaterial::new_metal(
+                    eta_index,
+                    k_index,
                     rough_u,
                     rough_v,
                     remap_roughness,

@@ -9,6 +9,7 @@ use spirv_std::{
 
 use crate::rand::DefaultRng;
 
+#[derive(Default)]
 pub struct SampledF {
     pub wi: Vec3A,
     pub f: Vec3A,
@@ -16,12 +17,18 @@ pub struct SampledF {
 }
 
 mod bxdf;
+pub mod fresnel;
 pub mod microfacet;
 pub mod onb;
 
 use bxdf::{FresnelSpecular, LambertianReflection};
 
-use self::{bxdf::FresnelBlend, microfacet::EnumMicrofacetDistribution, onb::Onb};
+use self::{
+    bxdf::{FresnelBlend, MicrofacetReflection},
+    fresnel::EnumFresnel,
+    microfacet::EnumMicrofacetDistribution,
+    onb::Onb,
+};
 
 pub struct BxdfKind(u32);
 
@@ -59,6 +66,7 @@ pub struct EnumBxdfData {
     v0: Vec4,
     v1: Vec4,
     microfacet_distribution: EnumMicrofacetDistribution,
+    fresnel: EnumFresnel,
 }
 
 #[repr(u32)]
@@ -68,6 +76,7 @@ enum BxdfType {
     LambertianReflection,
     FresnelSpecular,
     FresnelBlend,
+    MicroFacetReflection,
 }
 
 #[derive(Clone, Copy)]
@@ -83,6 +92,7 @@ impl Bxdf for EnumBxdf {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.kind(),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.kind(),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.kind(),
+            BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.kind(),
         }
     }
 
@@ -91,6 +101,7 @@ impl Bxdf for EnumBxdf {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.f(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.f(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.f(wo, wi),
+            BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.f(wo, wi),
         }
     }
 
@@ -101,6 +112,9 @@ impl Bxdf for EnumBxdf {
             }
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.sample_f(wo, rng),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.sample_f(wo, rng),
+            BxdfType::MicroFacetReflection => {
+                MicrofacetReflection { data: &self.data }.sample_f(wo, rng)
+            }
         }
     }
 
@@ -109,6 +123,7 @@ impl Bxdf for EnumBxdf {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.pdf(wo, wi),
+            BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.pdf(wo, wi),
         }
     }
 }
@@ -136,6 +151,16 @@ impl EnumBxdf {
         Self {
             t: BxdfType::FresnelBlend,
             data: FresnelBlend::new_data(rd, rs, distribution),
+        }
+    }
+    pub fn new_microfacet_reflection(
+        r: Vec3A,
+        microfacet_distribution: EnumMicrofacetDistribution,
+        fresnel: EnumFresnel,
+    ) -> Self {
+        Self {
+            t: BxdfType::MicroFacetReflection,
+            data: MicrofacetReflection::new_data(r, microfacet_distribution, fresnel),
         }
     }
 }

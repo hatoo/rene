@@ -1,12 +1,13 @@
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
-    glam::{uvec4, vec4, UVec4, Vec2, Vec3A, Vec4},
+    glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4},
     RuntimeArray,
 };
 
 use crate::{
     reflection::{
+        fresnel::EnumFresnel,
         microfacet::{EnumMicrofacetDistribution, TrowbridgeReitz},
         Bsdf, EnumBxdf,
     },
@@ -52,6 +53,7 @@ enum MaterialType {
     Matte,
     Glass,
     Substrate,
+    Metal,
 }
 
 #[derive(Clone, Copy)]
@@ -71,12 +73,10 @@ struct Substrate<'a> {
     data: &'a EnumMaterialData,
 }
 
-/*
 #[repr(transparent)]
 struct Metal<'a> {
     data: &'a EnumMaterialData,
 }
-*/
 
 #[repr(transparent)]
 struct Glass<'a> {
@@ -191,55 +191,82 @@ impl<'a> Material for Substrate<'a> {
     }
 }
 
-/*
-
 impl<'a> Metal<'a> {
-    fn fuzz(&self) -> f32 {
-        self.data.v0.w
+    fn new_data(
+        eta_index: u32,
+        k_index: u32,
+        rough_u: f32,
+        rough_v: f32,
+        remap_roghness: bool,
+    ) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: uvec4(eta_index, k_index, if remap_roghness { 1 } else { 0 }, 0),
+            v0: vec4(rough_u, rough_v, 0.0, 0.0),
+        }
+    }
+
+    fn eta(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
+        textures[self.data.u0.x as usize].color(textures, images, uv)
+    }
+
+    fn k(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
+        textures[self.data.u0.y as usize].color(textures, images, uv)
+    }
+
+    fn rough_u(&self) -> f32 {
+        self.data.v0.x
+    }
+
+    fn rough_v(&self) -> f32 {
+        self.data.v0.y
+    }
+
+    fn remap_roughness(&self) -> bool {
+        self.data.u0.z != 0
     }
 }
 
 impl<'a> Material for Metal<'a> {
-    fn scatter(
+    fn compute_bsdf(
         &self,
+        bsdf: &mut Bsdf,
+        uv: Vec2,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
-        ray: &Ray,
-        ray_payload: &RayPayload,
-        rng: &mut DefaultRng,
-        scatter: &mut Scatter,
-    ) -> bool {
-        let reflected = reflect(ray.direction.normalize(), ray_payload.normal);
-        let scatterd = reflected + self.fuzz() * random_in_unit_sphere(rng);
-        if scatterd.dot(ray_payload.normal) > 0.0 {
-            *scatter = Scatter {
-                color: self.albedo(textures, images, ray_payload.uv),
-                ray: Ray {
-                    origin: ray_payload.position,
-                    direction: scatterd,
-                },
-            };
-            true
+    ) {
+        let (rough_u, rough_v) = if self.remap_roughness() {
+            (
+                TrowbridgeReitz::roughness_to_alpha(self.rough_u()),
+                TrowbridgeReitz::roughness_to_alpha(self.rough_v()),
+            )
         } else {
-            false
-        }
+            (self.rough_u(), self.rough_v())
+        };
+
+        let fr_mf = EnumFresnel::new_fresnel_conductor(
+            vec3a(1.0, 1.0, 1.0),
+            self.eta(uv, textures, images),
+            self.k(uv, textures, images),
+        );
+
+        let dist = EnumMicrofacetDistribution::new_trowbridge_reitz(rough_u, rough_v);
+
+        bsdf.add(EnumBxdf::new_microfacet_reflection(
+            vec3a(1.0, 1.0, 1.0),
+            dist,
+            fr_mf,
+        ));
     }
 
     fn albedo(
         &self,
-        _textures: &[EnumTexture],
-        _images: &RuntimeArray<InputImage>,
-        _uv: Vec2,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
-        self.data.v0.xyz().into()
-    }
-
-    fn brdf(&self, _v0: Vec3A, _v1: Vec3A) -> f32 {
-        // TODO
-        1.0
+        self.k(uv, textures, images)
     }
 }
-*/
 
 impl<'a> Glass<'a> {
     pub fn new_data(ir: f32) -> EnumMaterialData {
@@ -301,17 +328,18 @@ impl EnumMaterial {
         }
     }
 
-    /*
-    pub fn new_metal(albedo: Vec3A, fuzz: f32) -> Self {
+    pub fn new_metal(
+        eta_index: u32,
+        k_index: u32,
+        rough_u: f32,
+        rough_v: f32,
+        remap_roghness: bool,
+    ) -> Self {
         Self {
-            t: 1,
-            data: EnumMaterialData {
-                u0: UVec4::ZERO,
-                v0: vec4(albedo.x, albedo.y, albedo.z, fuzz),
-            },
+            t: MaterialType::Metal,
+            data: Metal::new_data(eta_index, k_index, rough_u, rough_v, remap_roghness),
         }
     }
-    */
 
     pub fn new_glass(ir: f32) -> Self {
         Self {
@@ -332,6 +360,7 @@ impl Material for EnumMaterial {
             MaterialType::Matte => Matte { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Glass => Glass { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Substrate => Substrate { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Metal => Metal { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
@@ -351,6 +380,9 @@ impl Material for EnumMaterial {
             }
             MaterialType::Substrate => {
                 Substrate { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Metal => {
+                Metal { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }
         }
     }

@@ -13,6 +13,10 @@ pub trait MicrofacetDistribution {
     fn sample_wh(&self, wo: Vec3A, rng: &mut DefaultRng) -> Vec3A;
     fn pdf(&self, wo: Vec3A, wh: Vec3A) -> f32;
 
+    fn g(&self, wo: Vec3A, wi: Vec3A) -> f32 {
+        1.0 / (1.0 + self.lambda(wo) + self.lambda(wi))
+    }
+
     fn g1(&self, w: Vec3A) -> f32 {
         1.0 / (1.0 + self.lambda(w))
     }
@@ -243,6 +247,14 @@ impl MicrofacetDistribution for EnumMicrofacetDistribution {
         match self.t {
             MicrofacetDistributionType::TrowbridgeReitz => {
                 TrowbridgeReitz { data: &self.data }.pdf(wo, wh)
+            }
+        }
+    }
+
+    fn g(&self, wi: Vec3A, wo: Vec3A) -> f32 {
+        match self.t {
+            MicrofacetDistributionType::TrowbridgeReitz => {
+                TrowbridgeReitz { data: &self.data }.g(wo, wi)
             }
         }
     }

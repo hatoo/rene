@@ -94,6 +94,7 @@ pub enum Material {
     Matte(Matte),
     Glass,
     Substrate(Substrate),
+    Metal(Metal),
 }
 
 pub struct Matte {
@@ -103,6 +104,14 @@ pub struct Matte {
 pub struct Substrate {
     pub diffuse: TextureOrColor,
     pub specular: TextureOrColor,
+    pub rough_u: f32,
+    pub rough_v: f32,
+    pub remap_roughness: bool,
+}
+
+pub struct Metal {
+    pub eta: TextureOrColor,
+    pub k: TextureOrColor,
     pub rough_u: f32,
     pub rough_v: f32,
     pub remap_roughness: bool,
@@ -392,6 +401,33 @@ impl<'a, T> GetValue for Object<'a, T> {
                 Ok(Material::Substrate(Substrate {
                     diffuse,
                     specular,
+                    rough_u,
+                    rough_v,
+                    remap_roughness,
+                }))
+            }
+            "metal" => {
+                let eta = self
+                    .get_texture_or_color("eta")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+                let k = self
+                    .get_texture_or_color("k")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+
+                let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
+                    let r = roughness?;
+                    (r, r)
+                } else {
+                    let rough_u = self.get_float("uroughness")??;
+                    let rough_v = self.get_float("vroughness")??;
+                    (rough_u, rough_v)
+                };
+
+                let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
+
+                Ok(Material::Metal(Metal {
+                    eta,
+                    k,
                     rough_u,
                     rough_v,
                     remap_roughness,

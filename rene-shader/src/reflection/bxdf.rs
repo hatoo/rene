@@ -3,9 +3,10 @@ use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
-use crate::{math::random_cosine_direction, rand::DefaultRng};
+use crate::{math::random_cosine_direction, rand::DefaultRng, reflection::fresnel::Fresnel};
 
 use super::{
+    fresnel::EnumFresnel,
     microfacet::{EnumMicrofacetDistribution, MicrofacetDistribution},
     onb::Onb,
     Bxdf, BxdfKind, EnumBxdfData, SampledF,
@@ -23,6 +24,11 @@ pub struct FresnelSpecular<'a> {
 
 #[repr(transparent)]
 pub struct FresnelBlend<'a> {
+    pub data: &'a EnumBxdfData,
+}
+
+#[repr(transparent)]
+pub struct MicrofacetReflection<'a> {
     pub data: &'a EnumBxdfData,
 }
 
@@ -232,6 +238,7 @@ impl<'a> FresnelBlend<'a> {
             v0: rd.extend(0.0),
             v1: rs.extend(0.0),
             microfacet_distribution: distribution,
+            ..Default::default()
         }
     }
 
@@ -322,5 +329,93 @@ impl<'a> Bxdf for FresnelBlend<'a> {
         let pdf_wh = self.data.microfacet_distribution.pdf(wo, wh);
 
         0.5 * (Onb::local_abs_cos_theta(wi) / PI + pdf_wh / (4.0 * wo.dot(wh)))
+    }
+}
+
+impl<'a> MicrofacetReflection<'a> {
+    pub fn new_data(
+        r: Vec3A,
+        microfacet_distribution: EnumMicrofacetDistribution,
+        fresnel: EnumFresnel,
+    ) -> EnumBxdfData {
+        EnumBxdfData {
+            v0: r.extend(0.0),
+            microfacet_distribution,
+            fresnel,
+            ..Default::default()
+        }
+    }
+
+    fn r(&self) -> Vec3A {
+        self.data.v0.xyz().into()
+    }
+}
+
+fn face_forward(v: Vec3A, v2: Vec3A) -> Vec3A {
+    if v.dot(v2) < 0.0 {
+        -v
+    } else {
+        v
+    }
+}
+
+impl<'a> Bxdf for MicrofacetReflection<'a> {
+    fn kind(&self) -> BxdfKind {
+        BxdfKind::REFLECTION
+    }
+
+    fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A {
+        let cos_theta_o = Onb::local_abs_cos_theta(wo);
+        let cos_theta_i = Onb::local_abs_cos_theta(wi);
+
+        let wh = wi + wo;
+
+        if cos_theta_i == 0.0 || cos_theta_o == 0.0 || wh == Vec3A::ZERO {
+            return Vec3A::ZERO;
+        }
+
+        let wh = wh.normalize();
+
+        let f = self
+            .data
+            .fresnel
+            .evaluate(wi.dot(face_forward(wh, vec3a(0.0, 0.0, 1.0))));
+
+        self.r()
+            * self.data.microfacet_distribution.d(wh)
+            * self.data.microfacet_distribution.g(wo, wi)
+            * f
+            / (4.0 * cos_theta_i * cos_theta_o)
+    }
+
+    fn sample_f(&self, wo: Vec3A, rng: &mut DefaultRng) -> SampledF {
+        if wo.z == 0.0 {
+            return SampledF::default();
+        }
+
+        let wh = self.data.microfacet_distribution.sample_wh(wo, rng);
+        if wo.dot(wh) < 0.0 {
+            return SampledF::default();
+        }
+        let wi = reflect(wo, wh);
+        if !Onb::local_same_hemisphere(wo, wi) {
+            return SampledF::default();
+        }
+
+        let pdf = self.data.microfacet_distribution.pdf(wo, wh) / (4.0 * wo.dot(wh));
+
+        SampledF {
+            wi,
+            f: self.f(wo, wi),
+            pdf,
+        }
+    }
+
+    fn pdf(&self, wo: Vec3A, wi: Vec3A) -> f32 {
+        if !Onb::local_same_hemisphere(wo, wi) {
+            return 0.0;
+        }
+        let wh = (wo + wi).normalize();
+        self.data.microfacet_distribution.pdf(wo, wh) / (4.0 * wo.dot(wh))
     }
 }
