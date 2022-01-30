@@ -9,6 +9,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .relax_logical_pointer(true)
         .extension("SPV_KHR_ray_tracing")
         .extension("SPV_EXT_descriptor_indexing")
+        .release(true)
         .print_metadata(MetadataPrintout::Full)
         .build()?;
 
