@@ -197,6 +197,11 @@ fn main() {
             .queue_priorities(&priorities)
             .build();
 
+        let mut vulkan11 = vk::PhysicalDeviceVulkan11Features::builder()
+            .variable_pointers(true)
+            .variable_pointers_storage_buffer(true)
+            .build();
+
         let mut features2 = vk::PhysicalDeviceFeatures2::default();
         unsafe {
             instance
@@ -230,6 +235,7 @@ fn main() {
         ];
 
         let device_create_info = vk::DeviceCreateInfo::builder()
+            .push_next(&mut vulkan11)
             .push_next(&mut features2)
             .push_next(&mut features12)
             .push_next(&mut as_feature)
