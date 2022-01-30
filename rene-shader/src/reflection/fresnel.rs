@@ -32,11 +32,7 @@ impl Default for EnumFresnel {
     fn default() -> Self {
         Self {
             t: FresnelType::FresnelConductor,
-            data: EnumFresnelData {
-                v0: Default::default(),
-                v1: Default::default(),
-                v2: Default::default(),
-            },
+            data: Default::default(),
         }
     }
 }
