@@ -210,7 +210,7 @@ pub fn main_ray_generation(
 
             if i == 0 {
                 aov_normal = normal;
-                aov_albedo = material.albedo(payload.uv, textures, images);
+                aov_albedo = material.albedo(uv, textures, images);
             }
 
             if uniform.emit_object_len > 0 {
