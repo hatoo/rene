@@ -6,7 +6,10 @@ use spirv_std::{
     RuntimeArray,
 };
 
-use crate::{asm::f32_to_u32, InputImage};
+use crate::{
+    asm::{f32_to_u32, fract},
+    InputImage,
+};
 
 trait Texture {
     fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget;
@@ -96,13 +99,13 @@ impl<'a> Texture for CheckerBoard<'a> {
             ColorOrTarget {
                 t: true,
                 index: tex1,
-                color_or_uv: vec3a(x.fract(), y.fract(), 0.0),
+                color_or_uv: vec3a(fract(x), fract(y), 0.0),
             }
         } else {
             ColorOrTarget {
                 t: true,
                 index: tex2,
-                color_or_uv: vec3a(x.fract(), y.fract(), 0.0),
+                color_or_uv: vec3a(fract(x), fract(y), 0.0),
             }
         }
     }

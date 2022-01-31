@@ -44,3 +44,26 @@ pub fn f32_to_u32(value: f32) -> u32 {
     }
     uvalue
 }
+
+#[cfg(not(target_arch = "spirv"))]
+pub fn fract(value: f32) -> f32 {
+    value.fract()
+}
+
+#[spirv_std_macros::gpu_only]
+#[cfg(target_arch = "spirv")]
+#[inline]
+pub fn fract(value: f32) -> f32 {
+    let mut f: f32;
+
+    unsafe {
+        asm! {
+            "%glsl = OpExtInstImport \"GLSL.std.450\"",
+            "%float = OpTypeFloat 32",
+            "{result} =  OpExtInst %float %glsl 10 {value}",
+            value = in(reg) value,
+            result = out(reg) f
+        }
+    }
+    f
+}
