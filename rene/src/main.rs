@@ -535,9 +535,26 @@ fn main() {
             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
             .build();
 
-        const SHADER: &[u8] = include_bytes!(env!("rene_shader.spv"));
+        const SHADER_MAIN_MISS: &[u8] = include_bytes!(env!("main_miss"));
+        const SHADER_MAIN_MISS_PDF: &[u8] = include_bytes!(env!("main_miss_pdf"));
+        const SHADER_MAIN_RAYGEN: &[u8] = include_bytes!(env!("main_ray_generation"));
+        const SHADER_SPHERE_INTERSENTION: &[u8] = include_bytes!(env!("sphere_intersection"));
+        const SHADER_SPHERE_CHIT: &[u8] = include_bytes!(env!("sphere_closest_hit"));
+        const SHADER_TRIANGLE_CHIT: &[u8] = include_bytes!(env!("triangle_closest_hit"));
+        const SHADER_TRIANGLE_CHIT_PDF: &[u8] = include_bytes!(env!("triangle_closest_hit_pdf"));
+        const SHADER_SPHERE_CHIT_PDF: &[u8] = include_bytes!(env!("sphere_closest_hit_pdf"));
 
-        let shader_module = unsafe { create_shader_module(&device, SHADER).unwrap() };
+        let main_miss = unsafe { create_shader_module(&device, SHADER_MAIN_MISS).unwrap() };
+        let main_miss_pdf = unsafe { create_shader_module(&device, SHADER_MAIN_MISS_PDF).unwrap() };
+        let main_raygen = unsafe { create_shader_module(&device, SHADER_MAIN_RAYGEN).unwrap() };
+        let sphere_intersention =
+            unsafe { create_shader_module(&device, SHADER_SPHERE_INTERSENTION).unwrap() };
+        let sphere_chit = unsafe { create_shader_module(&device, SHADER_SPHERE_CHIT).unwrap() };
+        let triangle_chit = unsafe { create_shader_module(&device, SHADER_TRIANGLE_CHIT).unwrap() };
+        let triangle_chit_pdf =
+            unsafe { create_shader_module(&device, SHADER_TRIANGLE_CHIT_PDF).unwrap() };
+        let sphere_chit_pdf =
+            unsafe { create_shader_module(&device, SHADER_SPHERE_CHIT_PDF).unwrap() };
 
         let layouts = [descriptor_set_layout];
         let layout_create_info = vk::PipelineLayoutCreateInfo::builder()
@@ -610,42 +627,42 @@ fn main() {
         let shader_stages = vec![
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::RAYGEN_KHR)
-                .module(shader_module)
+                .module(main_raygen)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::MISS_KHR)
-                .module(shader_module)
+                .module(main_miss)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_miss\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::INTERSECTION_KHR)
-                .module(shader_module)
+                .module(sphere_intersention)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"sphere_intersection\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                .module(shader_module)
+                .module(sphere_chit)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"sphere_closest_hit\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                .module(shader_module)
+                .module(triangle_chit)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"triangle_closest_hit\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::MISS_KHR)
-                .module(shader_module)
+                .module(main_miss_pdf)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_miss_pdf\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                .module(shader_module)
+                .module(triangle_chit_pdf)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"triangle_closest_hit_pdf\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                .module(shader_module)
+                .module(sphere_chit_pdf)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"sphere_closest_hit_pdf\0").unwrap())
                 .build(),
         ];
@@ -666,7 +683,14 @@ fn main() {
         .unwrap()[0];
 
         unsafe {
-            device.destroy_shader_module(shader_module, None);
+            device.destroy_shader_module(main_miss, None);
+            device.destroy_shader_module(main_miss_pdf, None);
+            device.destroy_shader_module(main_raygen, None);
+            device.destroy_shader_module(sphere_intersention, None);
+            device.destroy_shader_module(sphere_chit, None);
+            device.destroy_shader_module(triangle_chit, None);
+            device.destroy_shader_module(triangle_chit_pdf, None);
+            device.destroy_shader_module(sphere_chit_pdf, None);
         }
 
         (
