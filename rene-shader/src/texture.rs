@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
+    arch::IndexUnchecked,
     glam::{uvec4, vec2, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4, Vec4Swizzles},
     RuntimeArray,
 };
@@ -166,7 +167,7 @@ impl EnumTexture {
         };
 
         while color_or_target.t {
-            let tex = textures[color_or_target.index as usize];
+            let tex = unsafe { textures.index_unchecked(color_or_target.index as usize) };
             color_or_target = match tex.t {
                 TextureType::Solid => Solid { data: &tex.data }.color(
                     images,

@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
+    arch::IndexUnchecked,
     glam::{uvec4, vec3a, vec4, UVec4, Vec2, Vec3A, Vec4},
     RuntimeArray,
 };
@@ -99,7 +100,7 @@ impl<'a> Material for Matte<'a> {
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
-        textures[self.data.u0.x as usize].color(textures, images, uv)
+        unsafe { textures.index_unchecked(self.data.u0.x as usize) }.color(textures, images, uv)
     }
 
     fn compute_bsdf(
@@ -132,11 +133,11 @@ impl<'a> Substrate<'a> {
         }
     }
     fn d(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
-        textures[self.data.u0.x as usize].color(textures, images, uv)
+        unsafe { textures.index_unchecked(self.data.u0.x as usize) }.color(textures, images, uv)
     }
 
     fn s(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
-        textures[self.data.u0.y as usize].color(textures, images, uv)
+        unsafe { textures.index_unchecked(self.data.u0.y as usize) }.color(textures, images, uv)
     }
 
     fn rough_u(&self) -> f32 {
@@ -205,11 +206,11 @@ impl<'a> Metal<'a> {
     }
 
     fn eta(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
-        textures[self.data.u0.x as usize].color(textures, images, uv)
+        unsafe { textures.index_unchecked(self.data.u0.x as usize) }.color(textures, images, uv)
     }
 
     fn k(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
-        textures[self.data.u0.y as usize].color(textures, images, uv)
+        unsafe { textures.index_unchecked(self.data.u0.y as usize) }.color(textures, images, uv)
     }
 
     fn rough_u(&self) -> f32 {
