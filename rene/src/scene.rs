@@ -251,7 +251,7 @@ impl Scene {
                     match obj {
                         WorldObject::LightSource(lightsource) => match lightsource {
                             LightSource::Infinite(Infinite { color, image_map }) => {
-                                self.uniform.background_color = color;
+                                self.uniform.background_color = color.extend(0.0);
 
                                 if let Some(image) = image_map {
                                     let image_index = self.images.len();

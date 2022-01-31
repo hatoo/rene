@@ -22,7 +22,7 @@ use texture::EnumTexture;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::{ignore_intersection, report_intersection, IndexUnchecked},
-    glam::{uvec2, vec2, vec3a, Mat4, UVec3, Vec2, Vec3A, Vec4},
+    glam::{uvec2, vec2, vec3a, Mat4, UVec3, Vec2, Vec3A, Vec4, Vec4Swizzles},
     image::{Image, SampledImage},
     ray_tracing::{AccelerationStructure, RayFlags},
     RuntimeArray,
@@ -89,7 +89,7 @@ impl RayPayload {
 pub struct Uniform {
     pub camera_to_world: Mat4,
     pub background_matrix: Mat4,
-    pub background_color: Vec3A,
+    pub background_color: Vec4,
     pub background_texture: u32,
     pub camera: PerspectiveCamera,
     pub lights_len: u32,
@@ -124,7 +124,7 @@ pub fn main_miss(
             .transform_vector3a(ray_direction)
             .normalize(),
     );
-    let color = uniform.background_color
+    let color = Vec3A::from(uniform.background_color.xyz())
         * unsafe { textures.index_unchecked(uniform.background_texture as usize) }
             .color(textures, images, uv);
 
