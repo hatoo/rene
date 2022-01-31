@@ -1,3 +1,5 @@
+use crate::asm::u32_to_f32;
+
 #[repr(transparent)]
 pub struct PCG32si {
     state: u32,
@@ -34,13 +36,13 @@ impl PCG32si {
     }
 
     pub fn next_f32(&mut self) -> f32 {
-        let float_size = core::mem::size_of::<f32>() as u32 * 8;
+        const FLOAT_SIZE: u32 = core::mem::size_of::<f32>() as u32 * 8;
         let precision = 23 + 1;
-        let scale = 1.0 / ((1 << precision) as f32);
+        let scale = 1.0 / u32_to_f32(1 << precision);
 
         let value = self.next_u32();
-        let value = value >> (float_size - precision);
-        scale * value as f32
+        let value = value >> (FLOAT_SIZE - precision);
+        scale * u32_to_f32(value)
     }
 
     pub fn next_f32_range(&mut self, min: f32, max: f32) -> f32 {

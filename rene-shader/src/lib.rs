@@ -1,7 +1,7 @@
 #![cfg_attr(
     target_arch = "spirv",
     no_std,
-    feature(register_attr),
+    feature(register_attr, asm_experimental_arch),
     register_attr(spirv)
 )]
 
@@ -29,6 +29,7 @@ use spirv_std::{
 };
 
 pub mod area_light;
+mod asm;
 pub mod camera;
 pub mod light;
 pub mod material;

@@ -6,7 +6,7 @@ use spirv_std::{
     RuntimeArray,
 };
 
-use crate::InputImage;
+use crate::{asm::f32_to_u32, InputImage};
 
 trait Texture {
     fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget;
@@ -92,7 +92,7 @@ impl<'a> Texture for CheckerBoard<'a> {
         let x = uv.x * w;
         let y = uv.y * h;
 
-        if (x as u32 % 2 == 0) == (y as u32 % 2 == 0) {
+        if (f32_to_u32(x) % 2 == 0) == (f32_to_u32(y) % 2 == 0) {
             ColorOrTarget {
                 t: true,
                 index: tex1,
