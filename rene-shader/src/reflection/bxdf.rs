@@ -320,7 +320,7 @@ impl<'a> Bxdf for FresnelBlend<'a> {
             let mut wi = random_cosine_direction(rng);
 
             if wo.z < 0.0 {
-                wi.z *= -1.0;
+                wi.z = -wi.z;
             }
 
             wi
@@ -329,11 +329,7 @@ impl<'a> Bxdf for FresnelBlend<'a> {
             let wi = reflect(wo, wh);
 
             if !Onb::local_same_hemisphere(wo, wi) {
-                return SampledF {
-                    wi,
-                    f: vec3a(0.0, 0.0, 0.0),
-                    pdf: 0.0,
-                };
+                return SampledF::default();
             }
 
             wi
