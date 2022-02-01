@@ -47,3 +47,11 @@ cargo run --features=oidn-denoiser  -- --denoiser=oidn   .\sample_scenes\teapot\
 ```
 
 ![dragon](images/teapot.png)
+
+# Veach, MIS
+
+```
+cargo run  -- .\sample_scenes\veach-mis\scene.pbrt
+```
+
+![Veach, MIS](images/veach-mis.png)
