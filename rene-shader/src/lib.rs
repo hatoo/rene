@@ -12,7 +12,7 @@ use core::f32::consts::PI;
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
 use math::sphere_uv;
-use reflection::{onb::Onb, Bsdf};
+use reflection::{onb::Onb, Bsdf, BxdfKind};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 use surface_sample::{EnumSurfaceSample, SurfaceSample};
@@ -214,7 +214,7 @@ pub fn main_ray_generation(
                 aov_albedo = material.albedo(uv, textures, images);
             }
 
-            if uniform.emit_object_len > 0 {
+            if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
                 let (wi, pdf, f) = if rng.next_f32() > 0.5 {
                     let wi = (unsafe {
                         emit_objects

@@ -81,7 +81,7 @@ impl<'a> LambertianReflection<'a> {
 
 impl<'a> Bxdf for LambertianReflection<'a> {
     fn kind(&self) -> super::BxdfKind {
-        BxdfKind::REFLECTION
+        BxdfKind::REFLECTION | BxdfKind::DIFFUSE
     }
 
     fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
@@ -286,7 +286,7 @@ impl<'a> FresnelBlend<'a> {
 
 impl<'a> Bxdf for FresnelBlend<'a> {
     fn kind(&self) -> BxdfKind {
-        BxdfKind::REFLECTION
+        BxdfKind::REFLECTION | BxdfKind::DIFFUSE
     }
 
     fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A {
@@ -395,7 +395,7 @@ fn face_forward(v: Vec3A, v2: Vec3A) -> Vec3A {
 
 impl<'a> Bxdf for MicrofacetReflection<'a> {
     fn kind(&self) -> BxdfKind {
-        BxdfKind::REFLECTION
+        BxdfKind::REFLECTION | BxdfKind::DIFFUSE
     }
 
     fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A {

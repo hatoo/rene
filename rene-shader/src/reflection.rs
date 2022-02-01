@@ -30,11 +30,13 @@ use self::{
     onb::Onb,
 };
 
+#[derive(Clone, Copy)]
 pub struct BxdfKind(u32);
 
 impl BxdfKind {
-    const REFLECTION: Self = Self(1 << 0);
-    const TRANSMISSION: Self = Self(1 << 1);
+    pub const REFLECTION: Self = Self(1 << 0);
+    pub const TRANSMISSION: Self = Self(1 << 1);
+    pub const DIFFUSE: Self = Self(1 << 2);
 
     pub fn contains(&self, other: Self) -> bool {
         (self.0 & other.0) != 0
@@ -198,6 +200,19 @@ impl Bsdf {
         let bxdf = unsafe { self.bxdfs.index_unchecked_mut(self.len as usize) };
         self.len += 1;
         bxdf
+    }
+
+    pub fn contains(&self, kind: BxdfKind) -> bool {
+        for i in 0..self.len {
+            if unsafe { self.bxdfs.index_unchecked(i as usize) }
+                .kind()
+                .contains(kind)
+            {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
