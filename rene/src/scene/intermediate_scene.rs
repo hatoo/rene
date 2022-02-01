@@ -407,20 +407,26 @@ impl<'a, T> GetValue for Object<'a, T> {
                 }))
             }
             "metal" => {
-                let eta = self
-                    .get_texture_or_color("eta")
-                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
-                let k = self
-                    .get_texture_or_color("k")
-                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
+                let eta = self.get_texture_or_color("eta").unwrap_or_else(|_| {
+                    Ok(TextureOrColor::Color(vec3a(
+                        0.19999069, 0.92208463, 1.09987593,
+                    )))
+                })?;
+                let k = self.get_texture_or_color("k").unwrap_or_else(|_| {
+                    Ok(TextureOrColor::Color(vec3a(
+                        3.90463543, 2.44763327, 2.13765264,
+                    )))
+                })?;
 
                 let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
                     let r = roughness?;
                     (r, r)
-                } else {
-                    let rough_u = self.get_float("uroughness")??;
-                    let rough_v = self.get_float("vroughness")??;
+                } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) =
+                    (self.get_float("uroughness"), self.get_float("vroughness"))
+                {
                     (rough_u, rough_v)
+                } else {
+                    (0.01, 0.01)
                 };
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
