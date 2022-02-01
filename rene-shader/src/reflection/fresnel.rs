@@ -2,6 +2,8 @@ use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
+use crate::asm::f32_clamp;
+
 pub trait Fresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A;
 }
@@ -64,7 +66,7 @@ impl<'a> FresnelConductor<'a> {
 }
 
 fn fr_conductor(cos_theta_i: f32, eta_i: Vec3A, eta_t: Vec3A, k: Vec3A) -> Vec3A {
-    let cos_theta_i = cos_theta_i.clamp(-1.0, 1.0);
+    let cos_theta_i = f32_clamp(cos_theta_i, -1.0, 1.0);
     let eta = eta_t / eta_i;
     let eta_k = k / eta_i;
 

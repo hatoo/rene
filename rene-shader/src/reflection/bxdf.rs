@@ -3,7 +3,9 @@ use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
-use crate::{math::random_cosine_direction, rand::DefaultRng, reflection::fresnel::Fresnel};
+use crate::{
+    asm::f32_clamp, math::random_cosine_direction, rand::DefaultRng, reflection::fresnel::Fresnel,
+};
 
 use super::{
     fresnel::EnumFresnel,
@@ -134,7 +136,7 @@ fn refract(wi: Vec3A, n: Vec3A, etai_over_etat: f32) -> (bool, Vec3A) {
 }
 
 fn fr_dielectric(cos_theta_i: f32, eta_i: f32, eta_t: f32) -> f32 {
-    let cos_theta_i = cos_theta_i.clamp(-1.0, 1.0);
+    let cos_theta_i = f32_clamp(cos_theta_i, -1.0, 1.0);
     let entering = cos_theta_i > 0.0;
 
     let (eta_i, eta_t) = if !entering {

@@ -2,6 +2,8 @@ use spirv_std::glam::{vec3a, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
+use crate::asm::f32_clamp;
+
 pub struct Onb {
     pub u: Vec3A,
     pub v: Vec3A,
@@ -62,7 +64,7 @@ impl Onb {
         if sin_theta == 0.0 {
             1.0
         } else {
-            (w.x / sin_theta).clamp(-1.0, 1.0)
+            f32_clamp(w.x / sin_theta, -1.0, 1.0)
         }
     }
 
@@ -71,7 +73,7 @@ impl Onb {
         if sin_theta == 0.0 {
             0.0
         } else {
-            (w.y / sin_theta).clamp(-1.0, 1.0)
+            f32_clamp(w.y / sin_theta, -1.0, 1.0)
         }
     }
 

@@ -67,3 +67,28 @@ pub fn fract(value: f32) -> f32 {
     }
     f
 }
+
+#[cfg(not(target_arch = "spirv"))]
+pub fn f32_clamp(value: f32, min: f32, max: f32) -> f32 {
+    value.clamp(min, max)
+}
+
+#[spirv_std_macros::gpu_only]
+#[cfg(target_arch = "spirv")]
+#[inline]
+pub fn f32_clamp(value: f32, min: f32, max: f32) -> f32 {
+    let mut r: f32;
+
+    unsafe {
+        asm! {
+            "%glsl = OpExtInstImport \"GLSL.std.450\"",
+            "%float = OpTypeFloat 32",
+            "{result} =  OpExtInst %float %glsl 43 {value} {min} {max}",
+            value = in(reg) value,
+            min = in(reg) min,
+            max = in(reg) max,
+            result = out(reg) r
+        }
+    }
+    r
+}
