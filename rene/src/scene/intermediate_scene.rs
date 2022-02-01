@@ -409,12 +409,16 @@ impl<'a, T> GetValue for Object<'a, T> {
             "metal" => {
                 let eta = self.get_texture_or_color("eta").unwrap_or_else(|_| {
                     Ok(TextureOrColor::Color(vec3a(
-                        0.19999069, 0.92208463, 1.09987593,
+                        0.19999069,
+                        0.922_084_6,
+                        1.099_875_9,
                     )))
                 })?;
                 let k = self.get_texture_or_color("k").unwrap_or_else(|_| {
                     Ok(TextureOrColor::Color(vec3a(
-                        3.90463543, 2.44763327, 2.13765264,
+                        3.904_635_4,
+                        2.447_633_3,
+                        2.137_652_6,
                     )))
                 })?;
 

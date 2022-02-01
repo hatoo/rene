@@ -1,4 +1,4 @@
-use core::f32::consts::PI;
+use core::f32::consts::{PI, TAU};
 use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
@@ -80,7 +80,7 @@ fn trowbridge_reitz_sample11(cos_theta: f32, rng: &mut DefaultRng) -> Vec2 {
 
     if cos_theta > 0.9999 {
         let r = (u1 / (1.0 - u1)).sqrt();
-        let phi = 6.28318530718 * u2;
+        let phi = TAU * u2;
 
         return vec2(r * phi.cos(), r * phi.sin());
     }
