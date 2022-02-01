@@ -246,10 +246,6 @@ impl Bsdf {
     }
 
     pub fn pdf(&self, wo_world: Vec3A, wi_world: Vec3A) -> f32 {
-        if self.len == 0 {
-            return 0.0;
-        }
-
         let mut pdf = 0.0;
 
         let wo = self.onb.world_to_local(wo_world);
