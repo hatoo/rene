@@ -215,7 +215,7 @@ pub fn main_ray_generation(
             }
 
             if uniform.emit_object_len > 0 {
-                let (wi, pdf) = if rng.next_f32() > 0.5 {
+                let (wi, pdf, f) = if rng.next_f32() > 0.5 {
                     let wi = (unsafe {
                         emit_objects
                             .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
@@ -224,11 +224,11 @@ pub fn main_ray_generation(
                         - position)
                         .normalize();
 
-                    (wi, bsdf.pdf(wi, normal))
+                    (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
                 } else {
                     let sampled_f = bsdf.sample_f(wo, &mut rng);
 
-                    (sampled_f.wi, sampled_f.pdf)
+                    (sampled_f.wi, sampled_f.pdf, sampled_f.f)
                 };
 
                 ray = Ray {
@@ -254,7 +254,7 @@ pub fn main_ray_generation(
                     );
                 }
 
-                color *= bsdf.f(wo, wi) * normal.dot(wi).abs();
+                color *= f * normal.dot(wi).abs();
                 let pdf = 0.5 * pdf + 0.5 * weight * payload_pdf.pdf;
 
                 if pdf < 1e-5 {
