@@ -3,7 +3,7 @@ use std::{
     collections::HashSet,
     ffi::{c_void, CStr, CString},
     fs::File,
-    io::Read,
+    io::{Read, Write},
     os::raw::c_char,
     path::PathBuf,
     ptr::{self, null},
@@ -49,7 +49,7 @@ enum Denoiser {
 #[derive(Parser)]
 struct Opts {
     #[clap(help = "pbrt file")]
-    pbrt_path: PathBuf,
+    pbrt_path: Option<PathBuf>,
     #[clap(help = "AOV normal", long = "aov-normal")]
     aov_normal: Option<PathBuf>,
     #[clap(help = "AOV albedo", long = "aov-albedo")]
@@ -61,6 +61,8 @@ struct Opts {
         default_value = "none"
     )]
     denoiser: Denoiser,
+    #[clap(help = "Dump SPIR-V module", long = "dump-module")]
+    dump_module_path: Option<PathBuf>,
 }
 
 fn main() {
@@ -72,7 +74,7 @@ fn main() {
     const N_SAMPLES: u32 = 5000;
     const N_SAMPLES_ITER: u32 = 100;
 
-    let mut opts: Opts = Opts::parse();
+    let opts: Opts = Opts::parse();
     let mut pbrt_file = String::new();
 
     #[cfg(not(feature = "optix-denoiser"))]
@@ -89,14 +91,24 @@ fn main() {
         );
     }
 
-    File::open(&opts.pbrt_path)
+    if let Some(dump_module_path) = opts.dump_module_path {
+        File::create(dump_module_path)
+            .unwrap()
+            .write_all(include_bytes!(env!("rene_shader.spv")))
+            .unwrap();
+        return;
+    }
+
+    let mut pbrt_path = opts.pbrt_path.unwrap();
+
+    File::open(&pbrt_path)
         .unwrap()
         .read_to_string(&mut pbrt_file)
         .unwrap();
 
-    opts.pbrt_path.pop();
+    pbrt_path.pop();
 
-    match expand_include(pbrt_file.as_str(), &opts.pbrt_path).unwrap() {
+    match expand_include(pbrt_file.as_str(), &pbrt_path).unwrap() {
         Cow::Borrowed(_) => {}
         Cow::Owned(s) => pbrt_file = s,
     }
@@ -108,7 +120,7 @@ fn main() {
             return;
         }
     };
-    let scene = match scene::Scene::create(parsed_scene, &opts.pbrt_path) {
+    let scene = match scene::Scene::create(parsed_scene, &pbrt_path) {
         Ok(scene) => scene,
         Err(e) => {
             println!("{}", e);
