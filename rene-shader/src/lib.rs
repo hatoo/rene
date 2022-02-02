@@ -410,7 +410,7 @@ pub fn sphere_closest_hit(
     let theta = object_hit_pos.z.acos();
 
     let u = phi * INV_PI * 0.5;
-    let v = theta * INV_PI;
+    let v = (theta - PI) * -INV_PI;
 
     let normal = vec3a(
         world_to_object.x.dot(object_hit_pos),

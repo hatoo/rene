@@ -114,7 +114,7 @@ impl<'a> Texture for CheckerBoard<'a> {
 impl<'a> Texture for ImageMap<'a> {
     fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
         let image = unsafe { images.index(self.data.u0.x as usize) };
-        let color: Vec4 = unsafe { image.sample_by_lod(uv, 0.0) };
+        let color: Vec4 = unsafe { image.sample_by_lod(vec2(uv.x, 1.0 - uv.y), 0.0) };
         ColorOrTarget {
             t: false,
             index: 0,
