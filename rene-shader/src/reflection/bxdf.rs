@@ -1,4 +1,4 @@
-use core::f32::consts::PI;
+use core::f32::consts::{FRAC_1_PI, PI};
 use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
@@ -85,7 +85,7 @@ impl<'a> Bxdf for LambertianReflection<'a> {
     }
 
     fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
-        self.albedo() / PI
+        self.albedo() * FRAC_1_PI
     }
 
     fn sample_f(&self, wo: Vec3A, rng: &mut DefaultRng) -> SampledF {
@@ -106,7 +106,7 @@ impl<'a> Bxdf for LambertianReflection<'a> {
 
     fn pdf(&self, wo: Vec3A, wi: Vec3A) -> f32 {
         if Onb::local_same_hemisphere(wo, wi) {
-            Onb::local_abs_cos_theta(wi) / PI
+            Onb::local_abs_cos_theta(wi) * FRAC_1_PI
         } else {
             0.0
         }
@@ -350,7 +350,7 @@ impl<'a> Bxdf for FresnelBlend<'a> {
         let wh = (wo + wi).normalize();
         let pdf_wh = self.data.microfacet_distribution.pdf(wo, wh);
 
-        0.5 * (Onb::local_abs_cos_theta(wi) / PI + pdf_wh / (4.0 * wo.dot(wh)))
+        0.5 * (Onb::local_abs_cos_theta(wi) * FRAC_1_PI + pdf_wh / (4.0 * wo.dot(wh)))
     }
 }
 

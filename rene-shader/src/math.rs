@@ -1,4 +1,4 @@
-use core::f32::consts::PI;
+use core::f32::consts::{FRAC_1_PI, PI};
 use spirv_std::glam::{vec2, vec3a, Vec2, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
@@ -68,12 +68,11 @@ pub fn random_to_sphere(radius: f32, distance_squared: f32, rng: &mut DefaultRng
 }
 
 pub fn sphere_uv(point: Vec3A) -> Vec2 {
-    const INV_PI: f32 = 1.0 / PI;
     let theta = point.z.acos();
     let phi = (point.y).atan2(point.x);
     let phi = if phi < 0.0 { phi + 2.0 * PI } else { phi };
 
-    vec2(phi * 0.5 * INV_PI, (theta - PI) * -INV_PI)
+    vec2(phi * 0.5 * FRAC_1_PI, (theta - PI) * -FRAC_1_PI)
 }
 
 pub trait IsNearZero {

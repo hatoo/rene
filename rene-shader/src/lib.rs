@@ -8,7 +8,7 @@
 use crate::rand::DefaultRng;
 use area_light::{AreaLight, EnumAreaLight};
 use camera::PerspectiveCamera;
-use core::f32::consts::PI;
+use core::f32::consts::{FRAC_1_PI, PI};
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
 use math::sphere_uv;
@@ -411,8 +411,6 @@ pub fn sphere_closest_hit(
     #[spirv(instance_custom_index)] instance_custom_index: u32,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
 ) {
-    const INV_PI: f32 = 1.0 / PI;
-
     let hit_pos = world_ray_origin + t * world_ray_direction;
     let object_hit_pos = object_ray_origin + t * object_ray_direction;
 
@@ -420,8 +418,8 @@ pub fn sphere_closest_hit(
     let phi = if phi < 0.0 { phi + 2.0 * PI } else { phi };
     let theta = object_hit_pos.z.acos();
 
-    let u = phi * INV_PI * 0.5;
-    let v = (theta - PI) * -INV_PI;
+    let u = phi * FRAC_1_PI * 0.5;
+    let v = (theta - PI) * -FRAC_1_PI;
 
     let normal = vec3a(
         world_to_object.x.dot(object_hit_pos),
