@@ -21,7 +21,7 @@ use texture::EnumTexture;
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
-    arch::{ignore_intersection, report_intersection, IndexUnchecked},
+    arch::{report_intersection, IndexUnchecked},
     glam::{uvec2, vec2, vec3a, Mat4, UVec3, Vec2, Vec3A, Vec4, Vec4Swizzles},
     image::{Image, SampledImage},
     ray_tracing::{AccelerationStructure, RayFlags},
@@ -622,17 +622,4 @@ pub fn sphere_closest_hit_pdf(
     *out = RayPayloadPDF {
         pdf: 1.0 / solid_angle,
     };
-}
-
-#[spirv(any_hit)]
-pub fn triangle_any_hit(
-    #[spirv(ray_tmax)] t: f32,
-    #[spirv(object_ray_origin)] object_ray_origin: Vec3A,
-    #[spirv(object_ray_direction)] object_ray_direction: Vec3A,
-) {
-    let pos = object_ray_origin + t * object_ray_direction;
-
-    if pos.length_squared() < 0.2 {
-        unsafe { ignore_intersection() };
-    }
 }
