@@ -467,6 +467,14 @@ fn deg_to_radian(angle: f32) -> f32 {
     angle * PI / 180.0
 }
 
+fn inverse_gamma_correct(value: f32) -> f32 {
+    if value <= 0.04045 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
     let pfm = OsStr::new("pfm");
     let exr = OsStr::new("exr");
@@ -503,9 +511,9 @@ fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
 
             for (_, _, p) in image.pixels() {
                 data.push([
-                    p.0[0] as f32 / 255.0,
-                    p.0[1] as f32 / 255.0,
-                    p.0[2] as f32 / 255.0,
+                    inverse_gamma_correct(p.0[0] as f32 / 255.0),
+                    inverse_gamma_correct(p.0[1] as f32 / 255.0),
+                    inverse_gamma_correct(p.0[2] as f32 / 255.0),
                     p.0[3] as f32 / 255.0,
                 ]);
             }
