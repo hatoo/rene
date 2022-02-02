@@ -564,13 +564,9 @@ pub fn triangle_closest_hit_pdf(
     let pos =
         v0.position * barycentrics.x + v1.position * barycentrics.y + v2.position * barycentrics.z;
 
-    let nrm = if v0.normal == Vec3A::ZERO && v1.normal == Vec3A::ZERO && v2.normal == Vec3A::ZERO {
-        (v1.position - v0.position)
-            .cross(v2.position - v0.position)
-            .normalize()
-    } else {
-        v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z
-    };
+    let nrm = (v1.position - v0.position)
+        .cross(v2.position - v0.position)
+        .normalize();
 
     let p0 = v0.position.x * object_to_world.x
         + v0.position.y * object_to_world.y
