@@ -7,6 +7,7 @@ use std::{
     os::raw::c_char,
     path::PathBuf,
     ptr::{self, null},
+    time::Instant,
 };
 
 use ash::{
@@ -1221,6 +1222,7 @@ fn main() {
                     );
                 }
             }
+            let now = Instant::now();
             unsafe {
                 device.end_command_buffer(command_buffer).unwrap();
 
@@ -1236,7 +1238,12 @@ fn main() {
 
                 device.queue_wait_idle(graphics_queue).unwrap();
             }
-            eprint!("\rSamples: {} / {} ", sampled, N_SAMPLES);
+            eprint!(
+                "\rSamples: {} / {} ({} ms)",
+                sampled,
+                N_SAMPLES,
+                now.elapsed().as_millis()
+            );
         }
         unsafe {
             device.free_command_buffers(command_pool, &[command_buffer]);
