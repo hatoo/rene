@@ -10,12 +10,7 @@ use std::{
     time::Instant,
 };
 
-use ash::{
-    extensions::khr::AccelerationStructure,
-    prelude::VkResult,
-    util::Align,
-    vk::{self, AccelerationStructureKHR},
-};
+use ash::{extensions::khr::AccelerationStructure, prelude::VkResult, util::Align, vk};
 
 use clap::{ArgEnum, Parser};
 use glam::{Vec2, Vec3A};
@@ -1002,7 +997,7 @@ fn main() {
 
         let mut shader_binding_table_buffer = BufferResource::new(
             table_size as u64,
-            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT
                 | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -1012,7 +1007,12 @@ fn main() {
 
         shader_binding_table_buffer.store(&table_data, &device);
 
-        shader_binding_table_buffer
+        shader_binding_table_buffer.to_gpu_only(
+            &device,
+            device_memory_properties,
+            command_pool,
+            graphics_queue,
+        )
     };
 
     {
@@ -1864,6 +1864,7 @@ pub unsafe extern "system" fn default_vulkan_debug_utils_callback(
 
 #[derive(Clone)]
 struct BufferResource {
+    usage: vk::BufferUsageFlags,
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
     size: vk::DeviceSize,
@@ -1915,6 +1916,7 @@ impl BufferResource {
             device.bind_buffer_memory(buffer, memory, 0).unwrap();
 
             BufferResource {
+                usage,
                 buffer,
                 memory,
                 size,
@@ -1930,6 +1932,106 @@ impl BufferResource {
             let mut mapped_slice = Align::new(mapped_ptr, std::mem::align_of::<T>() as u64, size);
             mapped_slice.copy_from_slice(data);
             self.unmap(device);
+        }
+    }
+
+    fn to_gpu_only(
+        self,
+        device: &ash::Device,
+        device_memory_properties: vk::PhysicalDeviceMemoryProperties,
+        command_pool: vk::CommandPool,
+        graphics_queue: vk::Queue,
+    ) -> Self {
+        let size = self.size;
+        let usage =
+            self.usage ^ vk::BufferUsageFlags::TRANSFER_SRC | vk::BufferUsageFlags::TRANSFER_DST;
+        let memory_properties = vk::MemoryPropertyFlags::DEVICE_LOCAL;
+        unsafe {
+            let buffer_info = vk::BufferCreateInfo::builder()
+                .size(size)
+                .usage(usage)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let buffer = device.create_buffer(&buffer_info, None).unwrap();
+
+            let memory_req = device.get_buffer_memory_requirements(buffer);
+
+            let memory_index = get_memory_type_index(
+                device_memory_properties,
+                memory_req.memory_type_bits,
+                memory_properties,
+            );
+
+            let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+                .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS)
+                .build();
+
+            let mut allocate_info_builder = vk::MemoryAllocateInfo::builder();
+
+            if usage.contains(vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
+                allocate_info_builder =
+                    allocate_info_builder.push_next(&mut memory_allocate_flags_info);
+            }
+
+            let allocate_info = allocate_info_builder
+                .allocation_size(memory_req.size)
+                .memory_type_index(memory_index)
+                .build();
+
+            let memory = device.allocate_memory(&allocate_info, None).unwrap();
+
+            device.bind_buffer_memory(buffer, memory, 0).unwrap();
+
+            // COPY
+
+            {
+                let command_buffer = {
+                    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                        .command_buffer_count(1)
+                        .command_pool(command_pool)
+                        .level(vk::CommandBufferLevel::PRIMARY)
+                        .build();
+
+                    device
+                        .allocate_command_buffers(&command_buffer_allocate_info)
+                        .expect("Failed to allocate Command Buffers!")[0]
+                };
+
+                let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                    .build();
+
+                device
+                    .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                    .expect("Failed to begin recording Command Buffer at beginning!");
+
+                let buffer_copy = [vk::BufferCopy::builder().size(size).build()];
+                device.cmd_copy_buffer(command_buffer, self.buffer, buffer, &buffer_copy);
+                device.end_command_buffer(command_buffer).unwrap();
+
+                let command_buffers = [command_buffer];
+
+                let submit_infos = [vk::SubmitInfo::builder()
+                    .command_buffers(&command_buffers)
+                    .build()];
+
+                device
+                    .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
+                    .expect("Failed to execute queue submit.");
+
+                device.queue_wait_idle(graphics_queue).unwrap();
+                device.free_command_buffers(command_pool, &[command_buffer]);
+            }
+
+            self.destroy(device);
+
+            Self {
+                usage,
+                buffer,
+                memory,
+                size,
+            }
         }
     }
 
@@ -2190,10 +2292,10 @@ impl Image {
 }
 
 struct SceneBuffers {
-    tlas: AccelerationStructureKHR,
-    tlas_emit_object: AccelerationStructureKHR,
-    default_blas: AccelerationStructureKHR,
-    blases: Vec<AccelerationStructureKHR>,
+    tlas: vk::AccelerationStructureKHR,
+    tlas_emit_object: vk::AccelerationStructureKHR,
+    default_blas: vk::AccelerationStructureKHR,
+    blases: Vec<vk::AccelerationStructureKHR>,
     uniform: BufferResource,
     materials: BufferResource,
     buffers: Vec<BufferResource>,
@@ -2214,7 +2316,7 @@ impl SceneBuffers {
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (AccelerationStructureKHR, BufferResource, BufferResource) {
+    ) -> (vk::AccelerationStructureKHR, BufferResource, BufferResource) {
         let aabb = vk::AabbPositionsKHR::builder()
             .min_x(-1.0)
             .max_x(1.0)
@@ -2227,7 +2329,8 @@ impl SceneBuffers {
         let mut aabb_buffer = BufferResource::new(
             std::mem::size_of::<vk::AabbPositionsKHR>() as u64,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                | vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT
                 | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2236,6 +2339,13 @@ impl SceneBuffers {
         );
 
         aabb_buffer.store(&[aabb], device);
+
+        let aabb_buffer = aabb_buffer.to_gpu_only(
+            device,
+            device_memory_properties,
+            command_pool,
+            graphics_queue,
+        );
 
         let geometry = vk::AccelerationStructureGeometryKHR::builder()
             .geometry_type(vk::GeometryTypeKHR::AABBS)
@@ -2371,7 +2481,7 @@ impl SceneBuffers {
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (AccelerationStructureKHR, BufferResource) {
+    ) -> (vk::AccelerationStructureKHR, BufferResource) {
         let vertex_stride = std::mem::size_of::<Vertex>();
         let index_stride = std::mem::size_of::<u32>();
 
@@ -2521,7 +2631,8 @@ impl SceneBuffers {
             let mut instance_buffer = BufferResource::new(
                 instance_buffer_size as vk::DeviceSize,
                 vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                    | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2531,7 +2642,15 @@ impl SceneBuffers {
 
             instance_buffer.store(instances, device);
 
-            (instances.len(), instance_buffer)
+            (
+                instances.len(),
+                instance_buffer.to_gpu_only(
+                    device,
+                    device_memory_properties,
+                    command_pool,
+                    graphics_queue,
+                ),
+            )
         };
 
         let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
@@ -2744,7 +2863,8 @@ impl SceneBuffers {
                 buffer_size,
                 vk::BufferUsageFlags::STORAGE_BUFFER
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                    | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2753,7 +2873,12 @@ impl SceneBuffers {
             );
             index_buffer.store(&global_indices, device);
 
-            index_buffer
+            index_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let vertices = {
@@ -2764,7 +2889,8 @@ impl SceneBuffers {
                 buffer_size,
                 vk::BufferUsageFlags::STORAGE_BUFFER
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                    | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2773,7 +2899,12 @@ impl SceneBuffers {
             );
             vertex_buffer.store(&global_vertices, device);
 
-            vertex_buffer
+            vertex_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let blases: Vec<_> = blas_args
@@ -2805,7 +2936,7 @@ impl SceneBuffers {
 
             let mut material_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2814,7 +2945,12 @@ impl SceneBuffers {
             );
             material_buffer.store(&scene.materials, device);
 
-            material_buffer
+            material_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let mut index_data: Vec<IndexData> = Vec::new();
@@ -2923,7 +3059,7 @@ impl SceneBuffers {
 
             let mut index_data_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2932,7 +3068,12 @@ impl SceneBuffers {
             );
             index_data_buffer.store(&index_data, device);
 
-            index_data_buffer
+            index_data_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let textures = {
@@ -2941,7 +3082,7 @@ impl SceneBuffers {
 
             let mut textures_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2950,7 +3091,12 @@ impl SceneBuffers {
             );
             textures_buffer.store(&scene.textures, device);
 
-            textures_buffer
+            textures_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let mut lights = scene.lights.clone();
@@ -2967,7 +3113,7 @@ impl SceneBuffers {
 
             let mut lights_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2976,7 +3122,12 @@ impl SceneBuffers {
             );
             lights_buffer.store(&lights, device);
 
-            lights_buffer
+            lights_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let area_lights = {
@@ -2985,7 +3136,7 @@ impl SceneBuffers {
 
             let mut area_lights_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -2994,7 +3145,12 @@ impl SceneBuffers {
             );
             area_lights_buffer.store(&scene.area_lights, device);
 
-            area_lights_buffer
+            area_lights_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         let mut images: Vec<Image> = scene
@@ -3035,7 +3191,7 @@ impl SceneBuffers {
 
             let mut uniform_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::BufferUsageFlags::UNIFORM_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -3044,7 +3200,12 @@ impl SceneBuffers {
             );
             uniform_buffer.store(&[uniform], device);
 
-            uniform_buffer
+            uniform_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         if emit_objects.is_empty() {
@@ -3057,7 +3218,7 @@ impl SceneBuffers {
 
             let mut emit_objects_buffer = BufferResource::new(
                 buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
                     | vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -3066,7 +3227,12 @@ impl SceneBuffers {
             );
             emit_objects_buffer.store(&emit_objects, device);
 
-            emit_objects_buffer
+            emit_objects_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
         };
 
         Self {
