@@ -310,21 +310,21 @@ pub fn main_ray_generation(
                         * unsafe { lights.index_unchecked(i as usize) }.color(position);
                 }
             }
+        }
 
-            if color == Vec3A::ZERO {
+        if color == Vec3A::ZERO {
+            break;
+        }
+
+        // russian roulette
+        if i > 4 {
+            let rr_coin = rng.next_f32();
+            let continue_p = color.max_element();
+
+            if rr_coin > continue_p {
                 break;
-            }
-
-            // russian roulette
-            if i > 4 {
-                let rr_coin = rng.next_f32();
-                let continue_p = color.max_element();
-
-                if rr_coin > continue_p {
-                    break;
-                } else {
-                    color /= continue_p;
-                }
+            } else {
+                color /= continue_p;
             }
         }
     }
