@@ -1,6 +1,6 @@
 # Rene
 
-WIP Vulkan Raytracing renderer entirely written by Rust.
+WIP Vulkan Raytracing renderer entirely written in Rust.
 
 # Requirements
 
