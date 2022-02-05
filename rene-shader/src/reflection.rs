@@ -237,13 +237,16 @@ impl Bsdf {
     }
 
     pub fn contains(&self, kind: BxdfKind) -> bool {
-        for i in 0..self.len {
+        let mut i = 0;
+
+        while i < self.len {
             if unsafe { self.bxdfs.index_unchecked(i as usize) }
                 .kind()
                 .contains(kind)
             {
                 return true;
             }
+            i += 1;
         }
 
         false
@@ -263,13 +266,16 @@ impl Bsdf {
 
         let mut f = Vec3A::ZERO;
 
-        for i in 0..self.len {
+        let mut i = 0;
+        while i < self.len {
             let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
             if (reflect && bxdf.kind().contains(BxdfKind::REFLECTION))
                 || (!reflect && bxdf.kind().contains(BxdfKind::TRANSMISSION))
             {
                 f += bxdf.f(wo, wi);
             }
+
+            i += 1;
         }
 
         f
@@ -300,9 +306,11 @@ impl Bsdf {
         let wo = self.onb.world_to_local(wo_world);
         let wi = self.onb.world_to_local(wi_world);
 
-        for i in 0..self.len {
+        let mut i = 0;
+        while i < self.len {
             let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
             pdf += bxdf.pdf(wo, wi);
+            i += 1;
         }
 
         pdf / self.len as f32
