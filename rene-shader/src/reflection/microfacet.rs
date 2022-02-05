@@ -1,5 +1,5 @@
 use core::f32::consts::{PI, TAU};
-use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4};
+use spirv_std::glam::{vec2, vec3a, Vec2, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -32,7 +32,7 @@ pub enum MicrofacetDistributionType {
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumMicrofacetDistributionData {
-    v0: Vec4,
+    v0: Vec2,
 }
 
 #[derive(Clone, Copy)]
@@ -50,7 +50,7 @@ pub struct TrowbridgeReitz<'a> {
 impl<'a> TrowbridgeReitz<'a> {
     fn new_data(alpha_x: f32, alpha_y: f32) -> EnumMicrofacetDistributionData {
         EnumMicrofacetDistributionData {
-            v0: vec4(alpha_x, alpha_y, 0.0, 0.0),
+            v0: vec2(alpha_x, alpha_y),
         }
     }
 
@@ -201,9 +201,7 @@ impl Default for EnumMicrofacetDistribution {
     fn default() -> Self {
         Self {
             t: MicrofacetDistributionType::TrowbridgeReitz,
-            data: EnumMicrofacetDistributionData {
-                v0: vec4(0.0, 0.0, 0.0, 0.0),
-            },
+            data: Default::default(),
         }
     }
 }

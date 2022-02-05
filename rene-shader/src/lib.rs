@@ -175,7 +175,8 @@ pub fn main_ray_generation(
     let mut aov_normal = Vec3A::ZERO;
     let mut aov_albedo = Vec3A::ZERO;
 
-    for i in 0..50 {
+    let mut i = 0;
+    while i < 50 {
         *payload = RayPayload::default();
         unsafe {
             tlas_main.trace_ray(
@@ -196,7 +197,6 @@ pub fn main_ray_generation(
             color_sum += color * payload.position;
             break;
         } else {
-            let color0 = color;
             let wo = -ray.direction.normalize();
             let normal = payload.normal.normalize();
             let position = payload.position;
@@ -212,6 +212,43 @@ pub fn main_ray_generation(
             if i == 0 {
                 aov_normal = normal;
                 aov_albedo = material.albedo(uv, textures, images);
+            }
+
+            let mut l = 0;
+            while l < uniform.lights_len {
+                let (target, t_max) =
+                    unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
+                let wi = (target - position).normalize();
+                let light_ray = Ray {
+                    origin: position,
+                    direction: wi,
+                };
+
+                *payload = RayPayload::default();
+                unsafe {
+                    tlas_main.trace_ray(
+                        RayFlags::empty(),
+                        cull_mask,
+                        0,
+                        0,
+                        0,
+                        light_ray.origin,
+                        tmin,
+                        light_ray.direction,
+                        t_max,
+                        payload,
+                    );
+                }
+
+                if payload.is_miss != 0 {
+                    let f = bsdf.f(wo, wi);
+
+                    color_sum += color
+                        * f
+                        * wi.dot(normal).abs()
+                        * unsafe { lights.index_unchecked(l as usize) }.color(position);
+                }
+                l += 1;
             }
 
             if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
@@ -275,41 +312,6 @@ pub fn main_ray_generation(
                     direction: sampled_f.wi,
                 };
             }
-
-            for i in 0..uniform.lights_len {
-                let (target, t_max) =
-                    unsafe { lights.index_unchecked(i as usize) }.ray_target(position);
-                let wi = (target - position).normalize();
-                let light_ray = Ray {
-                    origin: position,
-                    direction: wi,
-                };
-
-                *payload = RayPayload::default();
-                unsafe {
-                    tlas_main.trace_ray(
-                        RayFlags::empty(),
-                        cull_mask,
-                        0,
-                        0,
-                        0,
-                        light_ray.origin,
-                        tmin,
-                        light_ray.direction,
-                        t_max,
-                        payload,
-                    );
-                }
-
-                if payload.is_miss != 0 {
-                    let f = bsdf.f(wo, wi);
-
-                    color_sum += color0
-                        * f
-                        * wi.dot(normal).abs()
-                        * unsafe { lights.index_unchecked(i as usize) }.color(position);
-                }
-            }
         }
 
         if color == Vec3A::ZERO {
@@ -329,6 +331,7 @@ pub fn main_ray_generation(
             }
         }
         */
+        i += 1;
     }
 
     let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(0);
