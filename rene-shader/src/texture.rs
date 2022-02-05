@@ -8,6 +8,7 @@ use spirv_std::{
 
 use crate::{
     asm::{f32_to_u32, fract},
+    reflection::Packed4,
     InputImage,
 };
 
@@ -52,9 +53,7 @@ struct CheckerBoard<'a> {
 }
 
 struct ColorOrTarget {
-    t: bool,
-    index: u32,
-    color_or_uv: Vec3A,
+    color_or_uv: Packed4<u32>,
 }
 
 impl<'a> Solid<'a> {
@@ -97,15 +96,11 @@ impl<'a> Texture for CheckerBoard<'a> {
 
         if (f32_to_u32(x) % 2 == 0) == (f32_to_u32(y) % 2 == 0) {
             ColorOrTarget {
-                t: true,
-                index: tex1,
-                color_or_uv: vec3a(fract(x), fract(y), 0.0),
+                color_or_uv: Packed4::new(tex1, vec3a(fract(x), fract(y), 0.0)),
             }
         } else {
             ColorOrTarget {
-                t: true,
-                index: tex2,
-                color_or_uv: vec3a(fract(x), fract(y), 0.0),
+                color_or_uv: Packed4::new(tex2, vec3a(fract(x), fract(y), 0.0)),
             }
         }
     }
@@ -116,9 +111,7 @@ impl<'a> Texture for ImageMap<'a> {
         let image = unsafe { images.index(self.data.u0.x as usize) };
         let color: Vec4 = unsafe { image.sample_by_lod(vec2(uv.x, 1.0 - uv.y), 0.0) };
         ColorOrTarget {
-            t: false,
-            index: 0,
-            color_or_uv: color.xyz().into(),
+            color_or_uv: Packed4::new(u32::MAX, color.xyz().into()),
         }
     }
 }
@@ -126,9 +119,7 @@ impl<'a> Texture for ImageMap<'a> {
 impl<'a> Texture for Solid<'a> {
     fn color(&self, _images: &RuntimeArray<InputImage>, _uv: Vec2) -> ColorOrTarget {
         ColorOrTarget {
-            t: false,
-            index: 0,
-            color_or_uv: self.data.v0.xyz().into(),
+            color_or_uv: Packed4::new(u32::MAX, self.data.v0.xyz().into()),
         }
     }
 }
@@ -169,8 +160,8 @@ impl EnumTexture {
             TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
         };
 
-        while color_or_target.t {
-            let tex = unsafe { textures.index_unchecked(color_or_target.index as usize) };
+        while color_or_target.color_or_uv.t != u32::MAX {
+            let tex = unsafe { textures.index_unchecked(color_or_target.color_or_uv.t as usize) };
             color_or_target = match tex.t {
                 TextureType::Solid => Solid { data: &tex.data }.color(
                     images,
@@ -187,6 +178,6 @@ impl EnumTexture {
             };
         }
 
-        color_or_target.color_or_uv
+        color_or_target.color_or_uv.xyz()
     }
 }
