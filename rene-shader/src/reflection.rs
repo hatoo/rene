@@ -60,6 +60,7 @@ impl<T> Packed4<T> {
 }
 
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct BxdfKind(u32);
 
 impl BxdfKind {

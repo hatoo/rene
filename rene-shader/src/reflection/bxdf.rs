@@ -203,11 +203,7 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
 
             let (b, wi) = refract(
                 wo,
-                if wo.z > 0.0 {
-                    vec3a(0.0, 0.0, 1.0)
-                } else {
-                    vec3a(0.0, 0.0, -1.0)
-                },
+                vec3a(0.0, 0.0, if wo.z > 0.0 { 1.0 } else { -1.0 }),
                 refraction_ratio,
             );
 
