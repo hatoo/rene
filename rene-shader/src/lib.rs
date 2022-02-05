@@ -317,6 +317,7 @@ pub fn main_ray_generation(
         }
 
         // russian roulette
+        /*
         if i > 4 {
             let rr_coin = rng.next_f32();
             let continue_p = color.max_element();
@@ -327,6 +328,7 @@ pub fn main_ray_generation(
                 color /= continue_p;
             }
         }
+        */
     }
 
     let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(0);
