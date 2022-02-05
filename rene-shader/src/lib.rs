@@ -172,9 +172,6 @@ pub fn main_ray_generation(
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
-    let mut aov_normal = Vec3A::ZERO;
-    let mut aov_albedo = Vec3A::ZERO;
-
     let mut i = 0;
     while i < 50 {
         *payload = RayPayload::default();
@@ -210,8 +207,22 @@ pub fn main_ray_generation(
             color_sum += color * area_light.emit(wo, normal);
 
             if i == 0 {
-                aov_normal = normal;
-                aov_albedo = material.albedo(uv, textures, images);
+                let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(1);
+                let prev: Vec4 = image.read(pos);
+
+                unsafe {
+                    image.write(pos, prev + normal.extend(0.0));
+                }
+
+                let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(2);
+                let prev: Vec4 = image.read(pos);
+
+                unsafe {
+                    image.write(
+                        pos,
+                        prev + material.albedo(uv, textures, images).extend(0.0),
+                    );
+                }
             }
 
             let mut l = 0;
@@ -339,20 +350,6 @@ pub fn main_ray_generation(
 
     unsafe {
         image.write(pos, prev + color_sum.extend(1.0));
-    }
-
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(1);
-    let prev: Vec4 = image.read(pos);
-
-    unsafe {
-        image.write(pos, prev + aov_normal.extend(0.0));
-    }
-
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(2);
-    let prev: Vec4 = image.read(pos);
-
-    unsafe {
-        image.write(pos, prev + aov_albedo.extend(0.0));
     }
 }
 
