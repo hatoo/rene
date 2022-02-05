@@ -91,16 +91,13 @@ fn trowbridge_reitz_sample11(cos_theta: f32, rng: &mut DefaultRng) -> Vec2 {
     let g1 = 2.0 / (1.0 + (1.0 + 1.0 / (a0 * a0).sqrt()));
 
     let a = 2.0 * u1 / g1 - 1.0;
-    let mut tmp = 1.0 / (a * a - 1.0);
-    if tmp > 1e10 {
-        tmp = 1e10;
-    }
+    let tmp = (1.0 / (a * a - 1.0)).min(1e10);
     let b = tan_theta;
     let d = (b * b * tmp * tmp - (a * a - b * b) * tmp).max(0.0).sqrt();
     let slope_x_1 = b * tmp - d;
     let slope_x_2 = b * tmp + d;
 
-    let slope_x = if a < 0.0 || slope_x_2 > 1.0 / tan_theta {
+    let slope_x = if a < 0.0 || slope_x_2 > a0 {
         slope_x_1
     } else {
         slope_x_2

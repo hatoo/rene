@@ -288,11 +288,7 @@ impl Bsdf {
 
     pub fn sample_f(&self, wo_world: Vec3A, rng: &mut DefaultRng) -> SampledF {
         if self.len == 0 {
-            SampledF {
-                wi: Vec3A::ZERO,
-                f: Vec3A::ZERO,
-                pdf: 0.0,
-            }
+            SampledF::default()
         } else {
             let index = rng.next_u32() as usize % self.len as usize;
             let bxdf = unsafe { self.bxdfs.index_unchecked(index) };
