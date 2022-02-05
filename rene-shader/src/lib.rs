@@ -196,7 +196,6 @@ pub fn main_ray_generation(
             color_sum += color * payload.position;
             break;
         } else {
-            let color0 = color;
             let wo = -ray.direction.normalize();
             let normal = payload.normal.normalize();
             let position = payload.position;
@@ -212,6 +211,41 @@ pub fn main_ray_generation(
             if i == 0 {
                 aov_normal = normal;
                 aov_albedo = material.albedo(uv, textures, images);
+            }
+
+            for i in 0..uniform.lights_len {
+                let (target, t_max) =
+                    unsafe { lights.index_unchecked(i as usize) }.ray_target(position);
+                let wi = (target - position).normalize();
+                let light_ray = Ray {
+                    origin: position,
+                    direction: wi,
+                };
+
+                *payload = RayPayload::default();
+                unsafe {
+                    tlas_main.trace_ray(
+                        RayFlags::empty(),
+                        cull_mask,
+                        0,
+                        0,
+                        0,
+                        light_ray.origin,
+                        tmin,
+                        light_ray.direction,
+                        t_max,
+                        payload,
+                    );
+                }
+
+                if payload.is_miss != 0 {
+                    let f = bsdf.f(wo, wi);
+
+                    color_sum += color
+                        * f
+                        * wi.dot(normal).abs()
+                        * unsafe { lights.index_unchecked(i as usize) }.color(position);
+                }
             }
 
             if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
@@ -274,41 +308,6 @@ pub fn main_ray_generation(
                     origin: position,
                     direction: sampled_f.wi,
                 };
-            }
-
-            for i in 0..uniform.lights_len {
-                let (target, t_max) =
-                    unsafe { lights.index_unchecked(i as usize) }.ray_target(position);
-                let wi = (target - position).normalize();
-                let light_ray = Ray {
-                    origin: position,
-                    direction: wi,
-                };
-
-                *payload = RayPayload::default();
-                unsafe {
-                    tlas_main.trace_ray(
-                        RayFlags::empty(),
-                        cull_mask,
-                        0,
-                        0,
-                        0,
-                        light_ray.origin,
-                        tmin,
-                        light_ray.direction,
-                        t_max,
-                        payload,
-                    );
-                }
-
-                if payload.is_miss != 0 {
-                    let f = bsdf.f(wo, wi);
-
-                    color_sum += color0
-                        * f
-                        * wi.dot(normal).abs()
-                        * unsafe { lights.index_unchecked(i as usize) }.color(position);
-                }
             }
         }
 
