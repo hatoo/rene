@@ -31,19 +31,11 @@ pub struct EnumFresnelData {
     v2: Vec4,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(transparent)]
 pub struct EnumFresnel {
     data: EnumFresnelData,
-}
-
-impl Default for EnumFresnel {
-    fn default() -> Self {
-        Self {
-            data: Default::default(),
-        }
-    }
 }
 
 struct FresnelConductor<'a> {
@@ -65,7 +57,7 @@ impl<'a> FresnelConductor<'a> {
     }
 
     fn eta_i(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 
     fn eta_t(&self) -> Vec3A {

@@ -598,7 +598,9 @@ pub fn triangle_closest_hit_pdf(
 
     let area = 0.5 * ab.cross(ac).length();
     let distance_squared = (world_ray_origin - hit_pos).length_squared();
-    let cosine = (-world_ray_direction).normalize().dot(normal).abs();
+    // let cosine = (-world_ray_direction).normalize().dot(normal).abs();
+    // Same Value
+    let cosine = world_ray_direction.normalize().dot(normal).abs();
 
     *out = RayPayloadPDF {
         pdf: distance_squared / (cosine * area),

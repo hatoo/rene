@@ -65,7 +65,7 @@ impl<'a> LambertianReflection<'a> {
     }
 
     fn albedo(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 }
 
@@ -233,7 +233,7 @@ impl<'a> FresnelBlend<'a> {
     }
 
     fn rd(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 
     fn rs(&self) -> Vec3A {
@@ -331,7 +331,7 @@ impl<'a> MicrofacetReflection<'a> {
     }
 
     fn r(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 }
 
