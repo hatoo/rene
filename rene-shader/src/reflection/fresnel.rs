@@ -4,6 +4,8 @@ use spirv_std::num_traits::Float;
 
 use crate::asm::f32_clamp;
 
+use super::Packed4;
+
 pub trait Fresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A;
 }
@@ -15,10 +17,16 @@ enum FresnelType {
     FresnelConductor,
 }
 
+impl Default for FresnelType {
+    fn default() -> Self {
+        Self::FresnelConductor
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumFresnelData {
-    v0: Vec4,
+    v0: Packed4<FresnelType>,
     v1: Vec4,
     v2: Vec4,
 }
@@ -26,14 +34,12 @@ pub struct EnumFresnelData {
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumFresnel {
-    t: FresnelType,
     data: EnumFresnelData,
 }
 
 impl Default for EnumFresnel {
     fn default() -> Self {
         Self {
-            t: FresnelType::FresnelConductor,
             data: Default::default(),
         }
     }
@@ -46,7 +52,12 @@ struct FresnelConductor<'a> {
 impl<'a> FresnelConductor<'a> {
     fn new_data(eta_i: Vec3A, eta_t: Vec3A, k: Vec3A) -> EnumFresnelData {
         EnumFresnelData {
-            v0: eta_i.extend(0.0),
+            v0: Packed4 {
+                t: FresnelType::FresnelConductor,
+                x: eta_i.x,
+                y: eta_i.y,
+                z: eta_i.z,
+            },
             v1: eta_t.extend(0.0),
             v2: k.extend(0.0),
         }
@@ -100,7 +111,6 @@ impl<'a> Fresnel for FresnelConductor<'a> {
 impl EnumFresnel {
     pub fn new_fresnel_conductor(eta_i: Vec3A, eta_t: Vec3A, k: Vec3A) -> Self {
         Self {
-            t: FresnelType::FresnelConductor,
             data: FresnelConductor::new_data(eta_i, eta_t, k),
         }
     }
@@ -108,7 +118,7 @@ impl EnumFresnel {
 
 impl Fresnel for EnumFresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A {
-        match self.t {
+        match self.data.v0.t {
             FresnelType::FresnelConductor => FresnelConductor { data: &self.data }.evaluate(cos_i),
         }
     }
