@@ -33,6 +33,7 @@ pub struct EnumFresnelData {
 
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(transparent)]
 pub struct EnumFresnel {
     data: EnumFresnelData,
 }
