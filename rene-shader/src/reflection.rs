@@ -117,13 +117,14 @@ impl Default for BxdfType {
 
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(transparent)]
 pub struct EnumBxdf {
     data: EnumBxdfData,
 }
 
 impl Bxdf for EnumBxdf {
     fn kind(&self) -> BxdfKind {
-        match self.data.v0.t {
+        match self.t() {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.kind(),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.kind(),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.kind(),
@@ -132,7 +133,7 @@ impl Bxdf for EnumBxdf {
     }
 
     fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A {
-        match self.data.v0.t {
+        match self.t() {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.f(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.f(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.f(wo, wi),
@@ -141,7 +142,7 @@ impl Bxdf for EnumBxdf {
     }
 
     fn sample_f(&self, wo: Vec3A, rng: &mut DefaultRng) -> SampledF {
-        match self.data.v0.t {
+        match self.t() {
             BxdfType::LambertianReflection => {
                 LambertianReflection { data: &self.data }.sample_f(wo, rng)
             }
@@ -154,7 +155,7 @@ impl Bxdf for EnumBxdf {
     }
 
     fn pdf(&self, wo: Vec3A, wi: Vec3A) -> f32 {
-        match self.data.v0.t {
+        match self.t() {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.pdf(wo, wi),
@@ -164,6 +165,10 @@ impl Bxdf for EnumBxdf {
 }
 
 impl EnumBxdf {
+    fn t(&self) -> BxdfType {
+        self.data.v0.t
+    }
+
     pub fn setup_lambertian_reflection(albedo: Vec3A, bxdf: &mut EnumBxdf) {
         bxdf.data.v0.t = BxdfType::LambertianReflection;
         LambertianReflection::setup_data(albedo, &mut bxdf.data);
@@ -211,7 +216,6 @@ impl Default for Bsdf {
             onb: Onb::from_w(Vec3A::Z),
             len: 0,
             bxdfs: [EnumBxdf {
-                // t: BxdfType::LambertianReflection,
                 data: Default::default(),
             }; BXDF_LEN],
         }

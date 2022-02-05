@@ -109,6 +109,10 @@ impl<'a> Fresnel for FresnelConductor<'a> {
 }
 
 impl EnumFresnel {
+    fn t(&self) -> FresnelType {
+        self.data.v0.t
+    }
+
     pub fn new_fresnel_conductor(eta_i: Vec3A, eta_t: Vec3A, k: Vec3A) -> Self {
         Self {
             data: FresnelConductor::new_data(eta_i, eta_t, k),
@@ -118,7 +122,7 @@ impl EnumFresnel {
 
 impl Fresnel for EnumFresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A {
-        match self.data.v0.t {
+        match self.t() {
             FresnelType::FresnelConductor => FresnelConductor { data: &self.data }.evaluate(cos_i),
         }
     }
