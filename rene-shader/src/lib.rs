@@ -219,7 +219,9 @@ pub fn main_ray_generation(
             bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
 
-            add_image(0, color * area_light.emit(wo, normal));
+            if !area_light.is_null() {
+                add_image(0, color * area_light.emit(wo, normal));
+            }
 
             if i == 0 {
                 add_image(1, normal);
