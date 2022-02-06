@@ -58,12 +58,19 @@ pub struct RayPayload {
 }
 
 impl RayPayload {
+    /*
     pub fn new_miss(color: Vec3A) -> Self {
         Self {
             is_miss: 1,
             position: color,
             ..Default::default()
         }
+    }
+    */
+
+    pub fn set_miss(&mut self, color: Vec3A) {
+        self.is_miss = 1;
+        self.position = color;
     }
 
     pub fn new_hit(
@@ -129,7 +136,7 @@ pub fn main_miss(
         * unsafe { textures.index_unchecked(uniform.background_texture as usize) }
             .color(textures, images, uv);
 
-    *out = RayPayload::new_miss(color);
+    out.set_miss(color);
 }
 
 #[spirv(ray_generation)]
