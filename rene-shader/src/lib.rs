@@ -155,6 +155,15 @@ pub fn main_ray_generation(
     let tlas_main = unsafe { tlases.index(0) };
     let tlas_emit = unsafe { tlases.index(1) };
 
+    let add_image = |i: u32, v: Vec3A| {
+        let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(i);
+        let prev: Vec4 = image.read(pos);
+
+        unsafe {
+            image.write(pos, prev + v.extend(0.0));
+        }
+    };
+
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
 
@@ -168,7 +177,6 @@ pub fn main_ray_generation(
     let mut bsdf = Bsdf::default();
 
     let mut color = vec3a(1.0, 1.0, 1.0);
-    let mut color_sum = vec3a(0.0, 0.0, 0.0);
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
@@ -191,7 +199,7 @@ pub fn main_ray_generation(
         }
 
         if payload.is_miss != 0 {
-            color_sum += color * payload.position;
+            add_image(0, color * payload.position);
             break;
         } else {
             let wo = -ray.direction.normalize();
@@ -204,25 +212,11 @@ pub fn main_ray_generation(
             bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
 
-            color_sum += color * area_light.emit(wo, normal);
+            add_image(0, color * area_light.emit(wo, normal));
 
             if i == 0 {
-                let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(1);
-                let prev: Vec4 = image.read(pos);
-
-                unsafe {
-                    image.write(pos, prev + normal.extend(0.0));
-                }
-
-                let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(2);
-                let prev: Vec4 = image.read(pos);
-
-                unsafe {
-                    image.write(
-                        pos,
-                        prev + material.albedo(uv, textures, images).extend(0.0),
-                    );
-                }
+                add_image(1, normal);
+                add_image(2, material.albedo(uv, textures, images));
             }
 
             let mut l = 0;
@@ -254,10 +248,13 @@ pub fn main_ray_generation(
                 if payload.is_miss != 0 {
                     let f = bsdf.f(wo, wi);
 
-                    color_sum += color
-                        * f
-                        * wi.dot(normal).abs()
-                        * unsafe { lights.index_unchecked(l as usize) }.color(position);
+                    add_image(
+                        0,
+                        color
+                            * f
+                            * wi.dot(normal).abs()
+                            * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                    );
                 }
                 l += 1;
             }
@@ -343,13 +340,6 @@ pub fn main_ray_generation(
         }
         */
         i += 1;
-    }
-
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(0);
-    let prev: Vec4 = image.read(pos);
-
-    unsafe {
-        image.write(pos, prev + color_sum.extend(1.0));
     }
 }
 
