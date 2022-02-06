@@ -37,12 +37,13 @@ impl PCG32si {
 
     pub fn next_f32(&mut self) -> f32 {
         const FLOAT_SIZE: u32 = core::mem::size_of::<f32>() as u32 * 8;
-        let precision = 23 + 1;
-        let scale = 1.0 / u32_to_f32(1 << precision);
+        const PRECISION: u32 = 23 + 1;
+        const SCALE: f32 = 1.0 / (1 << PRECISION) as f32;
+        const SHIFT: u32 = FLOAT_SIZE - PRECISION;
 
         let value = self.next_u32();
-        let value = value >> (FLOAT_SIZE - precision);
-        scale * u32_to_f32(value)
+        let value = value >> SHIFT;
+        SCALE * u32_to_f32(value)
     }
 
     pub fn next_f32_range(&mut self, min: f32, max: f32) -> f32 {
