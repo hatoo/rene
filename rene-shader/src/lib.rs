@@ -311,11 +311,9 @@ pub fn main_ray_generation(
                 color *= f * normal.dot(wi).abs();
                 let pdf = 0.5 * pdf + 0.5 * weight * payload_pdf.pdf;
 
-                if pdf < 1e-5 {
-                    break;
+                if pdf > 1e-5 {
+                    color /= pdf;
                 }
-
-                color /= pdf;
             } else {
                 let sampled_f = bsdf.sample_f(wo, &mut rng);
 
