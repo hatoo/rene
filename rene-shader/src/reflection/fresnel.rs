@@ -43,10 +43,6 @@ struct FresnelConductor<'a> {
     data: &'a EnumFresnelData,
 }
 
-struct NoOp<'a> {
-    _data: &'a EnumFresnelData,
-}
-
 impl<'a> FresnelConductor<'a> {
     fn new_data(eta_i: Vec3A, eta_t: Vec3A, k: Vec3A) -> EnumFresnelData {
         EnumFresnelData {
@@ -106,21 +102,6 @@ impl<'a> Fresnel for FresnelConductor<'a> {
     }
 }
 
-impl<'a> NoOp<'a> {
-    fn new_data() -> EnumFresnelData {
-        EnumFresnelData {
-            v0: Packed4::new(FresnelType::NoOp, Vec3A::ZERO),
-            ..Default::default()
-        }
-    }
-}
-
-impl<'a> Fresnel for NoOp<'a> {
-    fn evaluate(&self, _cos_i: f32) -> Vec3A {
-        vec3a(1.0, 1.0, 1.0)
-    }
-}
-
 impl EnumFresnel {
     fn t(&self) -> FresnelType {
         self.data.v0.t
@@ -134,7 +115,10 @@ impl EnumFresnel {
 
     pub fn new_nop() -> Self {
         Self {
-            data: NoOp::new_data(),
+            data: EnumFresnelData {
+                v0: Packed4::new(FresnelType::NoOp, Vec3A::ZERO),
+                ..Default::default()
+            },
         }
     }
 }
@@ -142,7 +126,7 @@ impl EnumFresnel {
 impl Fresnel for EnumFresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A {
         match self.t() {
-            FresnelType::NoOp => NoOp { _data: &self.data }.evaluate(cos_i),
+            FresnelType::NoOp => vec3a(1.0, 1.0, 1.0),
             FresnelType::FresnelConductor => FresnelConductor { data: &self.data }.evaluate(cos_i),
         }
     }
