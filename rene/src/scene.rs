@@ -10,9 +10,9 @@ use thiserror::Error;
 use crate::ShaderOffset;
 
 use self::intermediate_scene::{
-    AreaLightSource, Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld,
-    LightSource, Material, Matte, Metal, Mirror, SceneObject, Shape, Sphere, Substrate,
-    TextureOrColor, TriangleMesh, WorldObject,
+    AreaLightSource, Camera, Film, Glass, Infinite, InnerTexture, IntermediateScene,
+    IntermediateWorld, LightSource, Material, Matte, Metal, Mirror, SceneObject, Shape, Sphere,
+    Substrate, TextureOrColor, TriangleMesh, WorldObject,
 };
 
 pub mod image;
@@ -157,7 +157,7 @@ impl Scene {
                 let texture_index = self.texture(albedo, state)?;
                 Ok(EnumMaterial::new_matte(texture_index))
             }
-            Material::Glass => Ok(EnumMaterial::new_glass(1.5)),
+            Material::Glass(Glass { index }) => Ok(EnumMaterial::new_glass(index)),
             Material::Substrate(Substrate {
                 diffuse,
                 specular,

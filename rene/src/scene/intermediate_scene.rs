@@ -92,7 +92,7 @@ pub struct Texture {
 }
 pub enum Material {
     Matte(Matte),
-    Glass,
+    Glass(Glass),
     Substrate(Substrate),
     Metal(Metal),
     Mirror(Mirror),
@@ -100,6 +100,10 @@ pub enum Material {
 
 pub struct Matte {
     pub albedo: TextureOrColor,
+}
+
+pub struct Glass {
+    pub index: f32,
 }
 
 pub struct Substrate {
@@ -389,7 +393,10 @@ impl<'a, T> GetValue for Object<'a, T> {
 
                 Ok(Material::Matte(Matte { albedo }))
             }
-            "glass" => Ok(Material::Glass),
+            "glass" => {
+                let index = self.get_float("index").unwrap_or(Ok(1.5))?;
+                Ok(Material::Glass(Glass { index }))
+            }
             "substrate" => {
                 let diffuse = self
                     .get_texture_or_color("Kd")
