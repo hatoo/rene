@@ -55,6 +55,7 @@ enum MaterialType {
     Glass,
     Substrate,
     Metal,
+    Mirror,
 }
 
 #[derive(Clone, Copy)]
@@ -81,6 +82,11 @@ struct Metal<'a> {
 
 #[repr(transparent)]
 struct Glass<'a> {
+    data: &'a EnumMaterialData,
+}
+
+#[repr(transparent)]
+struct Mirror<'a> {
     data: &'a EnumMaterialData,
 }
 
@@ -297,6 +303,38 @@ impl<'a> Material for Glass<'a> {
     }
 }
 
+impl<'a> Mirror<'a> {
+    fn new_data(r_index: u32) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: uvec4(r_index, 0, 0, 0),
+            ..Default::default()
+        }
+    }
+}
+
+impl<'a> Material for Mirror<'a> {
+    fn compute_bsdf(
+        &self,
+        bsdf: &mut Bsdf,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) {
+        let fresnel = EnumFresnel::new_nop();
+        let bxdf = bsdf.add_mut();
+        EnumBxdf::setup_specular_reflection(self.albedo(uv, textures, images), fresnel, bxdf);
+    }
+
+    fn albedo(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> Vec3A {
+        unsafe { textures.index_unchecked(self.data.u0.x as usize) }.color(textures, images, uv)
+    }
+}
+
 impl EnumMaterial {
     pub fn new_matte(albedo_index: u32) -> Self {
         Self {
@@ -343,6 +381,13 @@ impl EnumMaterial {
             data: Glass::new_data(ir),
         }
     }
+
+    pub fn new_mirror(r_index: u32) -> Self {
+        Self {
+            t: MaterialType::Mirror,
+            data: Mirror::new_data(r_index),
+        }
+    }
 }
 
 impl Material for EnumMaterial {
@@ -357,6 +402,7 @@ impl Material for EnumMaterial {
             MaterialType::Glass => Glass { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Substrate => Substrate { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Metal => Metal { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Mirror => Mirror { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
@@ -379,6 +425,9 @@ impl Material for EnumMaterial {
             }
             MaterialType::Metal => {
                 Metal { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Mirror => {
+                Mirror { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }
         }
     }

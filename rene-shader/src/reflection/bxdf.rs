@@ -34,6 +34,11 @@ pub struct MicrofacetReflection<'a> {
     pub data: &'a EnumBxdfData,
 }
 
+#[repr(transparent)]
+pub struct SpecularReflection<'a> {
+    pub data: &'a EnumBxdfData,
+}
+
 #[allow(dead_code)]
 fn concentric_sample_disk(rng: &mut DefaultRng) -> Vec2 {
     let u_offset = 2.0 * vec2(rng.next_f32(), rng.next_f32()) - vec2(1.0, 1.0);
@@ -401,5 +406,38 @@ impl<'a> Bxdf for MicrofacetReflection<'a> {
         }
         let wh = (wo + wi).normalize();
         self.data.microfacet_distribution.pdf(wo, wh) / (4.0 * wo.dot(wh))
+    }
+}
+
+impl<'a> SpecularReflection<'a> {
+    pub fn setup_data(r: Vec3A, fresnel: EnumFresnel, data: &mut EnumBxdfData) {
+        data.v0.set_xyz(r);
+        data.fresnel = fresnel;
+    }
+
+    fn r(&self) -> Vec3A {
+        self.data.v0.xyz()
+    }
+}
+
+impl<'a> Bxdf for SpecularReflection<'a> {
+    fn kind(&self) -> BxdfKind {
+        BxdfKind::REFLECTION
+    }
+
+    fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
+        Vec3A::ZERO
+    }
+
+    fn sample_f(&self, wo: Vec3A, _rng: &mut DefaultRng) -> SampledF {
+        let wi = vec3a(-wo.x, -wo.y, wo.z);
+        let f = self.data.fresnel.evaluate(Onb::local_cos_theta(wi)) * self.r()
+            / Onb::local_abs_cos_theta(wi);
+
+        SampledF { wi, f, pdf: 1.0 }
+    }
+
+    fn pdf(&self, _wo: Vec3A, _wi: Vec3A) -> f32 {
+        0.0
     }
 }

@@ -15,6 +15,7 @@ pub trait Fresnel {
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 enum FresnelType {
     FresnelConductor,
+    NoOp,
 }
 
 impl Default for FresnelType {
@@ -40,6 +41,10 @@ pub struct EnumFresnel {
 
 struct FresnelConductor<'a> {
     data: &'a EnumFresnelData,
+}
+
+struct NoOp<'a> {
+    _data: &'a EnumFresnelData,
 }
 
 impl<'a> FresnelConductor<'a> {
@@ -101,6 +106,21 @@ impl<'a> Fresnel for FresnelConductor<'a> {
     }
 }
 
+impl<'a> NoOp<'a> {
+    fn new_data() -> EnumFresnelData {
+        EnumFresnelData {
+            v0: Packed4::new(FresnelType::NoOp, Vec3A::ZERO),
+            ..Default::default()
+        }
+    }
+}
+
+impl<'a> Fresnel for NoOp<'a> {
+    fn evaluate(&self, _cos_i: f32) -> Vec3A {
+        vec3a(1.0, 1.0, 1.0)
+    }
+}
+
 impl EnumFresnel {
     fn t(&self) -> FresnelType {
         self.data.v0.t
@@ -111,11 +131,18 @@ impl EnumFresnel {
             data: FresnelConductor::new_data(eta_i, eta_t, k),
         }
     }
+
+    pub fn new_nop() -> Self {
+        Self {
+            data: NoOp::new_data(),
+        }
+    }
 }
 
 impl Fresnel for EnumFresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A {
         match self.t() {
+            FresnelType::NoOp => NoOp { _data: &self.data }.evaluate(cos_i),
             FresnelType::FresnelConductor => FresnelConductor { data: &self.data }.evaluate(cos_i),
         }
     }
