@@ -116,6 +116,7 @@ pub struct IndexData {
     pub material_index: u32,
     pub area_light_index: u32,
     pub index_offset: u32,
+    pub primitive_count: u32,
 }
 
 #[spirv(miss)]
@@ -270,13 +271,13 @@ pub fn main_ray_generation(
 
             if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
                 let (wi, pdf, f) = if rng.next_f32() > 0.5 {
-                    let wi = (unsafe {
+                    let emit_object = unsafe {
                         emit_objects
                             .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
-                    }
-                    .sample(indices, vertices, &mut rng)
-                        - position)
-                        .normalize();
+                    };
+
+                    let wi =
+                        (emit_object.sample(indices, vertices, &mut rng) - position).normalize();
 
                     (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
                 } else {
@@ -291,7 +292,6 @@ pub fn main_ray_generation(
                 };
 
                 *payload_pdf = RayPayloadPDF::default();
-                let weight = 1.0 / uniform.emit_primitives as f32;
 
                 unsafe {
                     tlas_emit.trace_ray(
@@ -309,7 +309,8 @@ pub fn main_ray_generation(
                 }
 
                 color *= f * normal.dot(wi).abs();
-                let pdf = 0.5 * pdf + 0.5 * weight * payload_pdf.pdf;
+
+                let pdf = 0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
 
                 if pdf < 1e-5 {
                     break;
@@ -602,7 +603,7 @@ pub fn triangle_closest_hit_pdf(
     let cosine = world_ray_direction.normalize().dot(normal).abs();
 
     *out = RayPayloadPDF {
-        pdf: distance_squared / (cosine * area),
+        pdf: distance_squared / (cosine * area) / index_data.primitive_count as f32,
     };
 }
 

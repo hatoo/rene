@@ -2831,6 +2831,10 @@ impl SceneBuffers {
                         .blas_index
                         .map(|i| blas_args[i].index_offset)
                         .unwrap_or(0),
+                    primitive_count: instance
+                        .blas_index
+                        .map(|i| blas_args[i].primitive_count)
+                        .unwrap_or(1),
                 });
                 vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
