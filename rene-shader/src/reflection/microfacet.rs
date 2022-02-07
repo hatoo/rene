@@ -1,5 +1,5 @@
 use core::f32::consts::{PI, TAU};
-use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4};
+use spirv_std::glam::{vec2, vec3a, Vec2, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -32,7 +32,7 @@ pub enum MicrofacetDistributionType {
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumMicrofacetDistributionData {
-    v0: Vec4,
+    v0: Vec2,
 }
 
 #[derive(Clone, Copy)]
@@ -50,7 +50,7 @@ pub struct TrowbridgeReitz<'a> {
 impl<'a> TrowbridgeReitz<'a> {
     fn new_data(alpha_x: f32, alpha_y: f32) -> EnumMicrofacetDistributionData {
         EnumMicrofacetDistributionData {
-            v0: vec4(alpha_x, alpha_y, 0.0, 0.0),
+            v0: vec2(alpha_x, alpha_y),
         }
     }
 
@@ -91,16 +91,13 @@ fn trowbridge_reitz_sample11(cos_theta: f32, rng: &mut DefaultRng) -> Vec2 {
     let g1 = 2.0 / (1.0 + (1.0 + 1.0 / (a0 * a0).sqrt()));
 
     let a = 2.0 * u1 / g1 - 1.0;
-    let mut tmp = 1.0 / (a * a - 1.0);
-    if tmp > 1e10 {
-        tmp = 1e10;
-    }
+    let tmp = (1.0 / (a * a - 1.0)).min(1e10);
     let b = tan_theta;
     let d = (b * b * tmp * tmp - (a * a - b * b) * tmp).max(0.0).sqrt();
     let slope_x_1 = b * tmp - d;
     let slope_x_2 = b * tmp + d;
 
-    let slope_x = if a < 0.0 || slope_x_2 > 1.0 / tan_theta {
+    let slope_x = if a < 0.0 || slope_x_2 > a0 {
         slope_x_1
     } else {
         slope_x_2
@@ -201,9 +198,7 @@ impl Default for EnumMicrofacetDistribution {
     fn default() -> Self {
         Self {
             t: MicrofacetDistributionType::TrowbridgeReitz,
-            data: EnumMicrofacetDistributionData {
-                v0: vec4(0.0, 0.0, 0.0, 0.0),
-            },
+            data: Default::default(),
         }
     }
 }

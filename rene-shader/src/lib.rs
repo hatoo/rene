@@ -58,12 +58,19 @@ pub struct RayPayload {
 }
 
 impl RayPayload {
+    /*
     pub fn new_miss(color: Vec3A) -> Self {
         Self {
             is_miss: 1,
             position: color,
             ..Default::default()
         }
+    }
+    */
+
+    pub fn set_miss(&mut self, color: Vec3A) {
+        self.is_miss = 1;
+        self.position = color;
     }
 
     pub fn new_hit(
@@ -109,6 +116,7 @@ pub struct IndexData {
     pub material_index: u32,
     pub area_light_index: u32,
     pub index_offset: u32,
+    pub primitive_count: u32,
 }
 
 #[spirv(miss)]
@@ -129,7 +137,7 @@ pub fn main_miss(
         * unsafe { textures.index_unchecked(uniform.background_texture as usize) }
             .color(textures, images, uv);
 
-    *out = RayPayload::new_miss(color);
+    out.set_miss(color);
 }
 
 #[spirv(ray_generation)]
@@ -155,6 +163,15 @@ pub fn main_ray_generation(
     let tlas_main = unsafe { tlases.index(0) };
     let tlas_emit = unsafe { tlases.index(1) };
 
+    let add_image = |i: u32, v: Vec3A| {
+        let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(i);
+        let prev: Vec4 = image.read(pos);
+
+        unsafe {
+            image.write(pos, prev + v.extend(0.0));
+        }
+    };
+
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
 
@@ -168,14 +185,11 @@ pub fn main_ray_generation(
     let mut bsdf = Bsdf::default();
 
     let mut color = vec3a(1.0, 1.0, 1.0);
-    let mut color_sum = vec3a(0.0, 0.0, 0.0);
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
-    let mut aov_normal = Vec3A::ZERO;
-    let mut aov_albedo = Vec3A::ZERO;
-
-    for i in 0..50 {
+    let mut i = 0;
+    while i < 50 {
         *payload = RayPayload::default();
         unsafe {
             tlas_main.trace_ray(
@@ -193,10 +207,9 @@ pub fn main_ray_generation(
         }
 
         if payload.is_miss != 0 {
-            color_sum += color * payload.position;
+            add_image(0, color * payload.position);
             break;
         } else {
-            let color0 = color;
             let wo = -ray.direction.normalize();
             let normal = payload.normal.normalize();
             let position = payload.position;
@@ -207,78 +220,19 @@ pub fn main_ray_generation(
             bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
 
-            color_sum += color * area_light.emit(wo, normal);
+            if !area_light.is_null() {
+                add_image(0, color * area_light.emit(wo, normal));
+            }
 
             if i == 0 {
-                aov_normal = normal;
-                aov_albedo = material.albedo(uv, textures, images);
+                add_image(1, normal);
+                add_image(2, material.albedo(uv, textures, images));
             }
 
-            if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
-                let (wi, pdf, f) = if rng.next_f32() > 0.5 {
-                    let wi = (unsafe {
-                        emit_objects
-                            .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
-                    }
-                    .sample(indices, vertices, &mut rng)
-                        - position)
-                        .normalize();
-
-                    (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
-                } else {
-                    let sampled_f = bsdf.sample_f(wo, &mut rng);
-
-                    (sampled_f.wi, sampled_f.pdf, sampled_f.f)
-                };
-
-                ray = Ray {
-                    origin: position,
-                    direction: wi,
-                };
-
-                *payload_pdf = RayPayloadPDF::default();
-                let weight = 1.0 / uniform.emit_primitives as f32;
-
-                unsafe {
-                    tlas_emit.trace_ray(
-                        RayFlags::OPAQUE,
-                        cull_mask,
-                        2,
-                        0,
-                        1,
-                        ray.origin,
-                        tmin,
-                        ray.direction,
-                        tmax,
-                        payload_pdf,
-                    );
-                }
-
-                color *= f * normal.dot(wi).abs();
-                let pdf = 0.5 * pdf + 0.5 * weight * payload_pdf.pdf;
-
-                if pdf < 1e-5 {
-                    break;
-                }
-
-                color /= pdf;
-            } else {
-                let sampled_f = bsdf.sample_f(wo, &mut rng);
-
-                if sampled_f.pdf < 1e-5 {
-                    break;
-                }
-
-                color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
-                ray = Ray {
-                    origin: position,
-                    direction: sampled_f.wi,
-                };
-            }
-
-            for i in 0..uniform.lights_len {
+            let mut l = 0;
+            while l < uniform.lights_len {
                 let (target, t_max) =
-                    unsafe { lights.index_unchecked(i as usize) }.ray_target(position);
+                    unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
                 let wi = (target - position).normalize();
                 let light_ray = Ray {
                     origin: position,
@@ -304,11 +258,77 @@ pub fn main_ray_generation(
                 if payload.is_miss != 0 {
                     let f = bsdf.f(wo, wi);
 
-                    color_sum += color0
-                        * f
-                        * wi.dot(normal).abs()
-                        * unsafe { lights.index_unchecked(i as usize) }.color(position);
+                    add_image(
+                        0,
+                        color
+                            * f
+                            * wi.dot(normal).abs()
+                            * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                    );
                 }
+                l += 1;
+            }
+
+            if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
+                let (wi, pdf, f) = if rng.next_f32() > 0.5 {
+                    let emit_object = unsafe {
+                        emit_objects
+                            .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
+                    };
+
+                    let wi =
+                        (emit_object.sample(indices, vertices, &mut rng) - position).normalize();
+
+                    (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
+                } else {
+                    let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                    (sampled_f.wi, sampled_f.pdf, sampled_f.f)
+                };
+
+                ray = Ray {
+                    origin: position,
+                    direction: wi,
+                };
+
+                *payload_pdf = RayPayloadPDF::default();
+
+                unsafe {
+                    tlas_emit.trace_ray(
+                        RayFlags::OPAQUE,
+                        cull_mask,
+                        2,
+                        0,
+                        1,
+                        ray.origin,
+                        tmin,
+                        ray.direction,
+                        tmax,
+                        payload_pdf,
+                    );
+                }
+
+                color *= f * normal.dot(wi).abs();
+
+                let pdf = 0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                if pdf < 1e-5 {
+                    break;
+                }
+
+                color /= pdf;
+            } else {
+                let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                if sampled_f.pdf < 1e-5 {
+                    break;
+                }
+
+                color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
+                ray = Ray {
+                    origin: position,
+                    direction: sampled_f.wi,
+                };
             }
         }
 
@@ -317,6 +337,7 @@ pub fn main_ray_generation(
         }
 
         // russian roulette
+        /*
         if i > 4 {
             let rr_coin = rng.next_f32();
             let continue_p = color.max_element();
@@ -327,27 +348,8 @@ pub fn main_ray_generation(
                 color /= continue_p;
             }
         }
-    }
-
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(0);
-    let prev: Vec4 = image.read(pos);
-
-    unsafe {
-        image.write(pos, prev + color_sum.extend(1.0));
-    }
-
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(1);
-    let prev: Vec4 = image.read(pos);
-
-    unsafe {
-        image.write(pos, prev + aov_normal.extend(0.0));
-    }
-
-    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(2);
-    let prev: Vec4 = image.read(pos);
-
-    unsafe {
-        image.write(pos, prev + aov_albedo.extend(0.0));
+        */
+        i += 1;
     }
 }
 
@@ -596,10 +598,12 @@ pub fn triangle_closest_hit_pdf(
 
     let area = 0.5 * ab.cross(ac).length();
     let distance_squared = (world_ray_origin - hit_pos).length_squared();
-    let cosine = (-world_ray_direction).normalize().dot(normal).abs();
+    // let cosine = (-world_ray_direction).normalize().dot(normal).abs();
+    // Same Value
+    let cosine = world_ray_direction.normalize().dot(normal).abs();
 
     *out = RayPayloadPDF {
-        pdf: distance_squared / (cosine * area),
+        pdf: distance_squared / (cosine * area) / index_data.primitive_count as f32,
     };
 }
 

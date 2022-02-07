@@ -27,8 +27,7 @@ pub fn expand_include<P: AsRef<Path>>(
 
                     File::open(&current_path)?.read_to_string(&mut buf)?;
 
-                    current_path.pop();
-                    match expand_include(&buf, &current_path)? {
+                    match expand_include(&buf, current_dir.as_ref())? {
                         Cow::Borrowed(_) => {}
                         Cow::Owned(s) => buf = s,
                     }

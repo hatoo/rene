@@ -4,7 +4,7 @@ use core::ops::BitOr;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::IndexUnchecked,
-    glam::{Vec3A, Vec4},
+    glam::{vec3a, Vec3A, Vec4},
 };
 
 use crate::rand::DefaultRng;
@@ -24,13 +24,43 @@ pub mod onb;
 use bxdf::{FresnelSpecular, LambertianReflection};
 
 use self::{
-    bxdf::{FresnelBlend, MicrofacetReflection},
+    bxdf::{FresnelBlend, MicrofacetReflection, SpecularReflection},
     fresnel::EnumFresnel,
     microfacet::EnumMicrofacetDistribution,
     onb::Onb,
 };
 
+#[derive(Clone, Copy, Default)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+pub struct Packed4<T> {
+    pub t: T,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+impl<T> Packed4<T> {
+    pub fn new(t: T, v: Vec3A) -> Self {
+        Self {
+            t,
+            x: v.x,
+            y: v.y,
+            z: v.z,
+        }
+    }
+
+    pub fn set_xyz(&mut self, v: Vec3A) {
+        self.x = v.x;
+        self.y = v.y;
+        self.z = v.z;
+    }
+
+    pub fn xyz(&self) -> Vec3A {
+        vec3a(self.x, self.y, self.z)
+    }
+}
+
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct BxdfKind(u32);
 
 impl BxdfKind {
@@ -64,7 +94,7 @@ pub trait Bxdf {
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct EnumBxdfData {
-    v0: Vec4,
+    v0: Packed4<BxdfType>,
     v1: Vec4,
     microfacet_distribution: EnumMicrofacetDistribution,
     fresnel: EnumFresnel,
@@ -78,36 +108,45 @@ enum BxdfType {
     FresnelSpecular,
     FresnelBlend,
     MicroFacetReflection,
+    SpecularReflection,
+}
+
+impl Default for BxdfType {
+    fn default() -> Self {
+        Self::LambertianReflection
+    }
 }
 
 #[derive(Clone, Copy)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(transparent)]
 pub struct EnumBxdf {
-    t: BxdfType,
     data: EnumBxdfData,
 }
 
 impl Bxdf for EnumBxdf {
     fn kind(&self) -> BxdfKind {
-        match self.t {
+        match self.t() {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.kind(),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.kind(),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.kind(),
             BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.kind(),
+            BxdfType::SpecularReflection => SpecularReflection { data: &self.data }.kind(),
         }
     }
 
     fn f(&self, wo: Vec3A, wi: Vec3A) -> Vec3A {
-        match self.t {
+        match self.t() {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.f(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.f(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.f(wo, wi),
             BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.f(wo, wi),
+            BxdfType::SpecularReflection => SpecularReflection { data: &self.data }.f(wo, wi),
         }
     }
 
     fn sample_f(&self, wo: Vec3A, rng: &mut DefaultRng) -> SampledF {
-        match self.t {
+        match self.t() {
             BxdfType::LambertianReflection => {
                 LambertianReflection { data: &self.data }.sample_f(wo, rng)
             }
@@ -116,27 +155,35 @@ impl Bxdf for EnumBxdf {
             BxdfType::MicroFacetReflection => {
                 MicrofacetReflection { data: &self.data }.sample_f(wo, rng)
             }
+            BxdfType::SpecularReflection => {
+                SpecularReflection { data: &self.data }.sample_f(wo, rng)
+            }
         }
     }
 
     fn pdf(&self, wo: Vec3A, wi: Vec3A) -> f32 {
-        match self.t {
+        match self.t() {
             BxdfType::LambertianReflection => LambertianReflection { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.pdf(wo, wi),
             BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.pdf(wo, wi),
+            BxdfType::SpecularReflection => SpecularReflection { data: &self.data }.pdf(wo, wi),
         }
     }
 }
 
 impl EnumBxdf {
+    fn t(&self) -> BxdfType {
+        self.data.v0.t
+    }
+
     pub fn setup_lambertian_reflection(albedo: Vec3A, bxdf: &mut EnumBxdf) {
-        bxdf.t = BxdfType::LambertianReflection;
+        bxdf.data.v0.t = BxdfType::LambertianReflection;
         LambertianReflection::setup_data(albedo, &mut bxdf.data);
     }
 
     pub fn setup_fresnel_specular(ir: f32, bxdf: &mut EnumBxdf) {
-        bxdf.t = BxdfType::FresnelSpecular;
+        bxdf.data.v0.t = BxdfType::FresnelSpecular;
         FresnelSpecular::setup_data(ir, &mut bxdf.data);
     }
 
@@ -146,7 +193,7 @@ impl EnumBxdf {
         distribution: EnumMicrofacetDistribution,
         bxdf: &mut EnumBxdf,
     ) {
-        bxdf.t = BxdfType::FresnelBlend;
+        bxdf.data.v0.t = BxdfType::FresnelBlend;
         FresnelBlend::setup_data(rd, rs, distribution, &mut bxdf.data);
     }
 
@@ -156,12 +203,17 @@ impl EnumBxdf {
         fresnel: EnumFresnel,
         bxdf: &mut EnumBxdf,
     ) {
-        bxdf.t = BxdfType::MicroFacetReflection;
+        bxdf.data.v0.t = BxdfType::MicroFacetReflection;
         MicrofacetReflection::setup_data(r, microfacet_distribution, fresnel, &mut bxdf.data);
+    }
+
+    pub fn setup_specular_reflection(r: Vec3A, fresnel: EnumFresnel, bxdf: &mut EnumBxdf) {
+        bxdf.data.v0.t = BxdfType::SpecularReflection;
+        SpecularReflection::setup_data(r, fresnel, &mut bxdf.data);
     }
 }
 
-const BXDF_LEN: usize = 8;
+const BXDF_LEN: usize = 4;
 
 pub struct Bsdf {
     ng: Vec3A,
@@ -177,7 +229,6 @@ impl Default for Bsdf {
             onb: Onb::from_w(Vec3A::Z),
             len: 0,
             bxdfs: [EnumBxdf {
-                t: BxdfType::LambertianReflection,
                 data: Default::default(),
             }; BXDF_LEN],
         }
@@ -203,13 +254,16 @@ impl Bsdf {
     }
 
     pub fn contains(&self, kind: BxdfKind) -> bool {
-        for i in 0..self.len {
+        let mut i = 0;
+
+        while i < self.len {
             if unsafe { self.bxdfs.index_unchecked(i as usize) }
                 .kind()
                 .contains(kind)
             {
                 return true;
             }
+            i += 1;
         }
 
         false
@@ -229,13 +283,16 @@ impl Bsdf {
 
         let mut f = Vec3A::ZERO;
 
-        for i in 0..self.len {
+        let mut i = 0;
+        while i < self.len {
             let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
             if (reflect && bxdf.kind().contains(BxdfKind::REFLECTION))
                 || (!reflect && bxdf.kind().contains(BxdfKind::TRANSMISSION))
             {
                 f += bxdf.f(wo, wi);
             }
+
+            i += 1;
         }
 
         f
@@ -243,11 +300,7 @@ impl Bsdf {
 
     pub fn sample_f(&self, wo_world: Vec3A, rng: &mut DefaultRng) -> SampledF {
         if self.len == 0 {
-            SampledF {
-                wi: Vec3A::ZERO,
-                f: Vec3A::ZERO,
-                pdf: 0.0,
-            }
+            SampledF::default()
         } else {
             let index = rng.next_u32() as usize % self.len as usize;
             let bxdf = unsafe { self.bxdfs.index_unchecked(index) };
@@ -266,9 +319,11 @@ impl Bsdf {
         let wo = self.onb.world_to_local(wo_world);
         let wi = self.onb.world_to_local(wi_world);
 
-        for i in 0..self.len {
+        let mut i = 0;
+        while i < self.len {
             let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
             pdf += bxdf.pdf(wo, wi);
+            i += 1;
         }
 
         pdf / self.len as f32

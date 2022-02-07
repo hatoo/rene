@@ -1,5 +1,5 @@
 use core::f32::consts::{FRAC_1_PI, PI};
-use spirv_std::glam::{vec2, vec3a, vec4, Vec2, Vec3A, Vec4Swizzles};
+use spirv_std::glam::{vec2, vec3a, Vec2, Vec3A, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -34,6 +34,11 @@ pub struct MicrofacetReflection<'a> {
     pub data: &'a EnumBxdfData,
 }
 
+#[repr(transparent)]
+pub struct SpecularReflection<'a> {
+    pub data: &'a EnumBxdfData,
+}
+
 #[allow(dead_code)]
 fn concentric_sample_disk(rng: &mut DefaultRng) -> Vec2 {
     let u_offset = 2.0 * vec2(rng.next_f32(), rng.next_f32()) - vec2(1.0, 1.0);
@@ -60,22 +65,12 @@ fn cosine_sample_hemisphere(rng: &mut DefaultRng) -> Vec3A {
 }
 
 impl<'a> LambertianReflection<'a> {
-    #[allow(dead_code)]
-    pub fn new_data(albedo: Vec3A) -> EnumBxdfData {
-        EnumBxdfData {
-            v0: albedo.extend(0.0),
-            ..Default::default()
-        }
-    }
-
     pub fn setup_data(albedo: Vec3A, data: &mut EnumBxdfData) {
-        data.v0.x = albedo.x;
-        data.v0.y = albedo.y;
-        data.v0.z = albedo.z;
+        data.v0.set_xyz(albedo);
     }
 
     fn albedo(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 }
 
@@ -172,14 +167,6 @@ fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
 }
 
 impl<'a> FresnelSpecular<'a> {
-    #[allow(dead_code)]
-    pub fn new_data(ir: f32) -> EnumBxdfData {
-        EnumBxdfData {
-            v0: vec4(ir, 0.0, 0.0, 0.0),
-            ..Default::default()
-        }
-    }
-
     pub fn setup_data(ir: f32, data: &mut EnumBxdfData) {
         data.v0.x = ir;
     }
@@ -221,11 +208,7 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
 
             let (b, wi) = refract(
                 wo,
-                if wo.z > 0.0 {
-                    vec3a(0.0, 0.0, 1.0)
-                } else {
-                    vec3a(0.0, 0.0, -1.0)
-                },
+                vec3a(0.0, 0.0, if wo.z > 0.0 { 1.0 } else { -1.0 }),
                 refraction_ratio,
             );
 
@@ -243,33 +226,19 @@ impl<'a> Bxdf for FresnelSpecular<'a> {
 }
 
 impl<'a> FresnelBlend<'a> {
-    #[allow(dead_code)]
-    pub fn new_data(
-        rd: Vec3A,
-        rs: Vec3A,
-        distribution: EnumMicrofacetDistribution,
-    ) -> EnumBxdfData {
-        EnumBxdfData {
-            v0: rd.extend(0.0),
-            v1: rs.extend(0.0),
-            microfacet_distribution: distribution,
-            ..Default::default()
-        }
-    }
-
     pub fn setup_data(
         rd: Vec3A,
         rs: Vec3A,
         distribution: EnumMicrofacetDistribution,
         data: &mut EnumBxdfData,
     ) {
-        data.v0 = rd.extend(0.0);
+        data.v0.set_xyz(rd);
         data.v1 = rs.extend(0.0);
         data.microfacet_distribution = distribution;
     }
 
     fn rd(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 
     fn rs(&self) -> Vec3A {
@@ -355,33 +324,19 @@ impl<'a> Bxdf for FresnelBlend<'a> {
 }
 
 impl<'a> MicrofacetReflection<'a> {
-    #[allow(dead_code)]
-    pub fn new_data(
-        r: Vec3A,
-        microfacet_distribution: EnumMicrofacetDistribution,
-        fresnel: EnumFresnel,
-    ) -> EnumBxdfData {
-        EnumBxdfData {
-            v0: r.extend(0.0),
-            microfacet_distribution,
-            fresnel,
-            ..Default::default()
-        }
-    }
-
     pub fn setup_data(
         r: Vec3A,
         microfacet_distribution: EnumMicrofacetDistribution,
         fresnel: EnumFresnel,
         data: &mut EnumBxdfData,
     ) {
-        data.v0 = r.extend(0.0);
+        data.v0.set_xyz(r);
         data.microfacet_distribution = microfacet_distribution;
         data.fresnel = fresnel;
     }
 
     fn r(&self) -> Vec3A {
-        self.data.v0.xyz().into()
+        self.data.v0.xyz()
     }
 }
 
@@ -451,5 +406,38 @@ impl<'a> Bxdf for MicrofacetReflection<'a> {
         }
         let wh = (wo + wi).normalize();
         self.data.microfacet_distribution.pdf(wo, wh) / (4.0 * wo.dot(wh))
+    }
+}
+
+impl<'a> SpecularReflection<'a> {
+    pub fn setup_data(r: Vec3A, fresnel: EnumFresnel, data: &mut EnumBxdfData) {
+        data.v0.set_xyz(r);
+        data.fresnel = fresnel;
+    }
+
+    fn r(&self) -> Vec3A {
+        self.data.v0.xyz()
+    }
+}
+
+impl<'a> Bxdf for SpecularReflection<'a> {
+    fn kind(&self) -> BxdfKind {
+        BxdfKind::REFLECTION
+    }
+
+    fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
+        Vec3A::ZERO
+    }
+
+    fn sample_f(&self, wo: Vec3A, _rng: &mut DefaultRng) -> SampledF {
+        let wi = vec3a(-wo.x, -wo.y, wo.z);
+        let f = self.data.fresnel.evaluate(Onb::local_cos_theta(wi)) * self.r()
+            / Onb::local_abs_cos_theta(wi);
+
+        SampledF { wi, f, pdf: 1.0 }
+    }
+
+    fn pdf(&self, _wo: Vec3A, _wi: Vec3A) -> f32 {
+        0.0
     }
 }

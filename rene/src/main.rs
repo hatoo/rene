@@ -62,6 +62,7 @@ struct Opts {
 }
 
 fn main() {
+    let program_start = Instant::now();
     simple_logger::init().unwrap();
 
     const ENABLE_VALIDATION_LAYER: bool = true;
@@ -95,6 +96,7 @@ fn main() {
         return;
     }
 
+    let before_parse = Instant::now();
     let mut pbrt_path = opts.pbrt_path.unwrap();
 
     File::open(&pbrt_path)
@@ -123,6 +125,8 @@ fn main() {
             return;
         }
     };
+
+    log::info!("Scene parsed ({} ms)", before_parse.elapsed().as_millis());
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
@@ -418,6 +422,7 @@ fn main() {
         }
     }
 
+    let before_scene_buffer = Instant::now();
     let scene_buffers = SceneBuffers::new(
         &scene,
         &device,
@@ -425,6 +430,10 @@ fn main() {
         &acceleration_structure,
         command_pool,
         graphics_queue,
+    );
+    log::info!(
+        "Scene buffers created ({} ms)",
+        before_scene_buffer.elapsed().as_millis()
     );
 
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_groups_len) = {
@@ -1566,6 +1575,8 @@ fn main() {
     unsafe {
         instance.destroy_instance(None);
     }
+
+    log::info!("End ({} ms)", program_start.elapsed().as_millis());
 }
 
 fn to_linear(
@@ -2967,6 +2978,10 @@ impl SceneBuffers {
                         .blas_index
                         .map(|i| blas_args[i].index_offset)
                         .unwrap_or(0),
+                    primitive_count: instance
+                        .blas_index
+                        .map(|i| blas_args[i].primitive_count)
+                        .unwrap_or(1),
                 });
                 vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
