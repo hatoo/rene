@@ -95,6 +95,7 @@ pub enum Material {
     Glass,
     Substrate(Substrate),
     Metal(Metal),
+    Mirror(Mirror),
 }
 
 pub struct Matte {
@@ -115,6 +116,10 @@ pub struct Metal {
     pub rough_u: f32,
     pub rough_v: f32,
     pub remap_roughness: bool,
+}
+
+pub struct Mirror {
+    pub r: TextureOrColor,
 }
 
 pub enum Shape {
@@ -442,6 +447,13 @@ impl<'a, T> GetValue for Object<'a, T> {
                     rough_v,
                     remap_roughness,
                 }))
+            }
+            "mirror" => {
+                let r = self
+                    .get_texture_or_color("Kd")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.9, 0.9, 0.9))))?;
+
+                Ok(Material::Mirror(Mirror { r }))
             }
             t => Err(Error::InvalidMaterial(t.to_string())),
         }

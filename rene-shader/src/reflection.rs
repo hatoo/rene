@@ -24,7 +24,7 @@ pub mod onb;
 use bxdf::{FresnelSpecular, LambertianReflection};
 
 use self::{
-    bxdf::{FresnelBlend, MicrofacetReflection},
+    bxdf::{FresnelBlend, MicrofacetReflection, SpecularReflection},
     fresnel::EnumFresnel,
     microfacet::EnumMicrofacetDistribution,
     onb::Onb,
@@ -108,6 +108,7 @@ enum BxdfType {
     FresnelSpecular,
     FresnelBlend,
     MicroFacetReflection,
+    SpecularReflection,
 }
 
 impl Default for BxdfType {
@@ -130,6 +131,7 @@ impl Bxdf for EnumBxdf {
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.kind(),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.kind(),
             BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.kind(),
+            BxdfType::SpecularReflection => SpecularReflection { data: &self.data }.kind(),
         }
     }
 
@@ -139,6 +141,7 @@ impl Bxdf for EnumBxdf {
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.f(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.f(wo, wi),
             BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.f(wo, wi),
+            BxdfType::SpecularReflection => SpecularReflection { data: &self.data }.f(wo, wi),
         }
     }
 
@@ -152,6 +155,9 @@ impl Bxdf for EnumBxdf {
             BxdfType::MicroFacetReflection => {
                 MicrofacetReflection { data: &self.data }.sample_f(wo, rng)
             }
+            BxdfType::SpecularReflection => {
+                SpecularReflection { data: &self.data }.sample_f(wo, rng)
+            }
         }
     }
 
@@ -161,6 +167,7 @@ impl Bxdf for EnumBxdf {
             BxdfType::FresnelSpecular => FresnelSpecular { data: &self.data }.pdf(wo, wi),
             BxdfType::FresnelBlend => FresnelBlend { data: &self.data }.pdf(wo, wi),
             BxdfType::MicroFacetReflection => MicrofacetReflection { data: &self.data }.pdf(wo, wi),
+            BxdfType::SpecularReflection => SpecularReflection { data: &self.data }.pdf(wo, wi),
         }
     }
 }
@@ -198,6 +205,11 @@ impl EnumBxdf {
     ) {
         bxdf.data.v0.t = BxdfType::MicroFacetReflection;
         MicrofacetReflection::setup_data(r, microfacet_distribution, fresnel, &mut bxdf.data);
+    }
+
+    pub fn setup_specular_reflection(r: Vec3A, fresnel: EnumFresnel, bxdf: &mut EnumBxdf) {
+        bxdf.data.v0.t = BxdfType::SpecularReflection;
+        SpecularReflection::setup_data(r, fresnel, &mut bxdf.data);
     }
 }
 

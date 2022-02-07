@@ -11,8 +11,8 @@ use crate::ShaderOffset;
 
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Infinite, InnerTexture, IntermediateScene, IntermediateWorld,
-    LightSource, Material, Matte, Metal, SceneObject, Shape, Sphere, Substrate, TextureOrColor,
-    TriangleMesh, WorldObject,
+    LightSource, Material, Matte, Metal, Mirror, SceneObject, Shape, Sphere, Substrate,
+    TextureOrColor, TriangleMesh, WorldObject,
 };
 
 pub mod image;
@@ -193,6 +193,10 @@ impl Scene {
                     rough_v,
                     remap_roughness,
                 ))
+            }
+            Material::Mirror(Mirror { r }) => {
+                let texture_index = self.texture(r, state)?;
+                Ok(EnumMaterial::new_mirror(texture_index))
             }
         }
     }
