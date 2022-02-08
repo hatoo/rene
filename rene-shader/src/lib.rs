@@ -274,12 +274,14 @@ pub fn main_ray_generation(
                 // Use frame wide RNG to reduce warp divergence
                 let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
                     let emit_object = unsafe {
-                        emit_objects
-                            .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
+                        emit_objects.index_unchecked(
+                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                        )
                     };
 
-                    let wi =
-                        (emit_object.sample(indices, vertices, &mut rng) - position).normalize();
+                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                        - position)
+                        .normalize();
 
                     (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
                 } else {
