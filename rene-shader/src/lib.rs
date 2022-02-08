@@ -174,7 +174,7 @@ pub fn main_ray_generation(
 
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
     let mut rng = DefaultRng::new(rand_seed);
-    let mut rng2 = DefaultRng::new(constants.seed);
+    let mut frame_wide_rng = DefaultRng::new(constants.seed);
 
     let u = (launch_id.x as f32 + rng.next_f32()) / (launch_size.x - 1) as f32;
     let v = (launch_id.y as f32 + rng.next_f32()) / (launch_size.y - 1) as f32;
@@ -272,7 +272,7 @@ pub fn main_ray_generation(
 
             if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
                 // Use frame wide RNG to reduce warp divergence
-                let (wi, pdf, f) = if rng2.next_f32() > 0.5 {
+                let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
                     let emit_object = unsafe {
                         emit_objects
                             .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
@@ -339,9 +339,8 @@ pub fn main_ray_generation(
         }
 
         // russian roulette
-        /*
-        if i > 4 {
-            let rr_coin = rng.next_f32();
+        if i > 12 {
+            let rr_coin = frame_wide_rng.next_f32();
             let continue_p = color.max_element();
 
             if rr_coin > continue_p {
@@ -350,7 +349,6 @@ pub fn main_ray_generation(
                 color /= continue_p;
             }
         }
-        */
         i += 1;
     }
 }
