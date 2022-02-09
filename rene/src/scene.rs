@@ -11,8 +11,8 @@ use crate::ShaderOffset;
 
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Glass, Infinite, InnerTexture, IntermediateScene,
-    IntermediateWorld, LightSource, Material, Matte, Metal, Mirror, SceneObject, Shape, Sphere,
-    Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
+    IntermediateWorld, LightSource, Material, Matte, Metal, Mirror, Plastic, SceneObject, Shape,
+    Sphere, Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
 };
 
 pub mod image;
@@ -217,6 +217,17 @@ impl Scene {
                 rough_v,
                 self.texture(opacity, state)?,
                 eta,
+                remap_roughness,
+            )),
+            Material::Plastic(Plastic {
+                kd,
+                ks,
+                rough,
+                remap_roughness,
+            }) => Ok(EnumMaterial::new_plastic(
+                self.texture(kd, state)?,
+                self.texture(ks, state)?,
+                rough,
                 remap_roughness,
             )),
         }

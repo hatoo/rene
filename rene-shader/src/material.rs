@@ -58,6 +58,7 @@ enum MaterialType {
     Metal,
     Mirror,
     Uber,
+    Plastic,
 }
 
 #[derive(Clone, Copy)]
@@ -94,6 +95,11 @@ struct Mirror<'a> {
 
 #[repr(transparent)]
 struct Uber<'a> {
+    data: &'a EnumMaterialData,
+}
+
+#[repr(transparent)]
+struct Plastic<'a> {
     data: &'a EnumMaterialData,
 }
 
@@ -426,6 +432,18 @@ impl EnumMaterial {
             ),
         }
     }
+
+    pub fn new_plastic(
+        kd_index: u32,
+        ks_index: u32,
+        roughness: f32,
+        remap_roughness: bool,
+    ) -> Self {
+        Self {
+            t: MaterialType::Plastic,
+            data: Plastic::new_data(kd_index, ks_index, roughness, remap_roughness),
+        }
+    }
 }
 
 impl<'a> Uber<'a> {
@@ -550,6 +568,77 @@ impl<'a> Material for Uber<'a> {
     }
 }
 
+impl<'a> Plastic<'a> {
+    fn new_data(
+        kd_index: u32,
+        ks_index: u32,
+        roughness: f32,
+        remap_roughness: bool,
+    ) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: uvec4(kd_index, ks_index, if remap_roughness { 1 } else { 0 }, 0),
+            v0: vec4(roughness, 0.0, 0.0, 0.0),
+            ..Default::default()
+        }
+    }
+
+    fn kd(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
+        unsafe { textures.index_unchecked(self.data.u0.x as usize) }.color(textures, images, uv)
+    }
+
+    fn ks(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> Vec3A {
+        unsafe { textures.index_unchecked(self.data.u0.y as usize) }.color(textures, images, uv)
+    }
+
+    fn rough(&self) -> f32 {
+        self.data.v0.x
+    }
+
+    fn remap_roughness(&self) -> bool {
+        self.data.u1.z != 0
+    }
+}
+
+impl<'a> Material for Plastic<'a> {
+    fn compute_bsdf(
+        &self,
+        bsdf: &mut Bsdf,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) {
+        let kd = self.kd(uv, textures, images);
+
+        if kd != Vec3A::ZERO {
+            EnumBxdf::setup_lambertian_reflection(kd, bsdf.add_mut());
+        }
+
+        let ks = self.ks(uv, textures, images);
+
+        if ks != Vec3A::ZERO {
+            let rough = if self.remap_roughness() {
+                TrowbridgeReitz::roughness_to_alpha(self.rough())
+            } else {
+                self.rough()
+            };
+
+            let fresnel = EnumFresnel::new_fresnel_dielectric(1.5, 1.0);
+            let distrib = EnumMicrofacetDistribution::new_trowbridge_reitz(rough, rough);
+
+            EnumBxdf::setup_microfacet_reflection(ks, distrib, fresnel, bsdf.add_mut());
+        }
+    }
+
+    fn albedo(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> Vec3A {
+        self.kd(uv, textures, images)
+    }
+}
+
 impl Material for EnumMaterial {
     fn albedo(
         &self,
@@ -564,6 +653,7 @@ impl Material for EnumMaterial {
             MaterialType::Metal => Metal { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Mirror => Mirror { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Uber => Uber { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Plastic => Plastic { data: &self.data }.albedo(uv, textures, images),
         }
     }
 
@@ -592,6 +682,9 @@ impl Material for EnumMaterial {
             }
             MaterialType::Uber => {
                 Uber { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Plastic => {
+                Plastic { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }
         }
     }

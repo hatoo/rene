@@ -97,6 +97,7 @@ pub enum Material {
     Metal(Metal),
     Mirror(Mirror),
     Uber(Uber),
+    Plastic(Plastic),
 }
 
 pub struct Matte {
@@ -136,6 +137,13 @@ pub struct Uber {
     pub rough_v: f32,
     pub eta: f32,
     pub opacity: TextureOrColor,
+    pub remap_roughness: bool,
+}
+
+pub struct Plastic {
+    pub kd: TextureOrColor,
+    pub ks: TextureOrColor,
+    pub rough: f32,
     pub remap_roughness: bool,
 }
 
@@ -517,6 +525,23 @@ impl<'a, T> GetValue for Object<'a, T> {
                     rough_v,
                     eta,
                     opacity,
+                    remap_roughness,
+                }))
+            }
+            "plastic" => {
+                let kd = self
+                    .get_texture_or_color("Kd")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
+                let ks = self
+                    .get_texture_or_color("Ks")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
+                let rough = self.get_float("roughness").unwrap_or(Ok(0.1))?;
+                let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
+
+                Ok(Material::Plastic(Plastic {
+                    kd,
+                    ks,
+                    rough,
                     remap_roughness,
                 }))
             }
