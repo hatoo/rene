@@ -130,7 +130,7 @@ fn refract(wi: Vec3A, n: Vec3A, etai_over_etat: f32) -> (bool, Vec3A) {
     )
 }
 
-fn fr_dielectric(cos_theta_i: f32, eta_i: f32, eta_t: f32) -> f32 {
+pub fn fr_dielectric(cos_theta_i: f32, eta_i: f32, eta_t: f32) -> f32 {
     let cos_theta_i = f32_clamp(cos_theta_i, -1.0, 1.0);
     let entering = cos_theta_i > 0.0;
 

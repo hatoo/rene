@@ -4,7 +4,7 @@ use spirv_std::num_traits::Float;
 
 use crate::asm::f32_clamp;
 
-use super::Packed4;
+use super::{bxdf::fr_dielectric, Packed4};
 
 pub trait Fresnel {
     fn evaluate(&self, cos_i: f32) -> Vec3A;
@@ -16,6 +16,7 @@ pub trait Fresnel {
 enum FresnelType {
     FresnelConductor,
     NoOp,
+    FresnelDielectric,
 }
 
 impl Default for FresnelType {
@@ -40,6 +41,10 @@ pub struct EnumFresnel {
 }
 
 struct FresnelConductor<'a> {
+    data: &'a EnumFresnelData,
+}
+
+struct FresnelDielectric<'a> {
     data: &'a EnumFresnelData,
 }
 
@@ -102,6 +107,30 @@ impl<'a> Fresnel for FresnelConductor<'a> {
     }
 }
 
+impl<'a> FresnelDielectric<'a> {
+    fn new_data(eta_i: f32, eta_t: f32) -> EnumFresnelData {
+        EnumFresnelData {
+            v0: Packed4::new(FresnelType::FresnelDielectric, vec3a(eta_i, eta_t, 0.0)),
+            ..Default::default()
+        }
+    }
+
+    fn eta_i(&self) -> f32 {
+        self.data.v0.x
+    }
+
+    fn eta_t(&self) -> f32 {
+        self.data.v0.y
+    }
+}
+
+impl<'a> Fresnel for FresnelDielectric<'a> {
+    fn evaluate(&self, cos_i: f32) -> Vec3A {
+        let x = fr_dielectric(cos_i, self.eta_i(), self.eta_t());
+        vec3a(x, x, x)
+    }
+}
+
 impl EnumFresnel {
     fn t(&self) -> FresnelType {
         self.data.v0.t
@@ -121,6 +150,12 @@ impl EnumFresnel {
             },
         }
     }
+
+    pub fn new_fresnel_dielectric(eta_i: f32, eta_t: f32) -> Self {
+        Self {
+            data: FresnelDielectric::new_data(eta_i, eta_t),
+        }
+    }
 }
 
 impl Fresnel for EnumFresnel {
@@ -128,6 +163,9 @@ impl Fresnel for EnumFresnel {
         match self.t() {
             FresnelType::NoOp => vec3a(1.0, 1.0, 1.0),
             FresnelType::FresnelConductor => FresnelConductor { data: &self.data }.evaluate(cos_i),
+            FresnelType::FresnelDielectric => {
+                FresnelDielectric { data: &self.data }.evaluate(cos_i)
+            }
         }
     }
 }
