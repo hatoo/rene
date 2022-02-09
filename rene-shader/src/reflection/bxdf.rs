@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    fresnel::EnumFresnel,
+    fresnel::{EnumFresnel, FresnelDielectric},
     microfacet::{EnumMicrofacetDistribution, MicrofacetDistribution},
     onb::Onb,
     Bxdf, BxdfKind, EnumBxdfData, SampledF,
@@ -36,6 +36,11 @@ pub struct MicrofacetReflection<'a> {
 
 #[repr(transparent)]
 pub struct SpecularReflection<'a> {
+    pub data: &'a EnumBxdfData,
+}
+
+#[repr(transparent)]
+pub struct SpecularTransmission<'a> {
     pub data: &'a EnumBxdfData,
 }
 
@@ -130,7 +135,7 @@ fn refract(wi: Vec3A, n: Vec3A, etai_over_etat: f32) -> (bool, Vec3A) {
     )
 }
 
-fn fr_dielectric(cos_theta_i: f32, eta_i: f32, eta_t: f32) -> f32 {
+pub fn fr_dielectric(cos_theta_i: f32, eta_i: f32, eta_t: f32) -> f32 {
     let cos_theta_i = f32_clamp(cos_theta_i, -1.0, 1.0);
     let entering = cos_theta_i > 0.0;
 
@@ -435,6 +440,75 @@ impl<'a> Bxdf for SpecularReflection<'a> {
             / Onb::local_abs_cos_theta(wi);
 
         SampledF { wi, f, pdf: 1.0 }
+    }
+
+    fn pdf(&self, _wo: Vec3A, _wi: Vec3A) -> f32 {
+        0.0
+    }
+}
+
+impl<'a> SpecularTransmission<'a> {
+    pub fn setup_data(t: Vec3A, eta_a: f32, eta_b: f32, data: &mut EnumBxdfData) {
+        data.v0.set_xyz(t);
+        data.v1.x = eta_a;
+        data.v1.y = eta_b;
+        // Little optimize
+        data.fresnel.data = FresnelDielectric::new_data(eta_a, eta_b);
+    }
+
+    fn t(&self) -> Vec3A {
+        self.data.v0.xyz()
+    }
+
+    fn eta_a(&self) -> f32 {
+        self.data.v1.x
+    }
+
+    fn eta_b(&self) -> f32 {
+        self.data.v1.y
+    }
+}
+
+impl<'a> Bxdf for SpecularTransmission<'a> {
+    fn kind(&self) -> BxdfKind {
+        BxdfKind::TRANSMISSION
+    }
+
+    fn f(&self, _wo: Vec3A, _wi: Vec3A) -> Vec3A {
+        Vec3A::ZERO
+    }
+
+    fn sample_f(&self, wo: Vec3A, _rng: &mut DefaultRng) -> SampledF {
+        let entering = Onb::local_cos_theta(wo) > 0.0;
+
+        let (eta_i, eta_t) = if entering {
+            (self.eta_a(), self.eta_b())
+        } else {
+            (self.eta_b(), self.eta_a())
+        };
+
+        let (b, wi) = refract(
+            wo,
+            vec3a(0.0, 0.0, if wo.z > 0.0 { 1.0 } else { -1.0 }),
+            eta_i / eta_t,
+        );
+
+        if !b {
+            return SampledF::default();
+        }
+
+        let ft = self.t()
+            * (vec3a(1.0, 1.0, 1.0)
+                - FresnelDielectric {
+                    data: &self.data.fresnel.data,
+                }
+                .evaluate(Onb::local_cos_theta(wi)));
+
+        SampledF {
+            wi,
+            f: ft / Onb::local_abs_cos_theta(wi),
+            pdf: 1.0,
+        }
     }
 
     fn pdf(&self, _wo: Vec3A, _wi: Vec3A) -> f32 {
