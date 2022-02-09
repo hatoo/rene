@@ -96,6 +96,7 @@ pub enum Material {
     Substrate(Substrate),
     Metal(Metal),
     Mirror(Mirror),
+    Uber(Uber),
 }
 
 pub struct Matte {
@@ -124,6 +125,18 @@ pub struct Metal {
 
 pub struct Mirror {
     pub r: TextureOrColor,
+}
+
+pub struct Uber {
+    pub kd: TextureOrColor,
+    pub ks: TextureOrColor,
+    pub kr: TextureOrColor,
+    pub kt: TextureOrColor,
+    pub rough_u: f32,
+    pub rough_v: f32,
+    pub eta: f32,
+    pub opacity: TextureOrColor,
+    pub remap_roughness: bool,
 }
 
 pub enum Shape {
@@ -461,6 +474,51 @@ impl<'a, T> GetValue for Object<'a, T> {
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.9, 0.9, 0.9))))?;
 
                 Ok(Material::Mirror(Mirror { r }))
+            }
+            "uber" => {
+                let kd = self
+                    .get_texture_or_color("Kd")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
+                let ks = self
+                    .get_texture_or_color("Ks")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
+                let kr = self
+                    .get_texture_or_color("Kr")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(Vec3A::ZERO)))?;
+                let kt = self
+                    .get_texture_or_color("Kt")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(Vec3A::ZERO)))?;
+
+                let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
+                    let r = roughness?;
+                    (r, r)
+                } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) =
+                    (self.get_float("uroughness"), self.get_float("vroughness"))
+                {
+                    (rough_u, rough_v)
+                } else {
+                    (0.1, 0.1)
+                };
+
+                let eta = self.get_float("eta").unwrap_or(Ok(1.5))?;
+
+                let opacity = self
+                    .get_texture_or_color("opacity")
+                    .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
+
+                let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
+
+                Ok(Material::Uber(Uber {
+                    kd,
+                    ks,
+                    kr,
+                    kt,
+                    rough_u,
+                    rough_v,
+                    eta,
+                    opacity,
+                    remap_roughness,
+                }))
             }
             t => Err(Error::InvalidMaterial(t.to_string())),
         }

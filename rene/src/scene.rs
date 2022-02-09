@@ -12,7 +12,7 @@ use crate::ShaderOffset;
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Glass, Infinite, InnerTexture, IntermediateScene,
     IntermediateWorld, LightSource, Material, Matte, Metal, Mirror, SceneObject, Shape, Sphere,
-    Substrate, TextureOrColor, TriangleMesh, WorldObject,
+    Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
 };
 
 pub mod image;
@@ -198,6 +198,27 @@ impl Scene {
                 let texture_index = self.texture(r, state)?;
                 Ok(EnumMaterial::new_mirror(texture_index))
             }
+            Material::Uber(Uber {
+                kd,
+                ks,
+                kr,
+                kt,
+                rough_u,
+                rough_v,
+                eta,
+                opacity,
+                remap_roughness,
+            }) => Ok(EnumMaterial::new_uber(
+                self.texture(kd, state)?,
+                self.texture(ks, state)?,
+                self.texture(kr, state)?,
+                self.texture(kt, state)?,
+                rough_u,
+                rough_v,
+                self.texture(opacity, state)?,
+                eta,
+                remap_roughness,
+            )),
         }
     }
 
