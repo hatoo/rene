@@ -763,7 +763,7 @@ impl IntermediateWorld {
                     t => Err(Error::InvalidLightSource(t.to_string())),
                 },
                 pbrt_parser::WorldObjectType::AreaLightSource => match obj.t {
-                    "diffuse" => {
+                    "diffuse" | "area" => {
                         let l = obj.get_rgb("L")??;
                         Ok(Self::WorldObject(WorldObject::AreaLightSource(
                             AreaLightSource::Diffuse(l),
