@@ -97,7 +97,7 @@ pub struct EnumBxdfData {
     v0: Packed4<BxdfType>,
     v1: Vec4,
     microfacet_distribution: EnumMicrofacetDistribution,
-    fresnel: EnumFresnel,
+    pub fresnel: EnumFresnel,
 }
 
 #[repr(u32)]

@@ -37,15 +37,15 @@ pub struct EnumFresnelData {
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(transparent)]
 pub struct EnumFresnel {
-    data: EnumFresnelData,
+    pub data: EnumFresnelData,
 }
 
 struct FresnelConductor<'a> {
     data: &'a EnumFresnelData,
 }
 
-struct FresnelDielectric<'a> {
-    data: &'a EnumFresnelData,
+pub struct FresnelDielectric<'a> {
+    pub data: &'a EnumFresnelData,
 }
 
 impl<'a> FresnelConductor<'a> {
@@ -108,7 +108,7 @@ impl<'a> Fresnel for FresnelConductor<'a> {
 }
 
 impl<'a> FresnelDielectric<'a> {
-    fn new_data(eta_i: f32, eta_t: f32) -> EnumFresnelData {
+    pub fn new_data(eta_i: f32, eta_t: f32) -> EnumFresnelData {
         EnumFresnelData {
             v0: Packed4::new(FresnelType::FresnelDielectric, vec3a(eta_i, eta_t, 0.0)),
             ..Default::default()
