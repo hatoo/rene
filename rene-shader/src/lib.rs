@@ -366,13 +366,47 @@ pub fn main_ray_generation_path(
 
 #[inline(always)]
 fn tr(
+    tlas_main: &AccelerationStructure,
     mut ray: Ray,
-    t_max: f32,
     mut medium: EnumMedium,
     mediums: &[EnumMedium],
     payload: &mut RayPayload,
 ) -> Vec3A {
-    Vec3A::ZERO
+    let mut tr = vec3a(1.0, 1.0, 1.0);
+
+    loop {
+        *payload = RayPayload::default();
+
+        unsafe {
+            tlas_main.trace_ray(
+                RayFlags::empty(),
+                0xff,
+                0,
+                0,
+                0,
+                ray.origin,
+                0.001,
+                ray.direction,
+                1e5,
+                payload,
+            );
+        }
+
+        if payload.is_miss != 0 {
+            break tr;
+        } else if !mediums[payload.medium as usize].is_vaccum() {
+            break Vec3A::ZERO;
+        } else {
+            if medium.is_vaccum() {
+                medium = mediums[payload.medium as usize];
+            } else {
+                tr *= medium.tr(ray, payload.t);
+                medium = EnumMedium::default();
+            }
+
+            ray.origin = payload.position;
+        }
+    }
 }
 
 #[spirv(ray_generation)]
@@ -431,6 +465,33 @@ pub fn main_ray_generation_volpath(
     while i < 50 {
         if uniform.lights_len > 0 && !medium.is_vaccum() {
             let sampled_medium = medium.sample(ray, tmax, &mut rng);
+
+            color *= sampled_medium.tr;
+
+            if sampled_medium.sampled {
+                ray.origin = sampled_medium.position;
+
+                let mut l = 0;
+                while l < uniform.lights_len {
+                    let (target, _t_max) =
+                        unsafe { lights.index_unchecked(l as usize) }.ray_target(ray.origin);
+                    let wi = (target - ray.origin).normalize();
+                    let light_ray = Ray {
+                        origin: ray.origin,
+                        direction: wi,
+                    };
+
+                    let tr = tr(tlas_main, light_ray, medium, mediums, payload);
+                    add_image(
+                        0,
+                        color
+                            * tr
+                            * medium.phase(-ray.direction.normalize(), wi)
+                            * unsafe { lights.index_unchecked(l as usize) }.color(ray.origin),
+                    );
+                    l += 1;
+                }
+            }
         }
 
         *payload = RayPayload::default();
