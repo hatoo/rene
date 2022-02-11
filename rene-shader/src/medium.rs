@@ -1,6 +1,6 @@
 use core::f32::consts::PI;
 
-use spirv_std::glam::{Vec3A, Vec4, Vec4Swizzles};
+use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
@@ -140,7 +140,7 @@ impl EnumMedium {
 impl Medium for EnumMedium {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A {
         match self.t {
-            MediumType::Vaccum => Vec3A::ZERO,
+            MediumType::Vaccum => vec3a(1.0, 1.0, 1.0),
             MediumType::Homogeous => Homogeous { data: &self.data }.tr(ray, t_max),
         }
     }

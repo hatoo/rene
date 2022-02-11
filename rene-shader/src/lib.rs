@@ -509,8 +509,8 @@ pub fn main_ray_generation_volpath(
     let mut medium = EnumMedium::new_vaccum();
 
     let mut i = 0;
-    while i < 50 {
-        if (uniform.lights_len > 0 || uniform.emit_object_len > 0) && !medium.is_vaccum() {
+    while i < 65 {
+        if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
             let sampled_medium = medium.sample(ray, tmax, &mut rng);
 
             color *= sampled_medium.tr;
@@ -582,6 +582,9 @@ pub fn main_ray_generation_volpath(
                         );
                     }
                 }
+
+                i += 1;
+                continue;
             }
         }
 
@@ -624,6 +627,7 @@ pub fn main_ray_generation_volpath(
                 add_image(2, material.albedo(uv, textures, images));
             }
 
+            color *= medium.tr(ray, payload.t);
             if !material.is_none() {
                 let mut l = 0;
                 while l < uniform.lights_len {
@@ -720,6 +724,7 @@ pub fn main_ray_generation_volpath(
             break;
         }
 
+        /*
         // russian roulette
         if i > 12 {
             let rr_coin = frame_wide_rng.next_f32();
@@ -731,6 +736,7 @@ pub fn main_ray_generation_volpath(
                 color /= continue_p;
             }
         }
+        */
 
         medium = mediums[payload.medium as usize];
 
