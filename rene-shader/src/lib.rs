@@ -431,8 +431,7 @@ pub fn main_ray_generation_volpath(
             );
         }
 
-        if !medium.is_vaccum() {
-        } else if payload.is_miss != 0 {
+        if payload.is_miss != 0 {
             add_image(0, color * payload.position);
             break;
         } else {
