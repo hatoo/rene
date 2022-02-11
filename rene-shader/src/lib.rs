@@ -52,6 +52,7 @@ pub struct Ray {
 #[derive(Clone, Default)]
 pub struct RayPayload {
     pub is_miss: u32,
+    pub t: f32,
     pub position: Vec3A,
     pub normal: Vec3A,
     pub material: u32,
@@ -77,6 +78,7 @@ impl RayPayload {
     }
 
     pub fn new_hit(
+        t: f32,
         position: Vec3A,
         normal: Vec3A,
         material: u32,
@@ -86,6 +88,7 @@ impl RayPayload {
     ) -> Self {
         Self {
             is_miss: 0,
+            t,
             position,
             normal,
             material,
@@ -426,7 +429,7 @@ pub fn main_ray_generation_volpath(
 
     let mut i = 0;
     while i < 50 {
-        if !medium.is_vaccum() && uniform.lights_len > 0 {
+        if uniform.lights_len > 0 && !medium.is_vaccum() {
             let sampled_medium = medium.sample(ray, tmax, &mut rng);
         }
 
@@ -676,6 +679,7 @@ pub fn sphere_closest_hit(
     let medium_index = index.medium_index;
 
     *out = RayPayload::new_hit(
+        t,
         hit_pos,
         normal,
         material_index,
@@ -697,6 +701,7 @@ pub struct Vertex {
 #[spirv(closest_hit)]
 #[allow(clippy::too_many_arguments)]
 pub fn triangle_closest_hit(
+    #[spirv(ray_tmax)] t: f32,
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
@@ -756,6 +761,7 @@ pub fn triangle_closest_hit(
     .normalize();
 
     *out = RayPayload::new_hit(
+        t,
         hit_pos,
         normal,
         material_index,

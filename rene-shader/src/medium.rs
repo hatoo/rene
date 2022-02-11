@@ -92,8 +92,8 @@ impl<'a> Medium for Homogeous<'a> {
         let t = (dist / ray.direction.length()).min(t_max);
         let sampled = t < t_max;
 
-        let tr = (-self.sigma_t() * t * ray.direction.length()).exp();
-        let density = if sampled { self.sigma_t() * tr } else { tr };
+        let tr = (-sigma_t * t * ray.direction.length()).exp();
+        let density = if sampled { sigma_t * tr } else { tr };
         let pdf = (density.x + density.y + density.z) / 3.0;
         let pdf = if pdf == 0.0 { 1.0 } else { pdf };
 
