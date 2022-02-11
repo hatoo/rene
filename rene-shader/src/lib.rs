@@ -12,7 +12,7 @@ use core::f32::consts::{FRAC_1_PI, PI};
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
 use math::sphere_uv;
-use medium::EnumMedium;
+use medium::{EnumMedium, Medium};
 use reflection::{onb::Onb, Bsdf, BxdfKind};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -361,6 +361,17 @@ pub fn main_ray_generation_path(
     }
 }
 
+#[inline(always)]
+fn tr(
+    mut ray: Ray,
+    t_max: f32,
+    mut medium: EnumMedium,
+    mediums: &[EnumMedium],
+    payload: &mut RayPayload,
+) -> Vec3A {
+    Vec3A::ZERO
+}
+
 #[spirv(ray_generation)]
 #[allow(clippy::too_many_arguments)]
 pub fn main_ray_generation_volpath(
@@ -415,6 +426,10 @@ pub fn main_ray_generation_volpath(
 
     let mut i = 0;
     while i < 50 {
+        if !medium.is_vaccum() && uniform.lights_len > 0 {
+            let sampled_medium = medium.sample(ray, tmax, &mut rng);
+        }
+
         *payload = RayPayload::default();
         unsafe {
             tlas_main.trace_ray(
