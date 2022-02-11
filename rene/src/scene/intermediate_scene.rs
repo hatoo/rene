@@ -46,6 +46,7 @@ pub enum WorldObject {
     AreaLightSource(AreaLightSource),
     Material(Material),
     MakeNamedMaterial(String, Material),
+    MakeNamedMedium(String, Medium),
     Shape(Shape),
 }
 
@@ -145,6 +146,16 @@ pub struct Plastic {
     pub ks: TextureOrColor,
     pub rough: f32,
     pub remap_roughness: bool,
+}
+
+pub enum Medium {
+    Homogeous(Homogeous),
+}
+
+pub struct Homogeous {
+    pub sigma_s: Vec3A,
+    pub sigma_a: Vec3A,
+    pub g: f32,
 }
 
 pub enum Shape {
@@ -783,6 +794,28 @@ impl IntermediateWorld {
                     Ok(Self::WorldObject(WorldObject::MakeNamedMaterial(
                         name,
                         obj.get_material()?,
+                    )))
+                }
+                pbrt_parser::WorldObjectType::MakeNamedMedium => {
+                    let name = obj.t.to_string();
+
+                    let sigma_a = obj
+                        .get_rgb("sigma_a")
+                        .unwrap_or(Ok(vec3a(0.0011, 0.0024, 0.014)))?;
+
+                    let sigma_s = obj
+                        .get_rgb("sigma_s")
+                        .unwrap_or(Ok(vec3a(2.55, 3.21, 3.77)))?;
+
+                    let g = obj.get_float("g").unwrap_or(Ok(0.0))?;
+
+                    Ok(Self::WorldObject(WorldObject::MakeNamedMedium(
+                        name,
+                        Medium::Homogeous(Homogeous {
+                            sigma_a,
+                            sigma_s,
+                            g,
+                        }),
                     )))
                 }
                 pbrt_parser::WorldObjectType::Shape => match obj.t {

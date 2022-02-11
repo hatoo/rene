@@ -2,17 +2,17 @@ use std::{collections::HashMap, f32::consts::PI, path::Path};
 
 use glam::{vec3, vec3a, Affine3A, Mat4};
 use rene_shader::{
-    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, texture::EnumTexture,
-    Uniform,
+    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, medium::EnumMedium,
+    texture::EnumTexture, Uniform,
 };
 use thiserror::Error;
 
 use crate::ShaderOffset;
 
 use self::intermediate_scene::{
-    AreaLightSource, Camera, Film, Glass, Infinite, InnerTexture, IntermediateScene,
-    IntermediateWorld, LightSource, Material, Matte, Metal, Mirror, Plastic, SceneObject, Shape,
-    Sphere, Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
+    AreaLightSource, Camera, Film, Glass, Homogeous, Infinite, InnerTexture, IntermediateScene,
+    IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror, Plastic, SceneObject,
+    Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
 };
 
 pub mod image;
@@ -37,6 +37,7 @@ pub struct Scene {
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
     pub materials: Vec<EnumMaterial>,
+    pub mediums: Vec<EnumMedium>,
     pub area_lights: Vec<EnumAreaLight>,
     pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
@@ -63,6 +64,7 @@ struct WorldState {
     current_matrix: Mat4,
     textures: HashMap<String, u32>,
     materials: HashMap<String, u32>,
+    mediums: HashMap<String, u32>,
 }
 
 impl Scene {
@@ -95,6 +97,7 @@ impl Scene {
         let mut fov = 0.5 * PI;
 
         scene.area_lights.push(EnumAreaLight::new_null());
+        scene.mediums.push(EnumMedium::new_vaccum());
 
         // Default infinite light texture
         scene
@@ -319,6 +322,18 @@ impl Scene {
                             state.materials.insert(name, self.materials.len() as u32);
                             state.current_material_index = Some(self.materials.len());
                             self.materials.push(material);
+                        }
+                        WorldObject::MakeNamedMedium(
+                            name,
+                            Medium::Homogeous(Homogeous {
+                                sigma_a,
+                                sigma_s,
+                                g,
+                            }),
+                        ) => {
+                            let medium = EnumMedium::new_homogeus(sigma_a, sigma_s, g);
+                            state.mediums.insert(name, self.mediums.len() as u32);
+                            self.mediums.push(medium);
                         }
                         WorldObject::Shape(shape) => match shape {
                             Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {

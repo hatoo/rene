@@ -86,6 +86,7 @@ pub enum WorldObjectType {
     AreaLightSource,
     Material,
     MakeNamedMaterial,
+    MakeNamedMedium,
     Shape,
 }
 #[derive(PartialEq, Debug, Clone)]
@@ -351,6 +352,7 @@ fn parse_world_object_type<'a, E: ParseError<&'a str>>(
         value(WorldObjectType::AreaLightSource, tag("AreaLightSource")),
         value(WorldObjectType::Material, tag("Material")),
         value(WorldObjectType::MakeNamedMaterial, tag("MakeNamedMaterial")),
+        value(WorldObjectType::MakeNamedMedium, tag("MakeNamedMedium")),
         value(WorldObjectType::Shape, tag("Shape")),
     ))(input)
 }
