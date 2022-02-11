@@ -125,7 +125,8 @@ pub struct IndexData {
     pub area_light_index: u32,
     pub index_offset: u32,
     pub primitive_count: u32,
-    pub medium_index: u32,
+    pub interior_medium_index: u32,
+    pub exterior_medium_index: u32,
 }
 
 #[spirv(miss)]
@@ -397,13 +398,11 @@ fn tr(
         } else if !mediums[payload.medium as usize].is_vaccum() {
             break Vec3A::ZERO;
         } else {
-            if medium.is_vaccum() {
-                medium = mediums[payload.medium as usize];
-            } else {
+            if !medium.is_vaccum() {
                 tr *= medium.tr(ray, payload.t);
-                medium = EnumMedium::default();
             }
 
+            medium = mediums[payload.medium as usize];
             ray.origin = payload.position;
         }
     }
@@ -447,13 +446,11 @@ fn tr_emit(
         } else if !mediums[payload.medium as usize].is_vaccum() {
             break Vec3A::ZERO;
         } else {
-            if medium.is_vaccum() {
-                medium = mediums[payload.medium as usize];
-            } else {
+            if !medium.is_vaccum() {
                 tr *= medium.tr(ray, payload.t);
-                medium = EnumMedium::default();
             }
 
+            medium = mediums[payload.medium as usize];
             ray.origin = payload.position;
         }
     }
@@ -733,11 +730,7 @@ pub fn main_ray_generation_volpath(
             }
         }
 
-        if medium.is_vaccum() {
-            medium = mediums[payload.medium as usize];
-        } else {
-            medium = EnumMedium::default();
-        }
+        medium = mediums[payload.medium as usize];
 
         i += 1;
     }
@@ -822,7 +815,11 @@ pub fn sphere_closest_hit(
     let index = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
     let material_index = index.material_index;
     let area_light_index = index.area_light_index;
-    let medium_index = index.medium_index;
+    let medium_index = if (-object_ray_direction).dot(object_hit_pos) > 0.0 {
+        index.interior_medium_index
+    } else {
+        index.exterior_medium_index
+    };
 
     *out = RayPayload::new_hit(
         t,
@@ -851,6 +848,7 @@ pub fn triangle_closest_hit(
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
+    #[spirv(object_ray_direction)] object_ray_direction: Vec3A,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
@@ -863,7 +861,6 @@ pub fn triangle_closest_hit(
     let index_offset = index_data.index_offset as usize;
     let material_index = index_data.material_index;
     let area_light_index = index_data.area_light_index;
-    let medium_index = index_data.medium_index;
 
     let v0 = unsafe {
         vertices.index_unchecked(
@@ -905,6 +902,12 @@ pub fn triangle_closest_hit(
         world_to_object.z.dot(nrm),
     )
     .normalize();
+
+    let medium_index = if (-object_ray_direction).dot(nrm) > 0.0 {
+        index_data.interior_medium_index
+    } else {
+        index_data.exterior_medium_index
+    };
 
     *out = RayPayload::new_hit(
         t,
