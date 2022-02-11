@@ -1,3 +1,5 @@
+use core::f32::consts::PI;
+
 use spirv_std::glam::{Vec3A, Vec4, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
@@ -14,7 +16,8 @@ pub struct SampledMedium {
 
 pub trait Medium {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A;
-    fn sample(&self, ray: &Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium;
+    fn sample(&self, ray: Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium;
+    fn phase(&self, wo: Vec3A, wi: Vec3A) -> f32;
 }
 
 #[repr(u32)]
@@ -70,6 +73,10 @@ impl<'a> Homogeous<'a> {
     fn sigma_t(&self) -> Vec3A {
         self.sigma_a() + self.sigma_s()
     }
+
+    fn g(&self) -> f32 {
+        self.data.v0.w
+    }
 }
 
 impl<'a> Medium for Homogeous<'a> {
@@ -77,7 +84,7 @@ impl<'a> Medium for Homogeous<'a> {
         (-self.sigma_t() * ray.direction.length() * t_max).exp()
     }
 
-    fn sample(&self, ray: &Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
+    fn sample(&self, ray: Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
         let channel = rng.next_u32() % 3;
         let dist = -(1.0 - rng.next_f32()).ln() / self.sigma_t()[channel as usize];
         let t = (dist / ray.direction.length()).min(t_max);
@@ -98,6 +105,13 @@ impl<'a> Medium for Homogeous<'a> {
                 tr / pdf
             },
         }
+    }
+
+    fn phase(&self, wo: Vec3A, wi: Vec3A) -> f32 {
+        let cos_theta = wo.dot(wi);
+        let g = self.g();
+        let denom = 1.0 + g * g + 2.0 * g * cos_theta;
+        1.0 / (4.0 * PI) * (1.0 - g * g) / (denom * denom.sqrt())
     }
 }
 
@@ -129,10 +143,17 @@ impl Medium for EnumMedium {
         }
     }
 
-    fn sample(&self, ray: &Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
+    fn sample(&self, ray: Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
         match self.t {
             MediumType::Vaccum => Default::default(),
             MediumType::Homogeous => Homogeous { data: &self.data }.sample(ray, t_max, rng),
+        }
+    }
+
+    fn phase(&self, wo: Vec3A, wi: Vec3A) -> f32 {
+        match self.t {
+            MediumType::Vaccum => 0.0,
+            MediumType::Homogeous => Homogeous { data: &self.data }.phase(wo, wi),
         }
     }
 }
