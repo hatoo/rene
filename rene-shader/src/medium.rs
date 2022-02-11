@@ -9,6 +9,7 @@ use crate::{rand::DefaultRng, Ray};
 #[derive(Default)]
 pub struct SampledMedium {
     pub sampled: bool,
+    pub t: f32,
     pub position: Vec3A,
     pub wo: Vec3A,
     pub tr: Vec3A,
@@ -89,8 +90,9 @@ impl<'a> Medium for Homogeous<'a> {
         let sigma_t = self.sigma_t();
         let dist =
             -(1.0 - rng.next_f32()).ln() / [sigma_t.x, sigma_t.y, sigma_t.z][channel as usize];
-        let t = (dist / ray.direction.length()).min(t_max);
+        let t = dist / ray.direction.length();
         let sampled = t < t_max;
+        let t = t.min(t_max);
 
         let tr = (-sigma_t * t * ray.direction.length()).exp();
         let density = if sampled { sigma_t * tr } else { tr };
@@ -99,6 +101,7 @@ impl<'a> Medium for Homogeous<'a> {
 
         SampledMedium {
             sampled,
+            t,
             position: ray.origin + t * ray.direction,
             wo: -ray.direction,
             tr: if sampled {
