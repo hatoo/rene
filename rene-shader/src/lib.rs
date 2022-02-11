@@ -409,6 +409,56 @@ fn tr(
     }
 }
 
+#[inline(always)]
+fn tr_emit(
+    tlas_main: &AccelerationStructure,
+    mut ray: Ray,
+    mut medium: EnumMedium,
+    mediums: &[EnumMedium],
+    area_lights: &[EnumAreaLight],
+    payload: &mut RayPayload,
+) -> Vec3A {
+    let mut tr = vec3a(1.0, 1.0, 1.0);
+
+    loop {
+        *payload = RayPayload::default();
+
+        unsafe {
+            tlas_main.trace_ray(
+                RayFlags::empty(),
+                0xff,
+                0,
+                0,
+                0,
+                ray.origin,
+                0.001,
+                ray.direction,
+                1e5,
+                payload,
+            );
+        }
+
+        if payload.is_miss != 0 {
+            break Vec3A::ZERO;
+        } else if !area_lights[payload.area_light as usize].is_null() {
+            break tr
+                * area_lights[payload.area_light as usize]
+                    .emit(-ray.direction.normalize(), payload.normal);
+        } else if !mediums[payload.medium as usize].is_vaccum() {
+            break Vec3A::ZERO;
+        } else {
+            if medium.is_vaccum() {
+                medium = mediums[payload.medium as usize];
+            } else {
+                tr *= medium.tr(ray, payload.t);
+                medium = EnumMedium::default();
+            }
+
+            ray.origin = payload.position;
+        }
+    }
+}
+
 #[spirv(ray_generation)]
 #[allow(clippy::too_many_arguments)]
 pub fn main_ray_generation_volpath(
@@ -463,7 +513,7 @@ pub fn main_ray_generation_volpath(
 
     let mut i = 0;
     while i < 50 {
-        if uniform.lights_len > 0 && !medium.is_vaccum() {
+        if (uniform.lights_len > 0 || uniform.emit_object_len > 0) && !medium.is_vaccum() {
             let sampled_medium = medium.sample(ray, tmax, &mut rng);
 
             color *= sampled_medium.tr;
@@ -490,6 +540,50 @@ pub fn main_ray_generation_volpath(
                             * unsafe { lights.index_unchecked(l as usize) }.color(ray.origin),
                     );
                     l += 1;
+                }
+
+                if uniform.emit_object_len > 0 {
+                    let emit_object = unsafe {
+                        emit_objects.index_unchecked(
+                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                        )
+                    };
+
+                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                        - ray.origin)
+                        .normalize();
+
+                    *payload_pdf = RayPayloadPDF::default();
+
+                    let light_ray = Ray {
+                        origin: ray.origin,
+                        direction: wi,
+                    };
+
+                    unsafe {
+                        tlas_emit.trace_ray(
+                            RayFlags::OPAQUE,
+                            cull_mask,
+                            2,
+                            0,
+                            1,
+                            light_ray.origin,
+                            tmin,
+                            light_ray.direction,
+                            tmax,
+                            payload_pdf,
+                        );
+                    }
+
+                    let tr = tr_emit(tlas_main, light_ray, medium, mediums, area_lights, payload);
+                    let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                    if pdf > 1e-5 {
+                        add_image(
+                            0,
+                            color * tr * medium.phase(-ray.direction.normalize(), wi) / pdf,
+                        );
+                    }
                 }
             }
         }
@@ -638,6 +732,13 @@ pub fn main_ray_generation_volpath(
                 color /= continue_p;
             }
         }
+
+        if medium.is_vaccum() {
+            medium = mediums[payload.medium as usize];
+        } else {
+            medium = EnumMedium::default();
+        }
+
         i += 1;
     }
 }
