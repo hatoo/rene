@@ -540,6 +540,13 @@ fn main() {
                             )
                             .binding(11)
                             .build(),
+                        // mediums
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .binding(12)
+                            .build(),
                     ])
                     .build(),
                 None,
@@ -745,6 +752,10 @@ fn main() {
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
             descriptor_count: scene_buffers.images.len() as u32,
+        },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_BUFFER,
@@ -968,6 +979,21 @@ fn main() {
             .build()
     };
 
+    let mediums_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.mediums.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
+
+    let mediums_write = {
+        vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(12)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&mediums_buffer_info)
+            .build()
+    };
+
     unsafe {
         device.update_descriptor_sets(
             &[
@@ -983,6 +1009,7 @@ fn main() {
                 index_data_write,
                 indices_write,
                 vertices_write,
+                mediums_write,
             ],
             &[],
         );
@@ -3325,6 +3352,7 @@ impl SceneBuffers {
             acceleration_structure.destroy_acceleration_structure(blas, None);
         }
         self.materials.destroy(device);
+        self.mediums.destroy(device);
         self.uniform.destroy(device);
         for buffer in self.buffers {
             buffer.destroy(device);
