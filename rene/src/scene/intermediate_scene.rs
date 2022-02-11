@@ -39,6 +39,7 @@ pub enum IntermediateWorld {
     Matrix(Mat4),
     Texture(Texture),
     NamedMaterial(String),
+    MediumInterface(String, String),
 }
 
 pub enum WorldObject {
@@ -701,6 +702,10 @@ impl IntermediateWorld {
         match world {
             pbrt_parser::World::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
+            pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface(
+                interior.to_string(),
+                exterior.to_string(),
+            )),
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
                     let tex1 = texture

@@ -27,6 +27,8 @@ pub struct TlasInstance {
     pub shader_offset: ShaderOffset,
     pub matrix: Affine3A,
     pub material_index: usize,
+    pub interior_medium_index: usize,
+    pub exterior_medium_index: usize,
     pub area_light_index: usize,
     pub blas_index: Option<usize>,
 }
@@ -53,6 +55,8 @@ pub enum CreateSceneError {
     NoMaterial,
     #[error("Unknown Material {0}")]
     UnknownMaterial(String),
+    #[error("Unknown Medium {0}")]
+    UnknownMedium(String),
     #[error("Not Found Texture: {0}")]
     NotFoundTexture(String),
 }
@@ -60,6 +64,7 @@ pub enum CreateSceneError {
 #[derive(Default, Clone)]
 struct WorldState {
     current_material_index: Option<usize>,
+    current_medium_index: Option<(usize, usize)>,
     current_area_light_index: usize,
     current_matrix: Mat4,
     textures: HashMap<String, u32>,
@@ -264,6 +269,28 @@ impl Scene {
                             as usize,
                     );
                 }
+                IntermediateWorld::MediumInterface(interior, exterior) => {
+                    state.current_medium_index = Some((
+                        if interior == "" {
+                            0
+                        } else {
+                            *state
+                                .mediums
+                                .get(&interior)
+                                .ok_or(CreateSceneError::UnknownMedium(interior))?
+                                as usize
+                        },
+                        if exterior == "" {
+                            0
+                        } else {
+                            *state
+                                .mediums
+                                .get(&exterior)
+                                .ok_or(CreateSceneError::UnknownMedium(exterior))?
+                                as usize
+                        },
+                    ));
+                }
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
                         InnerTexture::CheckerBoard(checkerboard) => {
@@ -347,6 +374,14 @@ impl Scene {
                                     .ok_or(CreateSceneError::NoMaterial)?,
                                 area_light_index: state.current_area_light_index,
                                 blas_index: None,
+                                interior_medium_index: state
+                                    .current_medium_index
+                                    .map(|t| t.0)
+                                    .unwrap_or(0),
+                                exterior_medium_index: state
+                                    .current_medium_index
+                                    .map(|t| t.1)
+                                    .unwrap_or(0),
                             }),
                             Shape::TriangleMesh(trianglemesh) => {
                                 let blass_index = self.blases.len();
@@ -358,6 +393,14 @@ impl Scene {
                                         .current_material_index
                                         .ok_or(CreateSceneError::NoMaterial)?,
                                     area_light_index: state.current_area_light_index,
+                                    interior_medium_index: state
+                                        .current_medium_index
+                                        .map(|t| t.0)
+                                        .unwrap_or(0),
+                                    exterior_medium_index: state
+                                        .current_medium_index
+                                        .map(|t| t.1)
+                                        .unwrap_or(0),
                                     blas_index: Some(blass_index),
                                 })
                             }

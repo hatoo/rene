@@ -3002,8 +3002,8 @@ impl SceneBuffers {
                         .blas_index
                         .map(|i| blas_args[i].primitive_count)
                         .unwrap_or(1),
-                    interior_medium_index: 0,
-                    exterior_medium_index: 0,
+                    interior_medium_index: instance.interior_medium_index as u32,
+                    exterior_medium_index: instance.exterior_medium_index as u32,
                 });
                 vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
