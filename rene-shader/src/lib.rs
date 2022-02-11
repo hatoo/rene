@@ -535,7 +535,7 @@ pub fn main_ray_generation_volpath(
 
             let mut l = 0;
             while l < uniform.lights_len {
-                let (target, t_max) =
+                let (target, _t_max) =
                     unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
                 let wi = (target - position).normalize();
                 let light_ray = Ray {
@@ -543,33 +543,17 @@ pub fn main_ray_generation_volpath(
                     direction: wi,
                 };
 
-                *payload = RayPayload::default();
-                unsafe {
-                    tlas_main.trace_ray(
-                        RayFlags::empty(),
-                        cull_mask,
-                        0,
-                        0,
-                        0,
-                        light_ray.origin,
-                        tmin,
-                        light_ray.direction,
-                        t_max,
-                        payload,
-                    );
-                }
+                let f = bsdf.f(wo, wi);
+                let tr = tr(tlas_main, light_ray, medium, mediums, payload);
 
-                if payload.is_miss != 0 {
-                    let f = bsdf.f(wo, wi);
-
-                    add_image(
-                        0,
-                        color
-                            * f
-                            * wi.dot(normal).abs()
-                            * unsafe { lights.index_unchecked(l as usize) }.color(position),
-                    );
-                }
+                add_image(
+                    0,
+                    color
+                        * tr
+                        * f
+                        * wi.dot(normal).abs()
+                        * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                );
                 l += 1;
             }
 
