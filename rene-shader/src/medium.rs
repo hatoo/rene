@@ -1,9 +1,20 @@
 use spirv_std::glam::{Vec3A, Vec4, Vec4Swizzles};
+#[allow(unused_imports)]
+use spirv_std::num_traits::Float;
 
-use crate::Ray;
+use crate::{rand::DefaultRng, Ray};
+
+#[derive(Default)]
+pub struct SampledMedium {
+    pub sampled: bool,
+    pub position: Vec3A,
+    pub wo: Vec3A,
+    pub tr: Vec3A,
+}
 
 pub trait Medium {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A;
+    fn sample(&self, ray: &Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium;
 }
 
 #[repr(u32)]
@@ -65,6 +76,29 @@ impl<'a> Medium for Homogeous<'a> {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A {
         (-self.sigma_t() * ray.direction.length() * t_max).exp()
     }
+
+    fn sample(&self, ray: &Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
+        let channel = rng.next_u32() % 3;
+        let dist = -(1.0 - rng.next_f32()).ln() / self.sigma_t()[channel as usize];
+        let t = (dist / ray.direction.length()).min(t_max);
+        let sampled = t < t_max;
+
+        let tr = (-self.sigma_t() * t * ray.direction.length()).exp();
+        let density = if sampled { self.sigma_t() * tr } else { tr };
+        let pdf = (density.x + density.y + density.z) / 3.0;
+        let pdf = if pdf == 0.0 { 1.0 } else { pdf };
+
+        SampledMedium {
+            sampled,
+            position: ray.origin + t * ray.direction,
+            wo: -ray.direction,
+            tr: if sampled {
+                tr * self.sigma_s() / pdf
+            } else {
+                tr / pdf
+            },
+        }
+    }
 }
 
 impl EnumMedium {
@@ -92,6 +126,13 @@ impl Medium for EnumMedium {
         match self.t {
             MediumType::Vaccum => Vec3A::ZERO,
             MediumType::Homogeous => Homogeous { data: &self.data }.tr(ray, t_max),
+        }
+    }
+
+    fn sample(&self, ray: &Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
+        match self.t {
+            MediumType::Vaccum => Default::default(),
+            MediumType::Homogeous => Homogeous { data: &self.data }.sample(ray, t_max, rng),
         }
     }
 }

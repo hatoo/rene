@@ -411,6 +411,8 @@ pub fn main_ray_generation_volpath(
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
+    let mut medium = EnumMedium::new_vaccum();
+
     let mut i = 0;
     while i < 50 {
         *payload = RayPayload::default();
@@ -429,7 +431,8 @@ pub fn main_ray_generation_volpath(
             );
         }
 
-        if payload.is_miss != 0 {
+        if !medium.is_vaccum() {
+        } else if payload.is_miss != 0 {
             add_image(0, color * payload.position);
             break;
         } else {
