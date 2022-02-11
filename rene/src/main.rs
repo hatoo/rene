@@ -21,6 +21,7 @@ use rene_shader::{
     area_light::EnumAreaLight,
     light::EnumLight,
     material::EnumMaterial,
+    medium::EnumMedium,
     surface_sample::{EnumSurfaceSample, SurfaceSample},
     texture::EnumTexture,
     IndexData, Uniform, Vertex,
@@ -2329,6 +2330,7 @@ struct SceneBuffers {
     blases: Vec<vk::AccelerationStructureKHR>,
     uniform: BufferResource,
     materials: BufferResource,
+    mediums: BufferResource,
     buffers: Vec<BufferResource>,
     index_data: BufferResource,
     vertices: BufferResource,
@@ -3190,6 +3192,29 @@ impl SceneBuffers {
             )
         };
 
+        let mediums = {
+            let buffer_size =
+                (scene.mediums.len() * std::mem::size_of::<EnumMedium>()) as vk::DeviceSize;
+
+            let mut mediums_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                device,
+                device_memory_properties,
+            );
+            mediums_buffer.store(&scene.mediums, device);
+
+            mediums_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
+        };
+
         let mut images: Vec<Image> = scene
             .images
             .iter()
@@ -3279,6 +3304,7 @@ impl SceneBuffers {
             blases,
             uniform: uniform_buffer,
             materials: material_buffer,
+            mediums,
             buffers,
             index_data,
             indices,
