@@ -509,85 +509,7 @@ pub fn main_ray_generation_volpath(
     let mut medium = EnumMedium::new_vaccum();
 
     let mut i = 0;
-    while i < 65 {
-        if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
-            let sampled_medium = medium.sample(ray, tmax, &mut rng);
-
-            color *= sampled_medium.tr;
-
-            if sampled_medium.sampled {
-                ray.origin = sampled_medium.position;
-
-                let mut l = 0;
-                while l < uniform.lights_len {
-                    let (target, _t_max) =
-                        unsafe { lights.index_unchecked(l as usize) }.ray_target(ray.origin);
-                    let wi = (target - ray.origin).normalize();
-                    let light_ray = Ray {
-                        origin: ray.origin,
-                        direction: wi,
-                    };
-
-                    let tr = tr(tlas_main, light_ray, medium, mediums, payload);
-                    add_image(
-                        0,
-                        color
-                            * tr
-                            * medium.phase(-ray.direction.normalize(), wi)
-                            * unsafe { lights.index_unchecked(l as usize) }.color(ray.origin),
-                    );
-                    l += 1;
-                }
-
-                if uniform.emit_object_len > 0 {
-                    let emit_object = unsafe {
-                        emit_objects.index_unchecked(
-                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
-                        )
-                    };
-
-                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
-                        - ray.origin)
-                        .normalize();
-
-                    *payload_pdf = RayPayloadPDF::default();
-
-                    let light_ray = Ray {
-                        origin: ray.origin,
-                        direction: wi,
-                    };
-
-                    unsafe {
-                        tlas_emit.trace_ray(
-                            RayFlags::OPAQUE,
-                            cull_mask,
-                            2,
-                            0,
-                            1,
-                            light_ray.origin,
-                            tmin,
-                            light_ray.direction,
-                            tmax,
-                            payload_pdf,
-                        );
-                    }
-
-                    let tr = tr_emit(tlas_main, light_ray, medium, mediums, area_lights, payload);
-                    let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
-
-                    if pdf > 1e-5 {
-                        add_image(
-                            0,
-                            color * tr * medium.phase(-ray.direction.normalize(), wi) / pdf,
-                        );
-                    }
-                }
-
-                i += 1;
-                continue;
-            }
-        }
-
+    while i < 80 {
         *payload = RayPayload::default();
         unsafe {
             tlas_main.trace_ray(
@@ -615,6 +537,102 @@ pub fn main_ray_generation_volpath(
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
 
+            if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
+                let mut tmax = payload.t;
+                while i < 80 {
+                    let sampled_medium = medium.sample(ray, tmax, &mut rng);
+
+                    color *= sampled_medium.tr;
+
+                    if sampled_medium.sampled {
+                        ray.origin = sampled_medium.position;
+                        tmax -= sampled_medium.t;
+
+                        let mut l = 0;
+                        while l < uniform.lights_len {
+                            let (target, _t_max) = unsafe { lights.index_unchecked(l as usize) }
+                                .ray_target(ray.origin);
+                            let wi = (target - ray.origin).normalize();
+                            let light_ray = Ray {
+                                origin: ray.origin,
+                                direction: wi,
+                            };
+
+                            let tr = tr(tlas_main, light_ray, medium, mediums, payload);
+                            add_image(
+                                0,
+                                color
+                                    * tr
+                                    * medium.phase(-ray.direction.normalize(), wi)
+                                    * unsafe { lights.index_unchecked(l as usize) }
+                                        .color(ray.origin),
+                            );
+                            l += 1;
+                        }
+
+                        if uniform.emit_object_len > 0 {
+                            let emit_object = unsafe {
+                                emit_objects.index_unchecked(
+                                    (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                                )
+                            };
+
+                            let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                                - ray.origin)
+                                .normalize();
+
+                            *payload_pdf = RayPayloadPDF::default();
+
+                            let light_ray = Ray {
+                                origin: ray.origin,
+                                direction: wi,
+                            };
+
+                            unsafe {
+                                tlas_emit.trace_ray(
+                                    RayFlags::OPAQUE,
+                                    cull_mask,
+                                    2,
+                                    0,
+                                    1,
+                                    light_ray.origin,
+                                    tmin,
+                                    light_ray.direction,
+                                    tmax,
+                                    payload_pdf,
+                                );
+                            }
+
+                            let tr = tr_emit(
+                                tlas_main,
+                                light_ray,
+                                medium,
+                                mediums,
+                                area_lights,
+                                payload,
+                            );
+                            let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                            if pdf > 1e-5 {
+                                add_image(
+                                    0,
+                                    color * tr * medium.phase(-ray.direction.normalize(), wi) / pdf,
+                                );
+                            }
+                        }
+                        if tmax <= 0.0 {
+                            break;
+                        }
+
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                color *= medium.tr(ray, payload.t);
+            }
+
             bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
 
@@ -627,7 +645,6 @@ pub fn main_ray_generation_volpath(
                 add_image(2, material.albedo(uv, textures, images));
             }
 
-            color *= medium.tr(ray, payload.t);
             if !material.is_none() {
                 let mut l = 0;
                 while l < uniform.lights_len {
@@ -717,6 +734,11 @@ pub fn main_ray_generation_volpath(
                         direction: sampled_f.wi,
                     };
                 }
+            } else {
+                ray = Ray {
+                    origin: payload.position,
+                    direction: ray.direction,
+                };
             }
         }
 
