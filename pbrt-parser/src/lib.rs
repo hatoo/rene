@@ -158,7 +158,7 @@ fn parse_axis_angle<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a s
 
 pub(crate) fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     fn parse<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
-        escaped(none_of("\""), '\\', one_of("\"n\\"))(i)
+        alt((escaped(none_of("\""), '\\', one_of("\"n\\")), tag("")))(i)
     }
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(i)
 }
@@ -292,7 +292,7 @@ fn parse_argument_type_name<'a, E: ParseError<&'a str>>(
     ) -> IResult<&'a str, (ArgumentType, &'a str), E> {
         let (rest, ty) = parse_argument_type(input)?;
         let (rest, _) = char(' ')(rest)?;
-        let (rest, ident) = take_while(|c: char| c.is_alphanum())(rest)?;
+        let (rest, ident) = take_while(|c: char| c.is_alphanum() || c == '_')(rest)?;
         Ok((rest, (ty, ident)))
     }
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(input)
@@ -572,6 +572,14 @@ mod test {
                     ],)
                 }
             ))
+        )
+    }
+
+    #[test]
+    fn test_parse_medium_interface() {
+        assert_eq!(
+            parse_medium_interface::<Error<&str>>("MediumInterface \"gas\" \"\""),
+            Ok(("", ("gas", "")))
         )
     }
 
