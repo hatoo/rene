@@ -624,93 +624,95 @@ pub fn main_ray_generation_volpath(
                 add_image(2, material.albedo(uv, textures, images));
             }
 
-            let mut l = 0;
-            while l < uniform.lights_len {
-                let (target, _t_max) =
-                    unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
-                let wi = (target - position).normalize();
-                let light_ray = Ray {
-                    origin: position,
-                    direction: wi,
-                };
-
-                let f = bsdf.f(wo, wi);
-                let tr = tr(tlas_main, light_ray, medium, mediums, payload);
-
-                add_image(
-                    0,
-                    color
-                        * tr
-                        * f
-                        * wi.dot(normal).abs()
-                        * unsafe { lights.index_unchecked(l as usize) }.color(position),
-                );
-                l += 1;
-            }
-
-            if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
-                // Use frame wide RNG to reduce warp divergence
-                let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
-                    let emit_object = unsafe {
-                        emit_objects.index_unchecked(
-                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
-                        )
+            if !material.is_none() {
+                let mut l = 0;
+                while l < uniform.lights_len {
+                    let (target, _t_max) =
+                        unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
+                    let wi = (target - position).normalize();
+                    let light_ray = Ray {
+                        origin: position,
+                        direction: wi,
                     };
 
-                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
-                        - position)
-                        .normalize();
+                    let f = bsdf.f(wo, wi);
+                    let tr = tr(tlas_main, light_ray, medium, mediums, payload);
 
-                    (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
+                    add_image(
+                        0,
+                        color
+                            * tr
+                            * f
+                            * wi.dot(normal).abs()
+                            * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                    );
+                    l += 1;
+                }
+
+                if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
+                    // Use frame wide RNG to reduce warp divergence
+                    let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
+                        let emit_object = unsafe {
+                            emit_objects.index_unchecked(
+                                (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                            )
+                        };
+
+                        let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                            - position)
+                            .normalize();
+
+                        (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
+                    } else {
+                        let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                        (sampled_f.wi, sampled_f.pdf, sampled_f.f)
+                    };
+
+                    ray = Ray {
+                        origin: position,
+                        direction: wi,
+                    };
+
+                    *payload_pdf = RayPayloadPDF::default();
+
+                    unsafe {
+                        tlas_emit.trace_ray(
+                            RayFlags::OPAQUE,
+                            cull_mask,
+                            2,
+                            0,
+                            1,
+                            ray.origin,
+                            tmin,
+                            ray.direction,
+                            tmax,
+                            payload_pdf,
+                        );
+                    }
+
+                    color *= f * normal.dot(wi).abs();
+
+                    let pdf = 0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                    if pdf < 1e-5 {
+                        break;
+                    }
+
+                    color /= pdf;
                 } else {
                     let sampled_f = bsdf.sample_f(wo, &mut rng);
 
-                    (sampled_f.wi, sampled_f.pdf, sampled_f.f)
-                };
+                    if sampled_f.pdf < 1e-5 {
+                        break;
+                    }
 
-                ray = Ray {
-                    origin: position,
-                    direction: wi,
-                };
-
-                *payload_pdf = RayPayloadPDF::default();
-
-                unsafe {
-                    tlas_emit.trace_ray(
-                        RayFlags::OPAQUE,
-                        cull_mask,
-                        2,
-                        0,
-                        1,
-                        ray.origin,
-                        tmin,
-                        ray.direction,
-                        tmax,
-                        payload_pdf,
-                    );
+                    color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
+                    ray = Ray {
+                        origin: position,
+                        direction: sampled_f.wi,
+                    };
                 }
-
-                color *= f * normal.dot(wi).abs();
-
-                let pdf = 0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
-
-                if pdf < 1e-5 {
-                    break;
-                }
-
-                color /= pdf;
-            } else {
-                let sampled_f = bsdf.sample_f(wo, &mut rng);
-
-                if sampled_f.pdf < 1e-5 {
-                    break;
-                }
-
-                color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
-                ray = Ray {
-                    origin: position,
-                    direction: sampled_f.wi,
-                };
             }
         }
 

@@ -238,6 +238,7 @@ impl Scene {
                 rough,
                 remap_roughness,
             )),
+            Material::None => Ok(EnumMaterial::new_none()),
         }
     }
 

@@ -49,9 +49,10 @@ pub struct EnumMaterialData {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 enum MaterialType {
+    None,
     Matte,
     Glass,
     Substrate,
@@ -353,6 +354,10 @@ impl<'a> Material for Mirror<'a> {
 }
 
 impl EnumMaterial {
+    pub fn is_none(&self) -> bool {
+        self.t == MaterialType::None
+    }
+
     pub fn new_matte(albedo_index: u32) -> Self {
         Self {
             t: MaterialType::Matte,
@@ -442,6 +447,13 @@ impl EnumMaterial {
         Self {
             t: MaterialType::Plastic,
             data: Plastic::new_data(kd_index, ks_index, roughness, remap_roughness),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        Self {
+            t: MaterialType::None,
+            data: Default::default(),
         }
     }
 }
@@ -647,6 +659,7 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) -> Vec3A {
         match self.t {
+            MaterialType::None => Vec3A::ZERO,
             MaterialType::Matte => Matte { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Glass => Glass { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Substrate => Substrate { data: &self.data }.albedo(uv, textures, images),
@@ -665,6 +678,7 @@ impl Material for EnumMaterial {
         images: &RuntimeArray<InputImage>,
     ) {
         match self.t {
+            MaterialType::None => {}
             MaterialType::Matte => {
                 Matte { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
             }

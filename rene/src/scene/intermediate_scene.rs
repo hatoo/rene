@@ -93,6 +93,7 @@ pub struct Texture {
     pub inner: InnerTexture,
 }
 pub enum Material {
+    None,
     Matte(Matte),
     Glass(Glass),
     Substrate(Substrate),
@@ -419,6 +420,7 @@ impl<'a, T> GetValue for Object<'a, T> {
 
     fn get_material(&self) -> Result<Material, Error> {
         match self.t {
+            "none" => Ok(Material::None),
             "matte" => {
                 let albedo = self
                     .get_texture_or_color("Kd")
