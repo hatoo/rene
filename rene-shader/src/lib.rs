@@ -34,6 +34,7 @@ pub mod camera;
 pub mod light;
 pub mod material;
 pub mod math;
+pub mod medium;
 pub mod rand;
 pub mod reflection;
 pub mod surface_sample;
