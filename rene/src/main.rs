@@ -574,6 +574,13 @@ fn main() {
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(8)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build(),
             // group1 = [ miss ]
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
@@ -628,7 +635,7 @@ fn main() {
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::RAYGEN_KHR)
                 .module(shader_module)
-                .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation\0").unwrap())
+                .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation_path\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::MISS_KHR)
@@ -664,6 +671,13 @@ fn main() {
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"sphere_closest_hit_pdf\0").unwrap())
+                .build(),
+            vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::RAYGEN_KHR)
+                .module(shader_module)
+                .name(
+                    std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation_volpath\0").unwrap(),
+                )
                 .build(),
         ];
 
@@ -1037,20 +1051,26 @@ fn main() {
         let sbt_address =
             unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
 
-        let sbt_raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let sbt_raygen_path_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
-        let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let sbt_raygen_volpath_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address + handle_size_aligned)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned)
+            .build();
+
+        let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
+            .device_address(sbt_address + 2 * handle_size_aligned)
             .size(2 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 3 * handle_size_aligned)
+            .device_address(sbt_address + 4 * handle_size_aligned)
             .size(4 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
@@ -1221,7 +1241,7 @@ fn main() {
 
                     rt_pipeline.cmd_trace_rays(
                         command_buffer,
-                        &sbt_raygen_region,
+                        &sbt_raygen_volpath_region,
                         &sbt_miss_region,
                         &sbt_hit_region,
                         &sbt_call_region,
