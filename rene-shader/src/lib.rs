@@ -58,8 +58,8 @@ pub struct RayPayload {
     pub material: u32,
     pub area_light: u32,
     pub uv: Vec2,
-    pub medium: u32,
-    pub medium_transition: u32,
+    pub interior_medium: u32,
+    pub exterior_medium: u32,
 }
 
 impl RayPayload {
@@ -85,8 +85,8 @@ impl RayPayload {
         material: u32,
         area_light: u32,
         uv: Vec2,
-        medium: u32,
-        medium_transition: bool,
+        interior_medium: u32,
+        exterior_medium: u32,
     ) -> Self {
         Self {
             is_miss: 0,
@@ -96,8 +96,8 @@ impl RayPayload {
             material,
             area_light,
             uv,
-            medium,
-            medium_transition: if medium_transition { 1 } else { 0 },
+            interior_medium,
+            exterior_medium,
         }
     }
 }
@@ -398,14 +398,18 @@ fn tr(
 
         if payload.is_miss != 0 {
             break tr;
-        } else if !mediums[payload.medium as usize].is_vaccum() {
+        } else if payload.interior_medium == payload.exterior_medium {
             break Vec3A::ZERO;
         } else {
             if !medium.is_vaccum() {
                 tr *= medium.tr(ray, payload.t);
             }
 
-            medium = mediums[payload.medium as usize];
+            medium = mediums[if ray.direction.dot(payload.normal) > 0.0 {
+                payload.exterior_medium
+            } else {
+                payload.interior_medium
+            } as usize];
             ray.origin = payload.position;
         }
     }
@@ -446,14 +450,18 @@ fn tr_emit(
             break tr
                 * area_lights[payload.area_light as usize]
                     .emit(-ray.direction.normalize(), payload.normal);
-        } else if !mediums[payload.medium as usize].is_vaccum() {
+        } else if payload.interior_medium == payload.exterior_medium {
             break Vec3A::ZERO;
         } else {
             if !medium.is_vaccum() {
                 tr *= medium.tr(ray, payload.t);
             }
 
-            medium = mediums[payload.medium as usize];
+            medium = mediums[if ray.direction.dot(payload.normal) > 0.0 {
+                payload.exterior_medium
+            } else {
+                payload.interior_medium
+            } as usize];
             ray.origin = payload.position;
         }
     }
@@ -539,7 +547,8 @@ pub fn main_ray_generation_volpath(
             let uv = payload.uv;
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
-            let medium_transition = payload.medium_transition != 0;
+            let interior_medium = payload.interior_medium;
+            let exterior_medium = payload.exterior_medium;
 
             if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
                 let mut tmax = payload.t;
@@ -745,8 +754,12 @@ pub fn main_ray_generation_volpath(
                 };
             }
 
-            if medium_transition {
-                medium = mediums[payload.medium as usize];
+            if interior_medium != exterior_medium {
+                medium = mediums[if wo.dot(normal) < 0.0 {
+                    exterior_medium
+                } else {
+                    interior_medium
+                } as usize];
             }
         }
 
@@ -851,11 +864,6 @@ pub fn sphere_closest_hit(
     let index = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
     let material_index = index.material_index;
     let area_light_index = index.area_light_index;
-    let medium_index = if (-object_ray_direction).dot(object_hit_pos) > 0.0 {
-        index.interior_medium_index
-    } else {
-        index.exterior_medium_index
-    };
 
     *out = RayPayload::new_hit(
         t,
@@ -864,8 +872,8 @@ pub fn sphere_closest_hit(
         material_index,
         area_light_index,
         vec2(u, v),
-        medium_index,
-        index.interior_medium_index != index.exterior_medium_index,
+        index.interior_medium_index,
+        index.exterior_medium_index,
     );
 }
 
@@ -953,8 +961,8 @@ pub fn triangle_closest_hit(
         material_index,
         area_light_index,
         uv,
-        medium_index,
-        index_data.interior_medium_index != index_data.exterior_medium_index,
+        index_data.interior_medium_index,
+        index_data.exterior_medium_index,
     );
 }
 
