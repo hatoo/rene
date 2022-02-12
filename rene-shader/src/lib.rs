@@ -469,6 +469,12 @@ fn tr_emit(
     }
 }
 
+fn power_heuristic(nf: f32, fpdf: f32, ng: f32, gpdf: f32) -> f32 {
+    let f = nf * fpdf;
+    let g = ng * gpdf;
+    (f * f) / (f * f + g * g)
+}
+
 #[spirv(ray_generation)]
 #[allow(clippy::too_many_arguments)]
 pub fn main_ray_generation_volpath(
@@ -629,11 +635,15 @@ pub fn main_ray_generation_volpath(
                             );
                             let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
 
+                            let weight = power_heuristic(
+                                1.0,
+                                pdf,
+                                1.0,
+                                medium.phase(-ray.direction.normalize(), wi),
+                            );
+
                             if pdf > 1e-5 {
-                                add_image(
-                                    0,
-                                    color * tr * medium.phase(-ray.direction.normalize(), wi) / pdf,
-                                );
+                                add_image(0, color * tr * weight / pdf);
                             }
                         }
 
