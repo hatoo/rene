@@ -39,6 +39,7 @@ pub enum IntermediateWorld {
     Matrix(Mat4),
     Texture(Texture),
     NamedMaterial(String),
+    CoordSysTransform(String),
     MediumInterface(String, String),
 }
 
@@ -720,6 +721,9 @@ impl IntermediateWorld {
                 interior.to_string(),
                 exterior.to_string(),
             )),
+            pbrt_parser::World::CoordSysTransform(name) => {
+                Ok(Self::CoordSysTransform(name.to_string()))
+            }
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
                     let tex1 = texture

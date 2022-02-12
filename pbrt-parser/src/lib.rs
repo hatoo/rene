@@ -39,6 +39,7 @@ pub enum World<'a> {
     TransformBeginEnd(Vec<World<'a>>),
     Transform(Mat4),
     Translate(Vec3A),
+    CoordSysTransform(&'a str),
     Scale(Vec3A),
     Rotate(AxisAngle),
     Texture(Texture<'a>),
@@ -458,6 +459,15 @@ fn parse_medium_interface<'a, E: ParseError<&'a str>>(
     Ok((rest, (interior, exterior)))
 }
 
+fn parse_coord_sys_transform<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, &'a str, E> {
+    let (rest, _) = tag("CoordSysTransform")(input)?;
+    let (rest, name) = preceded(sp, parse_str)(rest)?;
+
+    Ok((rest, name))
+}
+
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
         map(parse_texture, World::Texture),
@@ -469,6 +479,7 @@ fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, W
         map(parse_transrate, World::Translate),
         map(parse_scale, World::Scale),
         map(parse_rotate, World::Rotate),
+        map(parse_coord_sys_transform, World::CoordSysTransform),
         map(parse_medium_interface, |(interior, exterior)| {
             World::MediumInterface(interior, exterior)
         }),

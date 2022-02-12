@@ -61,6 +61,8 @@ pub enum CreateSceneError {
     UnknownMedium(String),
     #[error("Not Found Texture: {0}")]
     NotFoundTexture(String),
+    #[error("Not Found Coord system: {0}")]
+    NotFoundCoordSystem(String),
 }
 
 #[derive(Default, Clone)]
@@ -72,6 +74,7 @@ struct WorldState {
     textures: HashMap<String, u32>,
     materials: HashMap<String, u32>,
     mediums: HashMap<String, u32>,
+    coord_system: HashMap<String, Mat4>,
 }
 
 impl Scene {
@@ -136,7 +139,10 @@ impl Scene {
                     },
                 },
                 IntermediateScene::World(worlds) => {
-                    let mut state = Default::default();
+                    let mut state = WorldState::default();
+                    state
+                        .coord_system
+                        .insert("camera".to_string(), wolrd_to_camera);
                     scene.append_world(&mut state, worlds)?;
                 }
             }
@@ -271,6 +277,13 @@ impl Scene {
                             .ok_or(CreateSceneError::UnknownMaterial(name))?
                             as usize,
                     );
+                }
+                IntermediateWorld::CoordSysTransform(name) => {
+                    if let Some(mat) = state.coord_system.get(&name) {
+                        state.current_matrix = *mat;
+                    } else {
+                        return Err(CreateSceneError::NotFoundCoordSystem(name));
+                    }
                 }
                 IntermediateWorld::MediumInterface(interior, exterior) => {
                     state.current_medium_index = Some((
