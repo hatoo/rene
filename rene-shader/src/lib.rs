@@ -466,6 +466,7 @@ fn tr_emit<'a>(
     }
 }
 
+#[allow(dead_code)]
 fn power_heuristic(nf: f32, fpdf: f32, ng: f32, gpdf: f32) -> f32 {
     let f = nf * fpdf;
     let g = ng * gpdf;
@@ -558,141 +559,23 @@ pub fn main_ray_generation_volpath(
                 unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
             let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
 
-            if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
-                let mut tmax = payload.t;
-                while i < MAX_DEPTH {
-                    let sampled_medium = medium.sample(ray, tmax, &mut rng);
+            let sampled_medium = medium.sample(ray, payload.t, &mut rng);
 
-                    color *= sampled_medium.tr;
+            color *= sampled_medium.tr;
 
-                    if sampled_medium.sampled {
-                        ray.origin = sampled_medium.position;
-                        tmax -= sampled_medium.t;
+            if sampled_medium.sampled {
+                ray.origin = sampled_medium.position;
 
-                        let mut l = 0;
-                        while l < uniform.lights_len {
-                            let (target, _t_max) = unsafe { lights.index_unchecked(l as usize) }
-                                .ray_target(ray.origin);
-                            let wi = (target - ray.origin).normalize();
-                            let light_ray = Ray {
-                                origin: ray.origin,
-                                direction: wi,
-                            };
-
-                            let tr = tr(
-                                tlas_main,
-                                light_ray,
-                                medium_index,
-                                mediums,
-                                materials,
-                                index_data,
-                                payload,
-                            );
-                            add_image(
-                                0,
-                                color
-                                    * tr
-                                    * medium.phase(-ray.direction.normalize(), wi)
-                                    * unsafe { lights.index_unchecked(l as usize) }
-                                        .color(ray.origin),
-                            );
-                            l += 1;
-                        }
-
-                        if uniform.emit_object_len > 0 {
-                            let emit_object = unsafe {
-                                emit_objects.index_unchecked(
-                                    (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
-                                )
-                            };
-
-                            let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
-                                - ray.origin)
-                                .normalize();
-
-                            *payload_pdf = RayPayloadPDF::default();
-
-                            let light_ray = Ray {
-                                origin: ray.origin,
-                                direction: wi,
-                            };
-
-                            unsafe {
-                                tlas_emit.trace_ray(
-                                    RayFlags::OPAQUE,
-                                    cull_mask,
-                                    2,
-                                    0,
-                                    1,
-                                    light_ray.origin,
-                                    tmin,
-                                    light_ray.direction,
-                                    tmax,
-                                    payload_pdf,
-                                );
-                            }
-
-                            let tr = tr_emit(
-                                tlas_main,
-                                light_ray,
-                                medium_index,
-                                mediums,
-                                materials,
-                                area_lights,
-                                index_data,
-                                payload,
-                            );
-                            let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
-
-                            let weight = power_heuristic(
-                                1.0,
-                                pdf,
-                                1.0,
-                                medium.phase(-ray.direction.normalize(), wi),
-                            );
-
-                            if pdf > 1e-5 {
-                                add_image(0, color * tr * weight / pdf);
-                            }
-                        }
-
-                        i += 1;
-
-                        if tmax <= 0.0 {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                color *= medium.tr(ray, payload.t);
-            }
-
-            bsdf.clear(normal, Onb::from_w(normal));
-            material.compute_bsdf(&mut bsdf, uv, textures, images);
-
-            if !area_light.is_null() {
-                add_image(0, color * area_light.emit(wo, normal));
-            }
-
-            if i == 0 {
-                add_image(1, normal);
-                add_image(2, material.albedo(uv, textures, images));
-            }
-
-            if !material.is_none() {
                 let mut l = 0;
                 while l < uniform.lights_len {
                     let (target, _t_max) =
-                        unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
-                    let wi = (target - position).normalize();
+                        unsafe { lights.index_unchecked(l as usize) }.ray_target(ray.origin);
+                    let wi = (target - ray.origin).normalize();
                     let light_ray = Ray {
-                        origin: position,
+                        origin: ray.origin,
                         direction: wi,
                     };
 
-                    let f = bsdf.f(wo, wi);
                     let tr = tr(
                         tlas_main,
                         light_ray,
@@ -702,44 +585,33 @@ pub fn main_ray_generation_volpath(
                         index_data,
                         payload,
                     );
-
                     add_image(
                         0,
                         color
                             * tr
-                            * f
-                            * wi.dot(normal).abs()
-                            * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                            * medium.phase(-ray.direction.normalize(), wi)
+                            * unsafe { lights.index_unchecked(l as usize) }.color(ray.origin),
                     );
                     l += 1;
                 }
 
-                if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
-                    // Use frame wide RNG to reduce warp divergence
-                    let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
-                        let emit_object = unsafe {
-                            emit_objects.index_unchecked(
-                                (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
-                            )
-                        };
-
-                        let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
-                            - position)
-                            .normalize();
-
-                        (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
-                    } else {
-                        let sampled_f = bsdf.sample_f(wo, &mut rng);
-
-                        (sampled_f.wi, sampled_f.pdf, sampled_f.f)
+                if uniform.emit_object_len > 0 {
+                    let emit_object = unsafe {
+                        emit_objects.index_unchecked(
+                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                        )
                     };
 
-                    ray = Ray {
-                        origin: position,
-                        direction: wi,
-                    };
+                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                        - ray.origin)
+                        .normalize();
 
                     *payload_pdf = RayPayloadPDF::default();
+
+                    let light_ray = Ray {
+                        origin: ray.origin,
+                        direction: wi,
+                    };
 
                     unsafe {
                         tlas_emit.trace_ray(
@@ -748,48 +620,168 @@ pub fn main_ray_generation_volpath(
                             2,
                             0,
                             1,
-                            ray.origin,
+                            light_ray.origin,
                             tmin,
-                            ray.direction,
+                            light_ray.direction,
                             tmax,
                             payload_pdf,
                         );
                     }
 
-                    color *= f * normal.dot(wi).abs();
+                    let tr = tr_emit(
+                        tlas_main,
+                        light_ray,
+                        medium_index,
+                        mediums,
+                        materials,
+                        area_lights,
+                        index_data,
+                        payload,
+                    );
+                    let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
 
-                    let pdf = 0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
+                    /*
+                    let weight = power_heuristic(
+                        1.0,
+                        pdf,
+                        1.0,
+                        medium.phase(-ray.direction.normalize(), wi),
+                    );
+                    */
 
-                    if pdf < 1e-5 {
-                        break;
+                    if pdf > 1e-5 {
+                        add_image(
+                            0,
+                            color * tr * medium.phase(-ray.direction.normalize(), wi) / pdf,
+                        );
+                    }
+                }
+
+                ray.direction = medium.sample_p(-ray.direction.normalize(), &mut rng);
+            } else {
+                bsdf.clear(normal, Onb::from_w(normal));
+                material.compute_bsdf(&mut bsdf, uv, textures, images);
+
+                if !area_light.is_null() {
+                    add_image(0, color * area_light.emit(wo, normal));
+                }
+
+                if i == 0 {
+                    add_image(1, normal);
+                    add_image(2, material.albedo(uv, textures, images));
+                }
+
+                if !material.is_none() {
+                    let mut l = 0;
+                    while l < uniform.lights_len {
+                        let (target, _t_max) =
+                            unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
+                        let wi = (target - position).normalize();
+                        let light_ray = Ray {
+                            origin: position,
+                            direction: wi,
+                        };
+
+                        let f = bsdf.f(wo, wi);
+                        let tr = tr(
+                            tlas_main,
+                            light_ray,
+                            medium_index,
+                            mediums,
+                            materials,
+                            index_data,
+                            payload,
+                        );
+
+                        add_image(
+                            0,
+                            color
+                                * tr
+                                * f
+                                * wi.dot(normal).abs()
+                                * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                        );
+                        l += 1;
                     }
 
-                    color /= pdf;
+                    if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
+                        // Use frame wide RNG to reduce warp divergence
+                        let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
+                            let emit_object = unsafe {
+                                emit_objects.index_unchecked(
+                                    (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                                )
+                            };
+
+                            let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                                - position)
+                                .normalize();
+
+                            (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
+                        } else {
+                            let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                            (sampled_f.wi, sampled_f.pdf, sampled_f.f)
+                        };
+
+                        ray = Ray {
+                            origin: position,
+                            direction: wi,
+                        };
+
+                        *payload_pdf = RayPayloadPDF::default();
+
+                        unsafe {
+                            tlas_emit.trace_ray(
+                                RayFlags::OPAQUE,
+                                cull_mask,
+                                2,
+                                0,
+                                1,
+                                ray.origin,
+                                tmin,
+                                ray.direction,
+                                tmax,
+                                payload_pdf,
+                            );
+                        }
+
+                        color *= f * normal.dot(wi).abs();
+
+                        let pdf =
+                            0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                        if pdf < 1e-5 {
+                            break;
+                        }
+
+                        color /= pdf;
+                    } else {
+                        let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                        if sampled_f.pdf < 1e-5 {
+                            break;
+                        }
+
+                        color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
+                        ray = Ray {
+                            origin: position,
+                            direction: sampled_f.wi,
+                        };
+                    }
                 } else {
-                    let sampled_f = bsdf.sample_f(wo, &mut rng);
-
-                    if sampled_f.pdf < 1e-5 {
-                        break;
-                    }
-
-                    color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
                     ray = Ray {
-                        origin: position,
-                        direction: sampled_f.wi,
+                        origin: payload.position,
+                        direction: ray.direction,
                     };
                 }
-            } else {
-                ray = Ray {
-                    origin: payload.position,
-                    direction: ray.direction,
+
+                medium_index = if wo.dot(normal) < 0.0 {
+                    index.exterior_medium_index
+                } else {
+                    index.interior_medium_index
                 };
             }
-
-            medium_index = if wo.dot(normal) < 0.0 {
-                index.exterior_medium_index
-            } else {
-                index.interior_medium_index
-            };
         }
 
         if color == Vec3A::ZERO {

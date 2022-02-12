@@ -30,13 +30,24 @@ fn spherical_direction(
     sin_theta * phi.cos() * x + sin_theta * phi.sin() * y + cos_theta * z
 }
 
-#[derive(Default)]
 pub struct SampledMedium {
     pub sampled: bool,
     pub t: f32,
     pub position: Vec3A,
     pub wo: Vec3A,
     pub tr: Vec3A,
+}
+
+impl Default for SampledMedium {
+    fn default() -> Self {
+        SampledMedium {
+            sampled: false,
+            t: 0.0,
+            position: Vec3A::ZERO,
+            wo: Vec3A::ZERO,
+            tr: vec3a(1.0, 1.0, 1.0),
+        }
+    }
 }
 
 pub trait Medium {
