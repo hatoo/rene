@@ -32,9 +32,7 @@ fn spherical_direction(
 
 pub struct SampledMedium {
     pub sampled: bool,
-    pub t: f32,
     pub position: Vec3A,
-    pub wo: Vec3A,
     pub tr: Vec3A,
 }
 
@@ -42,9 +40,7 @@ impl Default for SampledMedium {
     fn default() -> Self {
         SampledMedium {
             sampled: false,
-            t: 0.0,
             position: Vec3A::ZERO,
-            wo: Vec3A::ZERO,
             tr: vec3a(1.0, 1.0, 1.0),
         }
     }
@@ -137,9 +133,7 @@ impl<'a> Medium for Homogeneous<'a> {
 
         SampledMedium {
             sampled,
-            t,
             position: ray.origin + t * ray.direction,
-            wo: -ray.direction,
             tr: if sampled {
                 tr * self.sigma_s() / pdf
             } else {
