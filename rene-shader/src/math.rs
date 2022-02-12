@@ -85,3 +85,13 @@ impl IsNearZero for Vec3A {
         self.x.abs() < S && self.y.abs() < S && self.z.abs() < S
     }
 }
+
+pub fn coordinate_system(v1: Vec3A) -> (Vec3A, Vec3A) {
+    let v2 = if v1.x.abs() > v1.y.abs() {
+        vec3a(-v1.z, 0.0, v1.x) / (v1.x * v1.x + v1.z * v1.z).sqrt()
+    } else {
+        vec3a(0.0, v1.z, -v1.y) / (v1.y * v1.y + v1.z * v1.z).sqrt()
+    };
+
+    (v2, v1.cross(v2))
+}

@@ -2,7 +2,7 @@ use spirv_std::glam::{vec3a, Vec3A};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
-use crate::asm::f32_clamp;
+use crate::{asm::f32_clamp, math::coordinate_system};
 
 pub struct Onb {
     pub u: Vec3A,
@@ -12,13 +12,7 @@ pub struct Onb {
 
 impl Onb {
     pub fn from_w(w: Vec3A) -> Self {
-        let a = if w.x.abs() > 0.9 {
-            vec3a(0.0, 1.0, 0.0)
-        } else {
-            vec3a(1.0, 0.0, 0.0)
-        };
-        let v = w.cross(a).normalize();
-        let u = w.cross(v);
+        let (u, v) = coordinate_system(w);
 
         Self { u, v, w }
     }

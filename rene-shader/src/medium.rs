@@ -7,17 +7,7 @@ use spirv_std::{
     glam::{vec3a, Vec3A, Vec4, Vec4Swizzles},
 };
 
-use crate::{rand::DefaultRng, Ray};
-
-fn coordinate_system(v1: Vec3A) -> (Vec3A, Vec3A) {
-    let v2 = if v1.x.abs() > v1.y.abs() {
-        vec3a(-v1.z, 0.0, v1.x) / (v1.x * v1.x + v1.z * v1.z).sqrt()
-    } else {
-        vec3a(0.0, v1.z, -v1.y) / (v1.y * v1.y + v1.z * v1.z).sqrt()
-    };
-
-    (v2, v1.cross(v2))
-}
+use crate::{math::coordinate_system, rand::DefaultRng, Ray};
 
 fn spherical_direction(
     sin_theta: f32,
