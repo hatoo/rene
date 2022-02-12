@@ -897,7 +897,6 @@ pub fn triangle_closest_hit(
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
-    #[spirv(object_ray_direction)] object_ray_direction: Vec3A,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
