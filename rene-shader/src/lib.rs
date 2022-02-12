@@ -589,7 +589,7 @@ pub fn main_ray_generation_volpath(
                         0,
                         color
                             * tr
-                            * medium.phase(-ray.direction.normalize(), wi)
+                            * medium.phase(wo, wi)
                             * unsafe { lights.index_unchecked(l as usize) }.color(ray.origin),
                     );
                     l += 1;
@@ -650,14 +650,11 @@ pub fn main_ray_generation_volpath(
                     */
 
                     if pdf > 1e-5 {
-                        add_image(
-                            0,
-                            color * tr * medium.phase(-ray.direction.normalize(), wi) / pdf,
-                        );
+                        add_image(0, color * tr * medium.phase(wo, wi) / pdf);
                     }
                 }
 
-                ray.direction = medium.sample_p(-ray.direction.normalize(), &mut rng);
+                ray.direction = medium.sample_p(wo, &mut rng);
             } else {
                 bsdf.clear(normal, Onb::from_w(normal));
                 material.compute_bsdf(&mut bsdf, uv, textures, images);
