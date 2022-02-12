@@ -1,8 +1,11 @@
 use core::f32::consts::PI;
 
-use spirv_std::glam::{vec3a, Vec3A, Vec4, Vec4Swizzles};
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
+use spirv_std::{
+    arch::IndexUnchecked,
+    glam::{vec3a, Vec3A, Vec4, Vec4Swizzles},
+};
 
 use crate::{rand::DefaultRng, Ray};
 
@@ -88,8 +91,8 @@ impl<'a> Medium for Homogeneous<'a> {
     fn sample(&self, ray: Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
         let channel = rng.next_u32() % 3;
         let sigma_t = self.sigma_t();
-        let dist =
-            -(1.0 - rng.next_f32()).ln() / [sigma_t.x, sigma_t.y, sigma_t.z][channel as usize];
+        let dist = -(1.0 - rng.next_f32()).ln()
+            / *unsafe { [sigma_t.x, sigma_t.y, sigma_t.z].index_unchecked(channel as usize) };
         let t = dist / ray.direction.length();
         let sampled = t < t_max;
         let t = t.min(t_max);

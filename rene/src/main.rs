@@ -517,7 +517,10 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::CLOSEST_HIT_KHR
+                                    | vk::ShaderStageFlags::RAYGEN_KHR,
+                            )
                             .binding(9)
                             .build(),
                         // indices
