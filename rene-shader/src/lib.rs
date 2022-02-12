@@ -597,14 +597,12 @@ pub fn main_ray_generation_volpath(
 
                 if uniform.emit_object_len > 0 {
                     let emit_object = unsafe {
-                        emit_objects.index_unchecked(
-                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
-                        )
+                        emit_objects
+                            .index_unchecked((rng.next_u32() % uniform.emit_object_len) as usize)
                     };
 
-                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
-                        - ray.origin)
-                        .normalize();
+                    let wi =
+                        (emit_object.sample(indices, vertices, &mut rng) - ray.origin).normalize();
 
                     *payload_pdf = RayPayloadPDF::default();
 
