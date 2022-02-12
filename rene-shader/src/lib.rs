@@ -636,11 +636,12 @@ pub fn main_ray_generation_volpath(
                                 );
                             }
                         }
+
+                        i += 1;
+
                         if tmax <= 0.0 {
                             break;
                         }
-
-                        i += 1;
                     } else {
                         break;
                     }
