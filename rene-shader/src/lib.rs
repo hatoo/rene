@@ -59,6 +59,7 @@ pub struct RayPayload {
     pub area_light: u32,
     pub uv: Vec2,
     pub medium: u32,
+    pub medium_transition: u32,
 }
 
 impl RayPayload {
@@ -85,6 +86,7 @@ impl RayPayload {
         area_light: u32,
         uv: Vec2,
         medium: u32,
+        medium_transition: bool,
     ) -> Self {
         Self {
             is_miss: 0,
@@ -95,6 +97,7 @@ impl RayPayload {
             area_light,
             uv,
             medium,
+            medium_transition: if medium_transition { 1 } else { 0 },
         }
     }
 }
@@ -536,6 +539,7 @@ pub fn main_ray_generation_volpath(
             let uv = payload.uv;
             let material = unsafe { materials.index_unchecked(payload.material as usize) };
             let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
+            let medium_transition = payload.medium_transition != 0;
 
             if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
                 let mut tmax = payload.t;
@@ -740,6 +744,10 @@ pub fn main_ray_generation_volpath(
                     direction: ray.direction,
                 };
             }
+
+            if medium_transition {
+                medium = mediums[payload.medium as usize];
+            }
         }
 
         if color == Vec3A::ZERO {
@@ -759,8 +767,6 @@ pub fn main_ray_generation_volpath(
             }
         }
         */
-
-        medium = mediums[payload.medium as usize];
 
         i += 1;
     }
@@ -859,6 +865,7 @@ pub fn sphere_closest_hit(
         area_light_index,
         vec2(u, v),
         medium_index,
+        index.interior_medium_index != index.exterior_medium_index,
     );
 }
 
@@ -947,6 +954,7 @@ pub fn triangle_closest_hit(
         area_light_index,
         uv,
         medium_index,
+        index_data.interior_medium_index != index_data.exterior_medium_index,
     );
 }
 
