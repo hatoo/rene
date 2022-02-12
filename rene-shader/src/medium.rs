@@ -26,7 +26,7 @@ pub trait Medium {
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub enum MediumType {
     Vaccum,
-    Homogeous,
+    Homogeneous,
 }
 
 impl Default for MediumType {
@@ -51,11 +51,11 @@ pub struct EnumMedium {
     data: EnumMediumData,
 }
 
-struct Homogeous<'a> {
+struct Homogeneous<'a> {
     data: &'a EnumMediumData,
 }
 
-impl<'a> Homogeous<'a> {
+impl<'a> Homogeneous<'a> {
     fn new_data(sigma_a: Vec3A, sigma_s: Vec3A, g: f32) -> EnumMediumData {
         EnumMediumData {
             v0: sigma_a.extend(g),
@@ -80,7 +80,7 @@ impl<'a> Homogeous<'a> {
     }
 }
 
-impl<'a> Medium for Homogeous<'a> {
+impl<'a> Medium for Homogeneous<'a> {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A {
         (-self.sigma_t() * ray.direction.length() * t_max).exp()
     }
@@ -132,10 +132,10 @@ impl EnumMedium {
         }
     }
 
-    pub fn new_homogeus(sigma_a: Vec3A, sigma_s: Vec3A, g: f32) -> Self {
+    pub fn new_homogeneous(sigma_a: Vec3A, sigma_s: Vec3A, g: f32) -> Self {
         Self {
-            t: MediumType::Homogeous,
-            data: Homogeous::new_data(sigma_a, sigma_s, g),
+            t: MediumType::Homogeneous,
+            data: Homogeneous::new_data(sigma_a, sigma_s, g),
         }
     }
 }
@@ -144,21 +144,21 @@ impl Medium for EnumMedium {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A {
         match self.t {
             MediumType::Vaccum => vec3a(1.0, 1.0, 1.0),
-            MediumType::Homogeous => Homogeous { data: &self.data }.tr(ray, t_max),
+            MediumType::Homogeneous => Homogeneous { data: &self.data }.tr(ray, t_max),
         }
     }
 
     fn sample(&self, ray: Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium {
         match self.t {
             MediumType::Vaccum => Default::default(),
-            MediumType::Homogeous => Homogeous { data: &self.data }.sample(ray, t_max, rng),
+            MediumType::Homogeneous => Homogeneous { data: &self.data }.sample(ray, t_max, rng),
         }
     }
 
     fn phase(&self, wo: Vec3A, wi: Vec3A) -> f32 {
         match self.t {
             MediumType::Vaccum => 0.0,
-            MediumType::Homogeous => Homogeous { data: &self.data }.phase(wo, wi),
+            MediumType::Homogeneous => Homogeneous { data: &self.data }.phase(wo, wi),
         }
     }
 }

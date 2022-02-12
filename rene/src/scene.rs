@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::ShaderOffset;
 
 use self::intermediate_scene::{
-    AreaLightSource, Camera, Film, Glass, Homogeous, Infinite, InnerTexture, IntermediateScene,
+    AreaLightSource, Camera, Film, Glass, Homogeneous, Infinite, InnerTexture, IntermediateScene,
     IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror, Plastic, SceneObject,
     Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
 };
@@ -353,13 +353,13 @@ impl Scene {
                         }
                         WorldObject::MakeNamedMedium(
                             name,
-                            Medium::Homogeous(Homogeous {
+                            Medium::Homogeneous(Homogeneous {
                                 sigma_a,
                                 sigma_s,
                                 g,
                             }),
                         ) => {
-                            let medium = EnumMedium::new_homogeus(sigma_a, sigma_s, g);
+                            let medium = EnumMedium::new_homogeneous(sigma_a, sigma_s, g);
                             state.mediums.insert(name, self.mediums.len() as u32);
                             self.mediums.push(medium);
                         }

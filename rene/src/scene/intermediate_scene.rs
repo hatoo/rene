@@ -151,10 +151,10 @@ pub struct Plastic {
 }
 
 pub enum Medium {
-    Homogeous(Homogeous),
+    Homogeneous(Homogeneous),
 }
 
-pub struct Homogeous {
+pub struct Homogeneous {
     pub sigma_s: Vec3A,
     pub sigma_a: Vec3A,
     pub g: f32,
@@ -818,7 +818,7 @@ impl IntermediateWorld {
 
                     Ok(Self::WorldObject(WorldObject::MakeNamedMedium(
                         name,
-                        Medium::Homogeous(Homogeous {
+                        Medium::Homogeneous(Homogeneous {
                             sigma_a,
                             sigma_s,
                             g,
