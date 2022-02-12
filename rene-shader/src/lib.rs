@@ -374,6 +374,7 @@ fn tr(
     mut ray: Ray,
     mut medium: EnumMedium,
     mediums: &[EnumMedium],
+    materials: &[EnumMaterial],
     payload: &mut RayPayload,
 ) -> Vec3A {
     let mut tr = vec3a(1.0, 1.0, 1.0);
@@ -398,7 +399,7 @@ fn tr(
 
         if payload.is_miss != 0 {
             break tr;
-        } else if payload.interior_medium == payload.exterior_medium {
+        } else if !materials[payload.material as usize].is_none() {
             break Vec3A::ZERO;
         } else {
             if !medium.is_vaccum() {
@@ -421,6 +422,7 @@ fn tr_emit(
     mut ray: Ray,
     mut medium: EnumMedium,
     mediums: &[EnumMedium],
+    materials: &[EnumMaterial],
     area_lights: &[EnumAreaLight],
     payload: &mut RayPayload,
 ) -> Vec3A {
@@ -450,7 +452,7 @@ fn tr_emit(
             break tr
                 * area_lights[payload.area_light as usize]
                     .emit(-ray.direction.normalize(), payload.normal);
-        } else if payload.interior_medium == payload.exterior_medium {
+        } else if !materials[payload.material as usize].is_none() {
             break Vec3A::ZERO;
         } else {
             if !medium.is_vaccum() {
@@ -571,7 +573,7 @@ pub fn main_ray_generation_volpath(
                                 direction: wi,
                             };
 
-                            let tr = tr(tlas_main, light_ray, medium, mediums, payload);
+                            let tr = tr(tlas_main, light_ray, medium, mediums, materials, payload);
                             add_image(
                                 0,
                                 color
@@ -621,6 +623,7 @@ pub fn main_ray_generation_volpath(
                                 light_ray,
                                 medium,
                                 mediums,
+                                materials,
                                 area_lights,
                                 payload,
                             );
@@ -670,7 +673,7 @@ pub fn main_ray_generation_volpath(
                     };
 
                     let f = bsdf.f(wo, wi);
-                    let tr = tr(tlas_main, light_ray, medium, mediums, payload);
+                    let tr = tr(tlas_main, light_ray, medium, mediums, materials, payload);
 
                     add_image(
                         0,
@@ -754,7 +757,8 @@ pub fn main_ray_generation_volpath(
                 };
             }
 
-            if interior_medium != exterior_medium {
+            if interior_medium != exterior_medium || (interior_medium != 0 || exterior_medium != 0)
+            {
                 medium = mediums[if wo.dot(normal) < 0.0 {
                     exterior_medium
                 } else {
@@ -947,12 +951,6 @@ pub fn triangle_closest_hit(
         world_to_object.z.dot(nrm),
     )
     .normalize();
-
-    let medium_index = if (-object_ray_direction).dot(nrm) > 0.0 {
-        index_data.interior_medium_index
-    } else {
-        index_data.exterior_medium_index
-    };
 
     *out = RayPayload::new_hit(
         t,
