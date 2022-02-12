@@ -39,6 +39,7 @@ pub enum IntermediateWorld {
     Matrix(Mat4),
     Texture(Texture),
     NamedMaterial(String),
+    MediumInterface(String, String),
 }
 
 pub enum WorldObject {
@@ -46,6 +47,7 @@ pub enum WorldObject {
     AreaLightSource(AreaLightSource),
     Material(Material),
     MakeNamedMaterial(String, Material),
+    MakeNamedMedium(String, Medium),
     Shape(Shape),
 }
 
@@ -91,6 +93,7 @@ pub struct Texture {
     pub inner: InnerTexture,
 }
 pub enum Material {
+    None,
     Matte(Matte),
     Glass(Glass),
     Substrate(Substrate),
@@ -147,6 +150,16 @@ pub struct Plastic {
     pub remap_roughness: bool,
 }
 
+pub enum Medium {
+    Homogeneous(Homogeneous),
+}
+
+pub struct Homogeneous {
+    pub sigma_s: Vec3A,
+    pub sigma_a: Vec3A,
+    pub g: f32,
+}
+
 pub enum Shape {
     Sphere(Sphere),
     TriangleMesh(TriangleMesh),
@@ -186,10 +199,22 @@ pub enum IntermediateScene {
     // TODO implement it
     Sampler,
     // TODO implement it
-    Integrator,
+    Integrator(Integrator),
     // TODO implement it
     PixelFilter,
     Film(Film),
+}
+
+#[derive(Debug)]
+pub enum Integrator {
+    Path,
+    VolPath,
+}
+
+impl Default for Integrator {
+    fn default() -> Self {
+        Self::Path
+    }
 }
 
 #[derive(Error, Debug)]
@@ -407,6 +432,7 @@ impl<'a, T> GetValue for Object<'a, T> {
 
     fn get_material(&self) -> Result<Material, Error> {
         match self.t {
+            "none" => Ok(Material::None),
             "matte" => {
                 let albedo = self
                     .get_texture_or_color("Kd")
@@ -690,6 +716,10 @@ impl IntermediateWorld {
         match world {
             pbrt_parser::World::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
+            pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface(
+                interior.to_string(),
+                exterior.to_string(),
+            )),
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
                 "checkerboard" => {
                     let tex1 = texture
@@ -783,6 +813,28 @@ impl IntermediateWorld {
                     Ok(Self::WorldObject(WorldObject::MakeNamedMaterial(
                         name,
                         obj.get_material()?,
+                    )))
+                }
+                pbrt_parser::WorldObjectType::MakeNamedMedium => {
+                    let name = obj.t.to_string();
+
+                    let sigma_a = obj
+                        .get_rgb("sigma_a")
+                        .unwrap_or(Ok(vec3a(0.0011, 0.0024, 0.014)))?;
+
+                    let sigma_s = obj
+                        .get_rgb("sigma_s")
+                        .unwrap_or(Ok(vec3a(2.55, 3.21, 3.77)))?;
+
+                    let g = obj.get_float("g").unwrap_or(Ok(0.0))?;
+
+                    Ok(Self::WorldObject(WorldObject::MakeNamedMedium(
+                        name,
+                        Medium::Homogeneous(Homogeneous {
+                            sigma_a,
+                            sigma_s,
+                            g,
+                        }),
                     )))
                 }
                 pbrt_parser::WorldObjectType::Shape => match obj.t {
@@ -927,7 +979,14 @@ impl IntermediateScene {
             pbrt_parser::Scene::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                 pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
-                pbrt_parser::SceneObjectType::Integrator => Ok(Self::Integrator),
+                pbrt_parser::SceneObjectType::Integrator => match obj.t {
+                    "volpath" => Ok(Self::Integrator(Integrator::VolPath)),
+                    "path" => Ok(Self::Integrator(Integrator::Path)),
+                    i => {
+                        log::info!("{} integrator is not implemented. Use volpath.", i);
+                        Ok(Self::Integrator(Integrator::VolPath))
+                    }
+                },
                 pbrt_parser::SceneObjectType::PixelFilter => Ok(Self::PixelFilter),
                 pbrt_parser::SceneObjectType::Camera => match obj.t {
                     "perspective" => {

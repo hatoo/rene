@@ -2,17 +2,18 @@ use std::{collections::HashMap, f32::consts::PI, path::Path};
 
 use glam::{vec3, vec3a, Affine3A, Mat4};
 use rene_shader::{
-    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, texture::EnumTexture,
-    Uniform,
+    area_light::EnumAreaLight, light::EnumLight, material::EnumMaterial, medium::EnumMedium,
+    texture::EnumTexture, Uniform,
 };
 use thiserror::Error;
 
 use crate::ShaderOffset;
 
 use self::intermediate_scene::{
-    AreaLightSource, Camera, Film, Glass, Infinite, InnerTexture, IntermediateScene,
-    IntermediateWorld, LightSource, Material, Matte, Metal, Mirror, Plastic, SceneObject, Shape,
-    Sphere, Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
+    AreaLightSource, Camera, Film, Glass, Homogeneous, Infinite, InnerTexture, Integrator,
+    IntermediateScene, IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror,
+    Plastic, SceneObject, Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber,
+    WorldObject,
 };
 
 pub mod image;
@@ -27,16 +28,20 @@ pub struct TlasInstance {
     pub shader_offset: ShaderOffset,
     pub matrix: Affine3A,
     pub material_index: usize,
+    pub interior_medium_index: usize,
+    pub exterior_medium_index: usize,
     pub area_light_index: usize,
     pub blas_index: Option<usize>,
 }
 
 #[derive(Default, Debug)]
 pub struct Scene {
+    pub integrator: Integrator,
     pub film: Film,
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
     pub materials: Vec<EnumMaterial>,
+    pub mediums: Vec<EnumMedium>,
     pub area_lights: Vec<EnumAreaLight>,
     pub textures: Vec<EnumTexture>,
     pub blases: Vec<TriangleMesh>,
@@ -52,6 +57,8 @@ pub enum CreateSceneError {
     NoMaterial,
     #[error("Unknown Material {0}")]
     UnknownMaterial(String),
+    #[error("Unknown Medium {0}")]
+    UnknownMedium(String),
     #[error("Not Found Texture: {0}")]
     NotFoundTexture(String),
 }
@@ -59,10 +66,12 @@ pub enum CreateSceneError {
 #[derive(Default, Clone)]
 struct WorldState {
     current_material_index: Option<usize>,
+    current_medium_index: Option<(usize, usize)>,
     current_area_light_index: usize,
     current_matrix: Mat4,
     textures: HashMap<String, u32>,
     materials: HashMap<String, u32>,
+    mediums: HashMap<String, u32>,
 }
 
 impl Scene {
@@ -95,6 +104,7 @@ impl Scene {
         let mut fov = 0.5 * PI;
 
         scene.area_lights.push(EnumAreaLight::new_null());
+        scene.mediums.push(EnumMedium::new_vaccum());
 
         // Default infinite light texture
         scene
@@ -106,8 +116,8 @@ impl Scene {
                 IntermediateScene::Sampler => {
                     log::info!("Sampler is not yet implemented. Continue.");
                 }
-                IntermediateScene::Integrator => {
-                    log::info!("Integrator is not yet implemented. Continue.");
+                IntermediateScene::Integrator(integrator) => {
+                    scene.integrator = integrator;
                 }
                 IntermediateScene::PixelFilter => {
                     log::info!("PixelFilter is not yet implemented. Continue.");
@@ -230,6 +240,7 @@ impl Scene {
                 rough,
                 remap_roughness,
             )),
+            Material::None => Ok(EnumMaterial::new_none()),
         }
     }
 
@@ -260,6 +271,28 @@ impl Scene {
                             .ok_or(CreateSceneError::UnknownMaterial(name))?
                             as usize,
                     );
+                }
+                IntermediateWorld::MediumInterface(interior, exterior) => {
+                    state.current_medium_index = Some((
+                        if interior == "" {
+                            0
+                        } else {
+                            *state
+                                .mediums
+                                .get(&interior)
+                                .ok_or(CreateSceneError::UnknownMedium(interior))?
+                                as usize
+                        },
+                        if exterior == "" {
+                            0
+                        } else {
+                            *state
+                                .mediums
+                                .get(&exterior)
+                                .ok_or(CreateSceneError::UnknownMedium(exterior))?
+                                as usize
+                        },
+                    ));
                 }
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
@@ -320,6 +353,18 @@ impl Scene {
                             state.current_material_index = Some(self.materials.len());
                             self.materials.push(material);
                         }
+                        WorldObject::MakeNamedMedium(
+                            name,
+                            Medium::Homogeneous(Homogeneous {
+                                sigma_a,
+                                sigma_s,
+                                g,
+                            }),
+                        ) => {
+                            let medium = EnumMedium::new_homogeneous(sigma_a, sigma_s, g);
+                            state.mediums.insert(name, self.mediums.len() as u32);
+                            self.mediums.push(medium);
+                        }
                         WorldObject::Shape(shape) => match shape {
                             Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
                                 shader_offset: ShaderOffset::Sphere,
@@ -332,6 +377,14 @@ impl Scene {
                                     .ok_or(CreateSceneError::NoMaterial)?,
                                 area_light_index: state.current_area_light_index,
                                 blas_index: None,
+                                interior_medium_index: state
+                                    .current_medium_index
+                                    .map(|t| t.0)
+                                    .unwrap_or(0),
+                                exterior_medium_index: state
+                                    .current_medium_index
+                                    .map(|t| t.1)
+                                    .unwrap_or(0),
                             }),
                             Shape::TriangleMesh(trianglemesh) => {
                                 let blass_index = self.blases.len();
@@ -343,6 +396,14 @@ impl Scene {
                                         .current_material_index
                                         .ok_or(CreateSceneError::NoMaterial)?,
                                     area_light_index: state.current_area_light_index,
+                                    interior_medium_index: state
+                                        .current_medium_index
+                                        .map(|t| t.0)
+                                        .unwrap_or(0),
+                                    exterior_medium_index: state
+                                        .current_medium_index
+                                        .map(|t| t.1)
+                                        .unwrap_or(0),
                                     blas_index: Some(blass_index),
                                 })
                             }

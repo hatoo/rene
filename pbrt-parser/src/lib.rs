@@ -43,6 +43,7 @@ pub enum World<'a> {
     Rotate(AxisAngle),
     Texture(Texture<'a>),
     NamedMaterial(&'a str),
+    MediumInterface(&'a str, &'a str),
 }
 
 #[derive(PartialEq, Debug)]
@@ -86,6 +87,7 @@ pub enum WorldObjectType {
     AreaLightSource,
     Material,
     MakeNamedMaterial,
+    MakeNamedMedium,
     Shape,
 }
 #[derive(PartialEq, Debug, Clone)]
@@ -156,7 +158,7 @@ fn parse_axis_angle<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a s
 
 pub(crate) fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     fn parse<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
-        escaped(none_of("\""), '\\', one_of("\"n\\"))(i)
+        alt((escaped(none_of("\""), '\\', one_of("\"n\\")), tag("")))(i)
     }
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(i)
 }
@@ -290,7 +292,7 @@ fn parse_argument_type_name<'a, E: ParseError<&'a str>>(
     ) -> IResult<&'a str, (ArgumentType, &'a str), E> {
         let (rest, ty) = parse_argument_type(input)?;
         let (rest, _) = char(' ')(rest)?;
-        let (rest, ident) = take_while(|c: char| c.is_alphanum())(rest)?;
+        let (rest, ident) = take_while(|c: char| c.is_alphanum() || c == '_')(rest)?;
         Ok((rest, (ty, ident)))
     }
     preceded(char('\"'), cut(terminated(parse, char('\"'))))(input)
@@ -351,6 +353,7 @@ fn parse_world_object_type<'a, E: ParseError<&'a str>>(
         value(WorldObjectType::AreaLightSource, tag("AreaLightSource")),
         value(WorldObjectType::Material, tag("Material")),
         value(WorldObjectType::MakeNamedMaterial, tag("MakeNamedMaterial")),
+        value(WorldObjectType::MakeNamedMedium, tag("MakeNamedMedium")),
         value(WorldObjectType::Shape, tag("Shape")),
     ))(input)
 }
@@ -445,6 +448,16 @@ fn parse_texture<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
     ))
 }
 
+fn parse_medium_interface<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, (&'a str, &'a str), E> {
+    let (rest, _) = tag("MediumInterface")(input)?;
+    let (rest, interior) = preceded(sp, parse_str)(rest)?;
+    let (rest, exterior) = preceded(sp, parse_str)(rest)?;
+
+    Ok((rest, (interior, exterior)))
+}
+
 fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, World, E> {
     alt((
         map(parse_texture, World::Texture),
@@ -456,6 +469,9 @@ fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, W
         map(parse_transrate, World::Translate),
         map(parse_scale, World::Scale),
         map(parse_rotate, World::Rotate),
+        map(parse_medium_interface, |(interior, exterior)| {
+            World::MediumInterface(interior, exterior)
+        }),
     ))(input)
 }
 
@@ -556,6 +572,14 @@ mod test {
                     ],)
                 }
             ))
+        )
+    }
+
+    #[test]
+    fn test_parse_medium_interface() {
+        assert_eq!(
+            parse_medium_interface::<Error<&str>>("MediumInterface \"gas\" \"\""),
+            Ok(("", ("gas", "")))
         )
     }
 

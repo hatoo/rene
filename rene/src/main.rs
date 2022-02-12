@@ -21,6 +21,7 @@ use rene_shader::{
     area_light::EnumAreaLight,
     light::EnumLight,
     material::EnumMaterial,
+    medium::EnumMedium,
     surface_sample::{EnumSurfaceSample, SurfaceSample},
     texture::EnumTexture,
     IndexData, Uniform, Vertex,
@@ -516,7 +517,10 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage_flags(
+                                vk::ShaderStageFlags::CLOSEST_HIT_KHR
+                                    | vk::ShaderStageFlags::RAYGEN_KHR,
+                            )
                             .binding(9)
                             .build(),
                         // indices
@@ -538,6 +542,13 @@ fn main() {
                                     | vk::ShaderStageFlags::RAYGEN_KHR,
                             )
                             .binding(11)
+                            .build(),
+                        // mediums
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .descriptor_count(1)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .binding(12)
                             .build(),
                     ])
                     .build(),
@@ -570,6 +581,13 @@ fn main() {
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
                 .general_shader(0)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build(),
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(8)
                 .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
@@ -628,7 +646,7 @@ fn main() {
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::RAYGEN_KHR)
                 .module(shader_module)
-                .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation\0").unwrap())
+                .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation_path\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::MISS_KHR)
@@ -664,6 +682,13 @@ fn main() {
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"sphere_closest_hit_pdf\0").unwrap())
+                .build(),
+            vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::RAYGEN_KHR)
+                .module(shader_module)
+                .name(
+                    std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation_volpath\0").unwrap(),
+                )
                 .build(),
         ];
 
@@ -730,6 +755,10 @@ fn main() {
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
             descriptor_count: scene_buffers.images.len() as u32,
+        },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_BUFFER,
@@ -953,6 +982,21 @@ fn main() {
             .build()
     };
 
+    let mediums_buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(scene_buffers.mediums.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
+
+    let mediums_write = {
+        vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(12)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&mediums_buffer_info)
+            .build()
+    };
+
     unsafe {
         device.update_descriptor_sets(
             &[
@@ -968,6 +1012,7 @@ fn main() {
                 index_data_write,
                 indices_write,
                 vertices_write,
+                mediums_write,
             ],
             &[],
         );
@@ -1037,20 +1082,31 @@ fn main() {
         let sbt_address =
             unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
 
-        let sbt_raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let sbt_raygen_path_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
-        let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let sbt_raygen_volpath_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address + handle_size_aligned)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned)
+            .build();
+
+        let sbt_raygen_region = match scene.integrator {
+            scene::intermediate_scene::Integrator::Path => sbt_raygen_path_region,
+            scene::intermediate_scene::Integrator::VolPath => sbt_raygen_volpath_region,
+        };
+
+        let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
+            .device_address(sbt_address + 2 * handle_size_aligned)
             .size(2 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 3 * handle_size_aligned)
+            .device_address(sbt_address + 4 * handle_size_aligned)
             .size(4 * handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
@@ -2309,6 +2365,7 @@ struct SceneBuffers {
     blases: Vec<vk::AccelerationStructureKHR>,
     uniform: BufferResource,
     materials: BufferResource,
+    mediums: BufferResource,
     buffers: Vec<BufferResource>,
     index_data: BufferResource,
     vertices: BufferResource,
@@ -2982,6 +3039,8 @@ impl SceneBuffers {
                         .blas_index
                         .map(|i| blas_args[i].primitive_count)
                         .unwrap_or(1),
+                    interior_medium_index: instance.interior_medium_index as u32,
+                    exterior_medium_index: instance.exterior_medium_index as u32,
                 });
                 vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
@@ -3168,6 +3227,29 @@ impl SceneBuffers {
             )
         };
 
+        let mediums = {
+            let buffer_size =
+                (scene.mediums.len() * std::mem::size_of::<EnumMedium>()) as vk::DeviceSize;
+
+            let mut mediums_buffer = BufferResource::new(
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                device,
+                device_memory_properties,
+            );
+            mediums_buffer.store(&scene.mediums, device);
+
+            mediums_buffer.to_gpu_only(
+                device,
+                device_memory_properties,
+                command_pool,
+                graphics_queue,
+            )
+        };
+
         let mut images: Vec<Image> = scene
             .images
             .iter()
@@ -3257,6 +3339,7 @@ impl SceneBuffers {
             blases,
             uniform: uniform_buffer,
             materials: material_buffer,
+            mediums,
             buffers,
             index_data,
             indices,
@@ -3277,6 +3360,7 @@ impl SceneBuffers {
             acceleration_structure.destroy_acceleration_structure(blas, None);
         }
         self.materials.destroy(device);
+        self.mediums.destroy(device);
         self.uniform.destroy(device);
         for buffer in self.buffers {
             buffer.destroy(device);

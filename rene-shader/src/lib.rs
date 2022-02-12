@@ -12,6 +12,7 @@ use core::f32::consts::{FRAC_1_PI, PI};
 use light::{EnumLight, Light};
 use material::{EnumMaterial, Material};
 use math::sphere_uv;
+use medium::{EnumMedium, Medium};
 use reflection::{onb::Onb, Bsdf, BxdfKind};
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -34,6 +35,7 @@ pub mod camera;
 pub mod light;
 pub mod material;
 pub mod math;
+pub mod medium;
 pub mod rand;
 pub mod reflection;
 pub mod surface_sample;
@@ -50,10 +52,10 @@ pub struct Ray {
 #[derive(Clone, Default)]
 pub struct RayPayload {
     pub is_miss: u32,
+    pub index: u32,
+    pub t: f32,
     pub position: Vec3A,
     pub normal: Vec3A,
-    pub material: u32,
-    pub area_light: u32,
     pub uv: Vec2,
 }
 
@@ -73,19 +75,13 @@ impl RayPayload {
         self.position = color;
     }
 
-    pub fn new_hit(
-        position: Vec3A,
-        normal: Vec3A,
-        material: u32,
-        area_light: u32,
-        uv: Vec2,
-    ) -> Self {
+    pub fn new_hit(t: f32, index: u32, position: Vec3A, normal: Vec3A, uv: Vec2) -> Self {
         Self {
             is_miss: 0,
+            index,
+            t,
             position,
             normal,
-            material,
-            area_light,
             uv,
         }
     }
@@ -117,6 +113,8 @@ pub struct IndexData {
     pub area_light_index: u32,
     pub index_offset: u32,
     pub primitive_count: u32,
+    pub interior_medium_index: u32,
+    pub exterior_medium_index: u32,
 }
 
 #[spirv(miss)]
@@ -142,7 +140,7 @@ pub fn main_miss(
 
 #[spirv(ray_generation)]
 #[allow(clippy::too_many_arguments)]
-pub fn main_ray_generation(
+pub fn main_ray_generation_path(
     #[spirv(launch_id)] launch_id: UVec3,
     #[spirv(launch_size)] launch_size: UVec3,
     #[spirv(push_constant)] constants: &PushConstants,
@@ -155,6 +153,7 @@ pub fn main_ray_generation(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
     #[spirv(ray_payload)] payload: &mut RayPayload,
@@ -215,8 +214,10 @@ pub fn main_ray_generation(
             let normal = payload.normal.normalize();
             let position = payload.position;
             let uv = payload.uv;
-            let material = unsafe { materials.index_unchecked(payload.material as usize) };
-            let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
+            let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+            let material = unsafe { materials.index_unchecked(index.material_index as usize) };
+            let area_light =
+                unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
 
             bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
@@ -355,6 +356,453 @@ pub fn main_ray_generation(
     }
 }
 
+#[inline(always)]
+fn tr(
+    tlas_main: &AccelerationStructure,
+    mut ray: Ray,
+    mut medium_index: u32,
+    mediums: &[EnumMedium],
+    materials: &[EnumMaterial],
+    index_data: &[IndexData],
+    payload: &mut RayPayload,
+) -> Vec3A {
+    let mut tr = vec3a(1.0, 1.0, 1.0);
+
+    loop {
+        *payload = RayPayload::default();
+
+        unsafe {
+            tlas_main.trace_ray(
+                RayFlags::empty(),
+                0xff,
+                0,
+                0,
+                0,
+                ray.origin,
+                0.001,
+                ray.direction,
+                1e5,
+                payload,
+            );
+        }
+
+        let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+
+        if payload.is_miss != 0 {
+            break tr;
+        } else if !unsafe { materials.index_unchecked(index.material_index as usize) }.is_none() {
+            break Vec3A::ZERO;
+        } else {
+            let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
+            if !medium.is_vaccum() {
+                tr *= medium.tr(ray, payload.t);
+            }
+
+            medium_index = if ray.direction.dot(payload.normal) > 0.0 {
+                index.exterior_medium_index
+            } else {
+                index.interior_medium_index
+            };
+            ray.origin = payload.position;
+        }
+    }
+}
+
+#[inline(always)]
+fn tr_emit<'a>(
+    tlas_main: &AccelerationStructure,
+    mut ray: Ray,
+    mut medium_index: u32,
+    mediums: &'a [EnumMedium],
+    materials: &[EnumMaterial],
+    area_lights: &[EnumAreaLight],
+    index_data: &[IndexData],
+    payload: &mut RayPayload,
+) -> Vec3A {
+    let mut tr = vec3a(1.0, 1.0, 1.0);
+
+    loop {
+        *payload = RayPayload::default();
+
+        unsafe {
+            tlas_main.trace_ray(
+                RayFlags::empty(),
+                0xff,
+                0,
+                0,
+                0,
+                ray.origin,
+                0.001,
+                ray.direction,
+                1e5,
+                payload,
+            );
+        }
+
+        let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+
+        if payload.is_miss != 0 {
+            break Vec3A::ZERO;
+        } else if !unsafe { area_lights.index_unchecked(index.area_light_index as usize) }.is_null()
+        {
+            break tr
+                * unsafe { area_lights.index_unchecked(index.area_light_index as usize) }
+                    .emit(-ray.direction.normalize(), payload.normal);
+        } else if !unsafe { materials.index_unchecked(index.material_index as usize) }.is_none() {
+            break Vec3A::ZERO;
+        } else {
+            let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
+            if !medium.is_vaccum() {
+                tr *= medium.tr(ray, payload.t);
+            }
+
+            medium_index = if ray.direction.dot(payload.normal) > 0.0 {
+                index.exterior_medium_index
+            } else {
+                index.interior_medium_index
+            };
+            ray.origin = payload.position;
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn power_heuristic(nf: f32, fpdf: f32, ng: f32, gpdf: f32) -> f32 {
+    let f = nf * fpdf;
+    let g = ng * gpdf;
+    (f * f) / (f * f + g * g)
+}
+
+#[spirv(ray_generation)]
+#[allow(clippy::too_many_arguments)]
+pub fn main_ray_generation_volpath(
+    #[spirv(launch_id)] launch_id: UVec3,
+    #[spirv(launch_size)] launch_size: UVec3,
+    #[spirv(push_constant)] constants: &PushConstants,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] uniform: &Uniform,
+    #[spirv(descriptor_set = 0, binding = 1)] tlases: &RuntimeArray<AccelerationStructure>,
+    #[spirv(descriptor_set = 0, binding = 2)] image: &Image!(2D, format=rgba32f, sampled=false, arrayed=true),
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lights: &[EnumLight],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] area_lights: &[EnumAreaLight],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] emit_objects: &[EnumSurfaceSample],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
+    #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] mediums: &[EnumMedium],
+    #[spirv(ray_payload)] payload: &mut RayPayload,
+    #[spirv(ray_payload)] payload_pdf: &mut RayPayloadPDF,
+) {
+    const MAX_DEPTH: u32 = 80;
+    let tlas_main = unsafe { tlases.index(0) };
+    let tlas_emit = unsafe { tlases.index(1) };
+
+    let add_image = |i: u32, v: Vec3A| {
+        let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y).extend(i);
+        let prev: Vec4 = image.read(pos);
+
+        unsafe {
+            image.write(pos, prev + v.extend(0.0));
+        }
+    };
+
+    let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
+    let mut rng = DefaultRng::new(rand_seed);
+    let mut frame_wide_rng = DefaultRng::new(constants.seed);
+
+    let u = (launch_id.x as f32 + rng.next_f32()) / (launch_size.x - 1) as f32;
+    let v = (launch_id.y as f32 + rng.next_f32()) / (launch_size.y - 1) as f32;
+
+    let cull_mask = 0xff;
+    let tmin = 0.001;
+    let tmax = 100000.0;
+
+    let mut bsdf = Bsdf::default();
+
+    let mut color = vec3a(1.0, 1.0, 1.0);
+
+    let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
+
+    let mut medium_index = 0u32;
+
+    let mut i = 0;
+    while i < MAX_DEPTH {
+        *payload = RayPayload::default();
+        unsafe {
+            tlas_main.trace_ray(
+                RayFlags::OPAQUE,
+                cull_mask,
+                0,
+                0,
+                0,
+                ray.origin,
+                tmin,
+                ray.direction,
+                tmax,
+                payload,
+            );
+        }
+
+        if payload.is_miss != 0 {
+            add_image(0, color * payload.position);
+            break;
+        } else {
+            let wo = -ray.direction.normalize();
+            let normal = payload.normal.normalize();
+            let position = payload.position;
+            let uv = payload.uv;
+            let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+            let material = unsafe { materials.index_unchecked(index.material_index as usize) };
+            let area_light =
+                unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
+            let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
+
+            let sampled_medium = medium.sample(ray, payload.t, &mut rng);
+
+            color *= sampled_medium.tr;
+
+            if sampled_medium.sampled {
+                ray.origin = sampled_medium.position;
+
+                let mut l = 0;
+                while l < uniform.lights_len {
+                    let (target, _t_max) =
+                        unsafe { lights.index_unchecked(l as usize) }.ray_target(ray.origin);
+                    let wi = (target - ray.origin).normalize();
+                    let light_ray = Ray {
+                        origin: ray.origin,
+                        direction: wi,
+                    };
+
+                    let tr = tr(
+                        tlas_main,
+                        light_ray,
+                        medium_index,
+                        mediums,
+                        materials,
+                        index_data,
+                        payload,
+                    );
+                    add_image(
+                        0,
+                        color
+                            * tr
+                            * medium.phase(wo, wi)
+                            * unsafe { lights.index_unchecked(l as usize) }.color(ray.origin),
+                    );
+                    l += 1;
+                }
+
+                if uniform.emit_object_len > 0 {
+                    let emit_object = unsafe {
+                        emit_objects.index_unchecked(
+                            (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                        )
+                    };
+
+                    let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                        - ray.origin)
+                        .normalize();
+
+                    *payload_pdf = RayPayloadPDF::default();
+
+                    let light_ray = Ray {
+                        origin: ray.origin,
+                        direction: wi,
+                    };
+
+                    unsafe {
+                        tlas_emit.trace_ray(
+                            RayFlags::OPAQUE,
+                            cull_mask,
+                            2,
+                            0,
+                            1,
+                            light_ray.origin,
+                            tmin,
+                            light_ray.direction,
+                            tmax,
+                            payload_pdf,
+                        );
+                    }
+
+                    let tr = tr_emit(
+                        tlas_main,
+                        light_ray,
+                        medium_index,
+                        mediums,
+                        materials,
+                        area_lights,
+                        index_data,
+                        payload,
+                    );
+                    let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                    /*
+                    let weight = power_heuristic(
+                        1.0,
+                        pdf,
+                        1.0,
+                        medium.phase(-ray.direction.normalize(), wi),
+                    );
+                    */
+
+                    if pdf > 1e-5 {
+                        add_image(0, color * tr * medium.phase(wo, wi) / pdf);
+                    }
+                }
+
+                ray.direction = medium.sample_p(wo, &mut rng);
+            } else {
+                bsdf.clear(normal, Onb::from_w(normal));
+                material.compute_bsdf(&mut bsdf, uv, textures, images);
+
+                if !area_light.is_null() {
+                    add_image(0, color * area_light.emit(wo, normal));
+                }
+
+                if i == 0 {
+                    add_image(1, normal);
+                    add_image(2, material.albedo(uv, textures, images));
+                }
+
+                if !material.is_none() {
+                    let mut l = 0;
+                    while l < uniform.lights_len {
+                        let (target, _t_max) =
+                            unsafe { lights.index_unchecked(l as usize) }.ray_target(position);
+                        let wi = (target - position).normalize();
+                        let light_ray = Ray {
+                            origin: position,
+                            direction: wi,
+                        };
+
+                        let f = bsdf.f(wo, wi);
+                        let tr = tr(
+                            tlas_main,
+                            light_ray,
+                            medium_index,
+                            mediums,
+                            materials,
+                            index_data,
+                            payload,
+                        );
+
+                        add_image(
+                            0,
+                            color
+                                * tr
+                                * f
+                                * wi.dot(normal).abs()
+                                * unsafe { lights.index_unchecked(l as usize) }.color(position),
+                        );
+                        l += 1;
+                    }
+
+                    if uniform.emit_object_len > 0 && bsdf.contains(BxdfKind::DIFFUSE) {
+                        // Use frame wide RNG to reduce warp divergence
+                        let (wi, pdf, f) = if frame_wide_rng.next_f32() > 0.5 {
+                            let emit_object = unsafe {
+                                emit_objects.index_unchecked(
+                                    (frame_wide_rng.next_u32() % uniform.emit_object_len) as usize,
+                                )
+                            };
+
+                            let wi = (emit_object.sample(indices, vertices, &mut frame_wide_rng)
+                                - position)
+                                .normalize();
+
+                            (wi, bsdf.pdf(wi, normal), bsdf.f(wo, wi))
+                        } else {
+                            let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                            (sampled_f.wi, sampled_f.pdf, sampled_f.f)
+                        };
+
+                        ray = Ray {
+                            origin: position,
+                            direction: wi,
+                        };
+
+                        *payload_pdf = RayPayloadPDF::default();
+
+                        unsafe {
+                            tlas_emit.trace_ray(
+                                RayFlags::OPAQUE,
+                                cull_mask,
+                                2,
+                                0,
+                                1,
+                                ray.origin,
+                                tmin,
+                                ray.direction,
+                                tmax,
+                                payload_pdf,
+                            );
+                        }
+
+                        color *= f * normal.dot(wi).abs();
+
+                        let pdf =
+                            0.5 * pdf + 0.5 * payload_pdf.pdf / uniform.emit_object_len as f32;
+
+                        if pdf < 1e-5 {
+                            break;
+                        }
+
+                        color /= pdf;
+                    } else {
+                        let sampled_f = bsdf.sample_f(wo, &mut rng);
+
+                        if sampled_f.pdf < 1e-5 {
+                            break;
+                        }
+
+                        color *= sampled_f.f * normal.dot(sampled_f.wi).abs() / sampled_f.pdf;
+                        ray = Ray {
+                            origin: position,
+                            direction: sampled_f.wi,
+                        };
+                    }
+                } else {
+                    ray = Ray {
+                        origin: payload.position,
+                        direction: ray.direction,
+                    };
+                }
+
+                medium_index = if wo.dot(normal) < 0.0 {
+                    index.exterior_medium_index
+                } else {
+                    index.interior_medium_index
+                };
+            }
+        }
+
+        if color == Vec3A::ZERO {
+            break;
+        }
+
+        /*
+        // russian roulette
+        if i > 12 {
+            let rr_coin = frame_wide_rng.next_f32();
+            let continue_p = color.max_element();
+
+            if rr_coin > continue_p {
+                break;
+            } else {
+                color /= continue_p;
+            }
+        }
+        */
+
+        i += 1;
+    }
+}
+
 #[spirv(intersection)]
 pub fn sphere_intersection(
     #[spirv(object_ray_origin)] ray_origin: Vec3A,
@@ -413,7 +861,6 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
 ) {
     let hit_pos = world_ray_origin + t * world_ray_direction;
     let object_hit_pos = object_ray_origin + t * object_ray_direction;
@@ -431,17 +878,7 @@ pub fn sphere_closest_hit(
         world_to_object.z.dot(object_hit_pos),
     );
 
-    let index = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
-    let material_index = index.material_index;
-    let area_light_index = index.area_light_index;
-
-    *out = RayPayload::new_hit(
-        hit_pos,
-        normal,
-        material_index,
-        area_light_index,
-        vec2(u, v),
-    );
+    *out = RayPayload::new_hit(t, instance_custom_index, hit_pos, normal, vec2(u, v));
 }
 
 #[derive(Copy, Clone)]
@@ -456,6 +893,7 @@ pub struct Vertex {
 #[spirv(closest_hit)]
 #[allow(clippy::too_many_arguments)]
 pub fn triangle_closest_hit(
+    #[spirv(ray_tmax)] t: f32,
     #[spirv(hit_attribute)] attribute: &Vec2,
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_to_object)] world_to_object: Affine3,
@@ -469,8 +907,6 @@ pub fn triangle_closest_hit(
     let index_data = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
 
     let index_offset = index_data.index_offset as usize;
-    let material_index = index_data.material_index;
-    let area_light_index = index_data.area_light_index;
 
     let v0 = unsafe {
         vertices.index_unchecked(
@@ -513,7 +949,7 @@ pub fn triangle_closest_hit(
     )
     .normalize();
 
-    *out = RayPayload::new_hit(hit_pos, normal, material_index, area_light_index, uv);
+    *out = RayPayload::new_hit(t, instance_custom_index, hit_pos, normal, uv);
 }
 
 #[derive(Default)]
