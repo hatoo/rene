@@ -9,6 +9,27 @@ use spirv_std::{
 
 use crate::{rand::DefaultRng, Ray};
 
+fn coordinate_system(v1: Vec3A) -> (Vec3A, Vec3A) {
+    let v2 = if v1.x.abs() > v1.y.abs() {
+        vec3a(-v1.z, 0.0, v1.z) / (v1.x * v1.x + v1.z * v1.z).sqrt()
+    } else {
+        vec3a(0.0, v1.z, -v1.y) / (v1.y * v1.y + v1.z * v1.z).sqrt()
+    };
+
+    (v2, v1.cross(v2))
+}
+
+fn spherical_direction(
+    sin_theta: f32,
+    cos_theta: f32,
+    phi: f32,
+    x: Vec3A,
+    y: Vec3A,
+    z: Vec3A,
+) -> Vec3A {
+    sin_theta * phi.cos() * x + sin_theta * phi.sin() * y + cos_theta * z
+}
+
 #[derive(Default)]
 pub struct SampledMedium {
     pub sampled: bool,
@@ -21,6 +42,7 @@ pub struct SampledMedium {
 pub trait Medium {
     fn tr(&self, ray: Ray, t_max: f32) -> Vec3A;
     fn sample(&self, ray: Ray, t_max: f32, rng: &mut DefaultRng) -> SampledMedium;
+    fn sample_p(&self, wo: Vec3A, rng: &mut DefaultRng) -> Vec3A;
     fn phase(&self, wo: Vec3A, wi: Vec3A) -> f32;
 }
 
@@ -121,6 +143,23 @@ impl<'a> Medium for Homogeneous<'a> {
         let denom = 1.0 + g * g + 2.0 * g * cos_theta;
         1.0 / (4.0 * PI) * (1.0 - g * g) / (denom * denom.sqrt())
     }
+
+    fn sample_p(&self, wo: Vec3A, rng: &mut DefaultRng) -> Vec3A {
+        let u0 = rng.next_f32();
+        let u1 = rng.next_f32();
+        let g = self.g();
+        let cos_theta = if g.abs() < 1e-3 {
+            1.0 - 2.0 * u0
+        } else {
+            let sqr_term = (1.0 - g * g) / (1.0 + g - 2.0 * g * u0);
+            -(1.0 + g * g - sqr_term * sqr_term) / (2.0 * g)
+        };
+
+        let sin_theta = (1.0 - cos_theta * cos_theta).max(0.0).sqrt();
+        let phi = 2.0 * PI * u1;
+        let (v1, v2) = coordinate_system(wo);
+        spherical_direction(sin_theta, cos_theta, phi, v1, v2, wo)
+    }
 }
 
 impl EnumMedium {
@@ -162,6 +201,13 @@ impl Medium for EnumMedium {
         match self.t {
             MediumType::Vaccum => 0.0,
             MediumType::Homogeneous => Homogeneous { data: &self.data }.phase(wo, wi),
+        }
+    }
+
+    fn sample_p(&self, wo: Vec3A, rng: &mut DefaultRng) -> Vec3A {
+        match self.t {
+            MediumType::Vaccum => Vec3A::ZERO,
+            MediumType::Homogeneous => Homogeneous { data: &self.data }.sample_p(wo, rng),
         }
     }
 }
