@@ -432,7 +432,7 @@ impl<'a, T> GetValue for Object<'a, T> {
 
     fn get_material(&self) -> Result<Material, Error> {
         match self.t {
-            "none" => Ok(Material::None),
+            "none" | "" => Ok(Material::None),
             "matte" => {
                 let albedo = self
                     .get_texture_or_color("Kd")
