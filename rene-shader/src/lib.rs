@@ -494,6 +494,7 @@ pub fn main_ray_generation_volpath(
     #[spirv(ray_payload)] payload: &mut RayPayload,
     #[spirv(ray_payload)] payload_pdf: &mut RayPayloadPDF,
 ) {
+    const MAX_DEPTH: u32 = 80;
     let tlas_main = unsafe { tlases.index(0) };
     let tlas_emit = unsafe { tlases.index(1) };
 
@@ -526,7 +527,7 @@ pub fn main_ray_generation_volpath(
     let mut medium_index = 0u32;
 
     let mut i = 0;
-    while i < 80 {
+    while i < MAX_DEPTH {
         *payload = RayPayload::default();
         unsafe {
             tlas_main.trace_ray(
@@ -559,7 +560,7 @@ pub fn main_ray_generation_volpath(
 
             if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
                 let mut tmax = payload.t;
-                while i < 80 {
+                while i < MAX_DEPTH {
                     let sampled_medium = medium.sample(ray, tmax, &mut rng);
 
                     color *= sampled_medium.tr;
