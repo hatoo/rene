@@ -52,14 +52,11 @@ pub struct Ray {
 #[derive(Clone, Default)]
 pub struct RayPayload {
     pub is_miss: u32,
+    pub index: u32,
     pub t: f32,
     pub position: Vec3A,
     pub normal: Vec3A,
-    pub material: u32,
-    pub area_light: u32,
     pub uv: Vec2,
-    pub interior_medium: u32,
-    pub exterior_medium: u32,
 }
 
 impl RayPayload {
@@ -78,26 +75,14 @@ impl RayPayload {
         self.position = color;
     }
 
-    pub fn new_hit(
-        t: f32,
-        position: Vec3A,
-        normal: Vec3A,
-        material: u32,
-        area_light: u32,
-        uv: Vec2,
-        interior_medium: u32,
-        exterior_medium: u32,
-    ) -> Self {
+    pub fn new_hit(t: f32, index: u32, position: Vec3A, normal: Vec3A, uv: Vec2) -> Self {
         Self {
             is_miss: 0,
+            index,
             t,
             position,
             normal,
-            material,
-            area_light,
             uv,
-            interior_medium,
-            exterior_medium,
         }
     }
 }
@@ -168,6 +153,7 @@ pub fn main_ray_generation_path(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
     #[spirv(ray_payload)] payload: &mut RayPayload,
@@ -228,8 +214,10 @@ pub fn main_ray_generation_path(
             let normal = payload.normal.normalize();
             let position = payload.position;
             let uv = payload.uv;
-            let material = unsafe { materials.index_unchecked(payload.material as usize) };
-            let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
+            let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+            let material = unsafe { materials.index_unchecked(index.material_index as usize) };
+            let area_light =
+                unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
 
             bsdf.clear(normal, Onb::from_w(normal));
             material.compute_bsdf(&mut bsdf, uv, textures, images);
@@ -375,6 +363,7 @@ fn tr(
     mut medium: EnumMedium,
     mediums: &[EnumMedium],
     materials: &[EnumMaterial],
+    index_data: &[IndexData],
     payload: &mut RayPayload,
 ) -> Vec3A {
     let mut tr = vec3a(1.0, 1.0, 1.0);
@@ -397,9 +386,11 @@ fn tr(
             );
         }
 
+        let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+
         if payload.is_miss != 0 {
             break tr;
-        } else if !materials[payload.material as usize].is_none() {
+        } else if !materials[index.material_index as usize].is_none() {
             break Vec3A::ZERO;
         } else {
             if !medium.is_vaccum() {
@@ -407,9 +398,9 @@ fn tr(
             }
 
             medium = mediums[if ray.direction.dot(payload.normal) > 0.0 {
-                payload.exterior_medium
+                index.exterior_medium_index
             } else {
-                payload.interior_medium
+                index.interior_medium_index
             } as usize];
             ray.origin = payload.position;
         }
@@ -424,6 +415,7 @@ fn tr_emit(
     mediums: &[EnumMedium],
     materials: &[EnumMaterial],
     area_lights: &[EnumAreaLight],
+    index_data: &[IndexData],
     payload: &mut RayPayload,
 ) -> Vec3A {
     let mut tr = vec3a(1.0, 1.0, 1.0);
@@ -446,13 +438,15 @@ fn tr_emit(
             );
         }
 
+        let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+
         if payload.is_miss != 0 {
             break Vec3A::ZERO;
-        } else if !area_lights[payload.area_light as usize].is_null() {
+        } else if !area_lights[index.area_light_index as usize].is_null() {
             break tr
-                * area_lights[payload.area_light as usize]
+                * area_lights[index.area_light_index as usize]
                     .emit(-ray.direction.normalize(), payload.normal);
-        } else if !materials[payload.material as usize].is_none() {
+        } else if !materials[index.material_index as usize].is_none() {
             break Vec3A::ZERO;
         } else {
             if !medium.is_vaccum() {
@@ -460,9 +454,9 @@ fn tr_emit(
             }
 
             medium = mediums[if ray.direction.dot(payload.normal) > 0.0 {
-                payload.exterior_medium
+                index.exterior_medium_index
             } else {
-                payload.interior_medium
+                index.interior_medium_index
             } as usize];
             ray.origin = payload.position;
         }
@@ -490,6 +484,7 @@ pub fn main_ray_generation_volpath(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] materials: &[EnumMaterial],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] textures: &[EnumTexture],
     #[spirv(descriptor_set = 0, binding = 8)] images: &RuntimeArray<InputImage>,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] vertices: &[Vertex],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] mediums: &[EnumMedium],
@@ -553,10 +548,10 @@ pub fn main_ray_generation_volpath(
             let normal = payload.normal.normalize();
             let position = payload.position;
             let uv = payload.uv;
-            let material = unsafe { materials.index_unchecked(payload.material as usize) };
-            let area_light = unsafe { area_lights.index_unchecked(payload.area_light as usize) };
-            let interior_medium = payload.interior_medium;
-            let exterior_medium = payload.exterior_medium;
+            let index = unsafe { index_data.index_unchecked(payload.index as usize) };
+            let material = unsafe { materials.index_unchecked(index.material_index as usize) };
+            let area_light =
+                unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
 
             if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
                 let mut tmax = payload.t;
@@ -579,7 +574,10 @@ pub fn main_ray_generation_volpath(
                                 direction: wi,
                             };
 
-                            let tr = tr(tlas_main, light_ray, medium, mediums, materials, payload);
+                            let tr = tr(
+                                tlas_main, light_ray, medium, mediums, materials, index_data,
+                                payload,
+                            );
                             add_image(
                                 0,
                                 color
@@ -631,6 +629,7 @@ pub fn main_ray_generation_volpath(
                                 mediums,
                                 materials,
                                 area_lights,
+                                index_data,
                                 payload,
                             );
                             let pdf = payload_pdf.pdf / uniform.emit_object_len as f32;
@@ -684,7 +683,9 @@ pub fn main_ray_generation_volpath(
                     };
 
                     let f = bsdf.f(wo, wi);
-                    let tr = tr(tlas_main, light_ray, medium, mediums, materials, payload);
+                    let tr = tr(
+                        tlas_main, light_ray, medium, mediums, materials, index_data, payload,
+                    );
 
                     add_image(
                         0,
@@ -768,14 +769,11 @@ pub fn main_ray_generation_volpath(
                 };
             }
 
-            if interior_medium != exterior_medium || (interior_medium != 0 || exterior_medium != 0)
-            {
-                medium = mediums[if wo.dot(normal) < 0.0 {
-                    exterior_medium
-                } else {
-                    interior_medium
-                } as usize];
-            }
+            medium = mediums[if wo.dot(normal) < 0.0 {
+                index.exterior_medium_index
+            } else {
+                index.interior_medium_index
+            } as usize];
         }
 
         if color == Vec3A::ZERO {
@@ -858,7 +856,6 @@ pub fn sphere_closest_hit(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3A,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
     #[spirv(instance_custom_index)] instance_custom_index: u32,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] index_data: &[IndexData],
 ) {
     let hit_pos = world_ray_origin + t * world_ray_direction;
     let object_hit_pos = object_ray_origin + t * object_ray_direction;
@@ -876,20 +873,7 @@ pub fn sphere_closest_hit(
         world_to_object.z.dot(object_hit_pos),
     );
 
-    let index = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
-    let material_index = index.material_index;
-    let area_light_index = index.area_light_index;
-
-    *out = RayPayload::new_hit(
-        t,
-        hit_pos,
-        normal,
-        material_index,
-        area_light_index,
-        vec2(u, v),
-        index.interior_medium_index,
-        index.exterior_medium_index,
-    );
+    *out = RayPayload::new_hit(t, instance_custom_index, hit_pos, normal, vec2(u, v));
 }
 
 #[derive(Copy, Clone)]
@@ -918,8 +902,6 @@ pub fn triangle_closest_hit(
     let index_data = unsafe { index_data.index_unchecked(instance_custom_index as usize) };
 
     let index_offset = index_data.index_offset as usize;
-    let material_index = index_data.material_index;
-    let area_light_index = index_data.area_light_index;
 
     let v0 = unsafe {
         vertices.index_unchecked(
@@ -962,16 +944,7 @@ pub fn triangle_closest_hit(
     )
     .normalize();
 
-    *out = RayPayload::new_hit(
-        t,
-        hit_pos,
-        normal,
-        material_index,
-        area_light_index,
-        uv,
-        index_data.interior_medium_index,
-        index_data.exterior_medium_index,
-    );
+    *out = RayPayload::new_hit(t, instance_custom_index, hit_pos, normal, uv);
 }
 
 #[derive(Default)]
