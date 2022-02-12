@@ -1091,6 +1091,11 @@ fn main() {
             .stride(handle_size_aligned)
             .build();
 
+        let sbt_raygen_region = match scene.integrator {
+            scene::intermediate_scene::Integrator::Path => sbt_raygen_path_region,
+            scene::intermediate_scene::Integrator::VolPath => sbt_raygen_volpath_region,
+        };
+
         let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address + 2 * handle_size_aligned)
             .size(2 * handle_size_aligned)
@@ -1269,7 +1274,7 @@ fn main() {
 
                     rt_pipeline.cmd_trace_rays(
                         command_buffer,
-                        &sbt_raygen_volpath_region,
+                        &sbt_raygen_region,
                         &sbt_miss_region,
                         &sbt_hit_region,
                         &sbt_call_region,

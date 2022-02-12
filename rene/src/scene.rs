@@ -10,9 +10,10 @@ use thiserror::Error;
 use crate::ShaderOffset;
 
 use self::intermediate_scene::{
-    AreaLightSource, Camera, Film, Glass, Homogeneous, Infinite, InnerTexture, IntermediateScene,
-    IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror, Plastic, SceneObject,
-    Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber, WorldObject,
+    AreaLightSource, Camera, Film, Glass, Homogeneous, Infinite, InnerTexture, Integrator,
+    IntermediateScene, IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror,
+    Plastic, SceneObject, Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber,
+    WorldObject,
 };
 
 pub mod image;
@@ -35,6 +36,7 @@ pub struct TlasInstance {
 
 #[derive(Default, Debug)]
 pub struct Scene {
+    pub integrator: Integrator,
     pub film: Film,
     pub uniform: Uniform,
     pub tlas: Vec<TlasInstance>,
@@ -114,8 +116,8 @@ impl Scene {
                 IntermediateScene::Sampler => {
                     log::info!("Sampler is not yet implemented. Continue.");
                 }
-                IntermediateScene::Integrator => {
-                    log::info!("Integrator is not yet implemented. Continue.");
+                IntermediateScene::Integrator(integrator) => {
+                    scene.integrator = integrator;
                 }
                 IntermediateScene::PixelFilter => {
                     log::info!("PixelFilter is not yet implemented. Continue.");

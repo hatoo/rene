@@ -199,10 +199,22 @@ pub enum IntermediateScene {
     // TODO implement it
     Sampler,
     // TODO implement it
-    Integrator,
+    Integrator(Integrator),
     // TODO implement it
     PixelFilter,
     Film(Film),
+}
+
+#[derive(Debug)]
+pub enum Integrator {
+    Path,
+    VolPath,
+}
+
+impl Default for Integrator {
+    fn default() -> Self {
+        Self::Path
+    }
 }
 
 #[derive(Error, Debug)]
@@ -967,7 +979,14 @@ impl IntermediateScene {
             pbrt_parser::Scene::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
                 pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
-                pbrt_parser::SceneObjectType::Integrator => Ok(Self::Integrator),
+                pbrt_parser::SceneObjectType::Integrator => match obj.t {
+                    "volpath" => Ok(Self::Integrator(Integrator::VolPath)),
+                    "path" => Ok(Self::Integrator(Integrator::Path)),
+                    i => {
+                        log::info!("{} integrator is not implemented. Use volpath.", i);
+                        Ok(Self::Integrator(Integrator::VolPath))
+                    }
+                },
                 pbrt_parser::SceneObjectType::PixelFilter => Ok(Self::PixelFilter),
                 pbrt_parser::SceneObjectType::Camera => match obj.t {
                     "perspective" => {
