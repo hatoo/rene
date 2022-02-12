@@ -360,7 +360,7 @@ pub fn main_ray_generation_path(
 fn tr(
     tlas_main: &AccelerationStructure,
     mut ray: Ray,
-    mut medium: EnumMedium,
+    mut medium_index: u32,
     mediums: &[EnumMedium],
     materials: &[EnumMaterial],
     index_data: &[IndexData],
@@ -390,29 +390,30 @@ fn tr(
 
         if payload.is_miss != 0 {
             break tr;
-        } else if !materials[index.material_index as usize].is_none() {
+        } else if !unsafe { materials.index_unchecked(index.material_index as usize) }.is_none() {
             break Vec3A::ZERO;
         } else {
+            let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
             if !medium.is_vaccum() {
                 tr *= medium.tr(ray, payload.t);
             }
 
-            medium = mediums[if ray.direction.dot(payload.normal) > 0.0 {
+            medium_index = if ray.direction.dot(payload.normal) > 0.0 {
                 index.exterior_medium_index
             } else {
                 index.interior_medium_index
-            } as usize];
+            };
             ray.origin = payload.position;
         }
     }
 }
 
 #[inline(always)]
-fn tr_emit(
+fn tr_emit<'a>(
     tlas_main: &AccelerationStructure,
     mut ray: Ray,
-    mut medium: EnumMedium,
-    mediums: &[EnumMedium],
+    mut medium_index: u32,
+    mediums: &'a [EnumMedium],
     materials: &[EnumMaterial],
     area_lights: &[EnumAreaLight],
     index_data: &[IndexData],
@@ -442,22 +443,24 @@ fn tr_emit(
 
         if payload.is_miss != 0 {
             break Vec3A::ZERO;
-        } else if !area_lights[index.area_light_index as usize].is_null() {
+        } else if !unsafe { area_lights.index_unchecked(index.area_light_index as usize) }.is_null()
+        {
             break tr
-                * area_lights[index.area_light_index as usize]
+                * unsafe { area_lights.index_unchecked(index.area_light_index as usize) }
                     .emit(-ray.direction.normalize(), payload.normal);
-        } else if !materials[index.material_index as usize].is_none() {
+        } else if !unsafe { materials.index_unchecked(index.material_index as usize) }.is_none() {
             break Vec3A::ZERO;
         } else {
+            let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
             if !medium.is_vaccum() {
                 tr *= medium.tr(ray, payload.t);
             }
 
-            medium = mediums[if ray.direction.dot(payload.normal) > 0.0 {
+            medium_index = if ray.direction.dot(payload.normal) > 0.0 {
                 index.exterior_medium_index
             } else {
                 index.interior_medium_index
-            } as usize];
+            };
             ray.origin = payload.position;
         }
     }
@@ -520,7 +523,7 @@ pub fn main_ray_generation_volpath(
 
     let mut ray = uniform.camera.get_ray(vec2(u, v), uniform.camera_to_world);
 
-    let mut medium = EnumMedium::new_vaccum();
+    let mut medium_index = 0u32;
 
     let mut i = 0;
     while i < 80 {
@@ -552,6 +555,7 @@ pub fn main_ray_generation_volpath(
             let material = unsafe { materials.index_unchecked(index.material_index as usize) };
             let area_light =
                 unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
+            let medium = unsafe { mediums.index_unchecked(medium_index as usize) };
 
             if (uniform.emit_object_len > 0 || uniform.lights_len > 0) && !medium.is_vaccum() {
                 let mut tmax = payload.t;
@@ -575,7 +579,12 @@ pub fn main_ray_generation_volpath(
                             };
 
                             let tr = tr(
-                                tlas_main, light_ray, medium, mediums, materials, index_data,
+                                tlas_main,
+                                light_ray,
+                                medium_index,
+                                mediums,
+                                materials,
+                                index_data,
                                 payload,
                             );
                             add_image(
@@ -625,7 +634,7 @@ pub fn main_ray_generation_volpath(
                             let tr = tr_emit(
                                 tlas_main,
                                 light_ray,
-                                medium,
+                                medium_index,
                                 mediums,
                                 materials,
                                 area_lights,
@@ -684,7 +693,13 @@ pub fn main_ray_generation_volpath(
 
                     let f = bsdf.f(wo, wi);
                     let tr = tr(
-                        tlas_main, light_ray, medium, mediums, materials, index_data, payload,
+                        tlas_main,
+                        light_ray,
+                        medium_index,
+                        mediums,
+                        materials,
+                        index_data,
+                        payload,
                     );
 
                     add_image(
@@ -769,11 +784,11 @@ pub fn main_ray_generation_volpath(
                 };
             }
 
-            medium = mediums[if wo.dot(normal) < 0.0 {
+            medium_index = if wo.dot(normal) < 0.0 {
                 index.exterior_medium_index
             } else {
                 index.interior_medium_index
-            } as usize];
+            };
         }
 
         if color == Vec3A::ZERO {
