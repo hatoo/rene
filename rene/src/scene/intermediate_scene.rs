@@ -85,6 +85,7 @@ pub struct CheckerBoard {
 }
 
 pub enum InnerTexture {
+    Constant(Vec3A),
     CheckerBoard(CheckerBoard),
     ImageMap(Image),
 }
@@ -760,6 +761,20 @@ impl IntermediateWorld {
                 Ok(Self::CoordSysTransform(name.to_string()))
             }
             pbrt_parser::World::Texture(texture) => match texture.obj.t {
+                "constant" => {
+                    let value = if let Ok(Ok(v)) = texture.obj.get_float("value") {
+                        vec3a(v, v, v)
+                    } else if let Ok(Ok(rgb)) = texture.obj.get_rgb("value", base_dir) {
+                        rgb
+                    } else {
+                        vec3a(1.0, 1.0, 1.0)
+                    };
+
+                    Ok(Self::Texture(Texture {
+                        name: texture.name.to_string(),
+                        inner: InnerTexture::Constant(value),
+                    }))
+                }
                 "checkerboard" => {
                     let tex1 = texture
                         .obj

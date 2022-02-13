@@ -310,6 +310,7 @@ impl Scene {
                 }
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
+                        InnerTexture::Constant(value) => EnumTexture::new_solid(value),
                         InnerTexture::CheckerBoard(checkerboard) => {
                             let tex1 = self.texture(checkerboard.tex1, state)?;
                             let tex2 = self.texture(checkerboard.tex2, state)?;
