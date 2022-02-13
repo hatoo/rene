@@ -2541,7 +2541,6 @@ struct SceneBuffers {
     uniform: BufferResource,
     materials: BufferResource,
     mediums: BufferResource,
-    buffers: Vec<BufferResource>,
     buffers_alloc: Vec<BufferResourceAlloc>,
     index_data: BufferResource,
     vertices: BufferResourceAlloc,
@@ -2996,12 +2995,13 @@ impl SceneBuffers {
 
         build_info.dst_acceleration_structure = top_as;
 
-        let scratch_buffer = BufferResource::new(
+        let scratch_buffer = BufferResourceAlloc::new(
+            allocator,
             size_info.build_scratch_size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
         build_info.scratch_data = vk::DeviceOrHostAddressKHR {
@@ -3029,7 +3029,7 @@ impl SceneBuffers {
 
             device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
-            scratch_buffer.destroy(device);
+            scratch_buffer.destroy(allocator, device);
         }
 
         (top_as, top_as_buffer, instance_buffer)
@@ -3065,7 +3065,6 @@ impl SceneBuffers {
             primitive_count: u32,
         }
 
-        let mut buffers = Vec::new();
         let mut buffers_alloc = Vec::new();
         let mut global_vertices: Vec<Vertex> = Vec::new();
         let mut global_indices: Vec<u32> = Vec::new();
@@ -3508,7 +3507,6 @@ impl SceneBuffers {
             uniform: uniform_buffer,
             materials: material_buffer,
             mediums,
-            buffers,
             buffers_alloc,
             index_data,
             indices,
@@ -3536,9 +3534,6 @@ impl SceneBuffers {
         self.materials.destroy(device);
         self.mediums.destroy(device);
         self.uniform.destroy(device);
-        for buffer in self.buffers {
-            buffer.destroy(device);
-        }
         for buffer_alloc in self.buffers_alloc {
             buffer_alloc.destroy(allocator, device);
         }
