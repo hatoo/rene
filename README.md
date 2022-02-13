@@ -60,7 +60,7 @@ cargo run  -- .\sample_scenes\veach-mis\scene.pbrt
 
 ## Teapot-full
 
-Scene file cam be downloaded from https://benedikt-bitterli.me/resources/
+The scene file can be downloaded from https://benedikt-bitterli.me/resources/
 
 With Oidn Denoiser
 ![teapot full](images/teapot-full.png)
