@@ -1109,7 +1109,7 @@ impl IntermediateScene {
                 },
                 pbrt_parser::SceneObjectType::Film => match obj.t {
                     "image" => {
-                        let filename = obj.get_str("filename")??;
+                        let filename = obj.get_str("filename").unwrap_or(Ok("out.png"))?;
                         let xresolution = obj.get_integer("xresolution").unwrap_or(Ok(640))? as u32;
                         let yresolution = obj.get_integer("yresolution").unwrap_or(Ok(480))? as u32;
                         Ok(Self::Film(Film {
