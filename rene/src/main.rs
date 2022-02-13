@@ -1955,6 +1955,7 @@ impl BufferResourceAlloc {
     fn new(
         allocator: &mut Allocator,
         size: vk::DeviceSize,
+        location: MemoryLocation,
         usage: vk::BufferUsageFlags,
         device: &ash::Device,
     ) -> Self {
@@ -1971,7 +1972,7 @@ impl BufferResourceAlloc {
             let allocation = allocator
                 .allocate(&AllocationCreateDesc {
                     requirements,
-                    location: MemoryLocation::CpuToGpu,
+                    location,
                     linear: true,
                     name: "Test allocation (Cpu to Gpu)",
                 })
@@ -2305,6 +2306,7 @@ struct Image {
 
 impl Image {
     fn load(
+        allocator: &mut Allocator,
         img: &crate::scene::image::Image,
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
@@ -2365,6 +2367,14 @@ impl Image {
             unsafe { device.create_image_view(&image_view_create_info, None) }.unwrap()
         };
 
+        let mut staging_buffer = BufferResourceAlloc::new(
+            allocator,
+            (img.data.len() * 4 * std::mem::size_of::<f32>()) as u64,
+            MemoryLocation::CpuToGpu,
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
+            device,
+        );
+        /*
         let mut staging_buffer = BufferResource::new(
             (img.data.len() * 4 * std::mem::size_of::<f32>()) as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
@@ -2374,8 +2384,9 @@ impl Image {
             device,
             device_memory_properties,
         );
+        */
 
-        staging_buffer.store(&img.data, device);
+        staging_buffer.store(&img.data);
 
         let command_buffer = {
             let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -2502,7 +2513,7 @@ impl Image {
             unsafe { device.create_sampler(&sampler_create_info, None) }.unwrap()
         };
 
-        unsafe { staging_buffer.destroy(device) };
+        unsafe { staging_buffer.destroy(allocator, device) };
 
         Self {
             buffer,
@@ -3119,6 +3130,7 @@ impl SceneBuffers {
             let mut vertex_buffer = BufferResourceAlloc::new(
                 allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::STORAGE_BUFFER
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                     | vk::BufferUsageFlags::TRANSFER_SRC
@@ -3432,6 +3444,7 @@ impl SceneBuffers {
             .iter()
             .map(|img| {
                 Image::load(
+                    allocator,
                     img,
                     device,
                     device_memory_properties,
@@ -3448,6 +3461,7 @@ impl SceneBuffers {
                 data: vec![[0.0, 0.0, 0.0, 0.0]],
             };
             images.push(Image::load(
+                allocator,
                 &dummy_image,
                 device,
                 device_memory_properties,
