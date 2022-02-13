@@ -19,6 +19,7 @@ use self::intermediate_scene::{
 pub mod image;
 pub mod intermediate_scene;
 mod pfm_parser;
+mod spectrum;
 mod subdivision;
 
 use crate::scene::image::Image;
