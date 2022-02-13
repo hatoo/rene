@@ -744,11 +744,26 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
     let mut indices = Vec::new();
 
     for e in faces {
-        let face = e.get_list_int(&vertex_indices_string).ok_or(Error::Ply)?;
+        let face: Vec<u32> = e
+            .get_list_int(&vertex_indices_string)
+            .map(|v| v.iter().map(|&i| i as u32).collect())
+            .or_else(|| e.get_list_uint(&vertex_indices_string).map(|v| v.to_vec()))
+            .ok_or(Error::Ply)?;
 
-        assert_eq!(face.len(), 3);
         assert!(face.iter().all(|&i| (i as usize) < vertices.len()));
-        indices.extend(face.iter().map(|&i| i as u32));
+        match face.len() {
+            3 => {
+                indices.extend(face.into_iter());
+            }
+            4 => {
+                indices.extend_from_slice(&[face[0], face[1], face[2]]);
+                indices.extend_from_slice(&[face[0], face[2], face[3]]);
+            }
+            x => {
+                log::info!("Unsupported face len {}", x);
+                return Err(Error::Ply);
+            }
+        }
     }
     Ok(TriangleMesh { vertices, indices })
 }
