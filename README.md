@@ -46,7 +46,7 @@ cargo run -- .\sample_scenes\dragon\scene.pbrt
 cargo run --features=oidn-denoiser  -- --denoiser=oidn   .\sample_scenes\teapot\scene.pbrt
 ```
 
-![dragon](images/teapot.png)
+![teapot](images/teapot.png)
 
 # Veach, MIS
 
@@ -55,3 +55,10 @@ cargo run  -- .\sample_scenes\veach-mis\scene.pbrt
 ```
 
 ![Veach, MIS](images/veach-mis.png)
+
+## Teapot-full
+
+Scene file cam be downloaded from https://benedikt-bitterli.me/resources/
+
+With Oidn Denoiser
+![teapot full](images/teapot-full.png)
