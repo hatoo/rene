@@ -14,6 +14,10 @@ use ash::{extensions::khr::AccelerationStructure, prelude::VkResult, util::Align
 
 use clap::{ArgEnum, Parser};
 use glam::{Vec2, Vec3A};
+use gpu_allocator::{
+    vulkan::{Allocation, AllocationCreateDesc, Allocator, AllocatorCreateDesc},
+    MemoryLocation,
+};
 use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
@@ -262,6 +266,15 @@ fn main() {
             .expect("Failed to create logical Device!")
     };
 
+    let mut allocator = Allocator::new(&AllocatorCreateDesc {
+        instance: instance.clone(),
+        device: device.clone(),
+        physical_device,
+        debug_settings: Default::default(),
+        buffer_device_address: true,
+    })
+    .unwrap();
+
     let mut rt_pipeline_properties = vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
 
     {
@@ -425,6 +438,7 @@ fn main() {
 
     let before_scene_buffer = Instant::now();
     let scene_buffers = SceneBuffers::new(
+        &mut allocator,
         &scene,
         &device,
         device_memory_properties,
@@ -1617,11 +1631,12 @@ fn main() {
     }
 
     unsafe {
-        scene_buffers.destroy(&device, &acceleration_structure);
+        scene_buffers.destroy(&mut allocator, &device, &acceleration_structure);
 
         device.destroy_image_view(image_view, None);
         device.destroy_image(image, None);
         device.free_memory(device_memory, None);
+        drop(allocator);
     }
 
     unsafe {
@@ -1927,6 +1942,153 @@ pub unsafe extern "system" fn default_vulkan_debug_utils_callback(
     println!("[Debug]{}{}{:?}", severity, types, message);
 
     vk::FALSE
+}
+
+struct BufferResourceAlloc {
+    usage: vk::BufferUsageFlags,
+    buffer: vk::Buffer,
+    allocation: Allocation,
+    size: vk::DeviceSize,
+}
+
+impl BufferResourceAlloc {
+    fn new(
+        allocator: &mut Allocator,
+        size: vk::DeviceSize,
+        usage: vk::BufferUsageFlags,
+        device: &ash::Device,
+    ) -> Self {
+        unsafe {
+            let buffer_info = vk::BufferCreateInfo::builder()
+                .size(size)
+                .usage(usage)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let buffer = device.create_buffer(&buffer_info, None).unwrap();
+            let requirements = device.get_buffer_memory_requirements(buffer);
+
+            let allocation = allocator
+                .allocate(&AllocationCreateDesc {
+                    requirements,
+                    location: MemoryLocation::CpuToGpu,
+                    linear: true,
+                    name: "Test allocation (Cpu to Gpu)",
+                })
+                .unwrap();
+
+            device
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+                .unwrap();
+
+            Self {
+                buffer,
+                allocation,
+                size,
+                usage,
+            }
+        }
+    }
+
+    fn store<T: Copy>(&mut self, data: &[T]) {
+        unsafe {
+            let size = (std::mem::size_of::<T>() * data.len()) as u64;
+            assert!(self.size >= size);
+            let mapped_ptr = self.allocation.mapped_ptr().unwrap().as_ptr(); // self.map(size, device);
+            let mut mapped_slice = Align::new(mapped_ptr, std::mem::align_of::<T>() as u64, size);
+            mapped_slice.copy_from_slice(data);
+            // self.unmap(device);
+        }
+    }
+
+    fn to_gpu_only(
+        self,
+        allocator: &mut Allocator,
+        device: &ash::Device,
+        command_pool: vk::CommandPool,
+        graphics_queue: vk::Queue,
+    ) -> Self {
+        let size = self.size;
+        let usage = self.usage | vk::BufferUsageFlags::TRANSFER_DST;
+        unsafe {
+            let buffer_info = vk::BufferCreateInfo::builder()
+                .size(size)
+                .usage(usage)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let buffer = device.create_buffer(&buffer_info, None).unwrap();
+            let requirements = device.get_buffer_memory_requirements(buffer);
+
+            let allocation = allocator
+                .allocate(&AllocationCreateDesc {
+                    requirements,
+                    location: MemoryLocation::GpuOnly,
+                    linear: true,
+                    name: "Test allocation (Gpu only)",
+                })
+                .unwrap();
+
+            device
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+                .unwrap();
+
+            // COPY
+
+            {
+                let command_buffer = {
+                    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                        .command_buffer_count(1)
+                        .command_pool(command_pool)
+                        .level(vk::CommandBufferLevel::PRIMARY)
+                        .build();
+
+                    device
+                        .allocate_command_buffers(&command_buffer_allocate_info)
+                        .expect("Failed to allocate Command Buffers!")[0]
+                };
+
+                let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                    .build();
+
+                device
+                    .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                    .expect("Failed to begin recording Command Buffer at beginning!");
+
+                let buffer_copy = [vk::BufferCopy::builder().size(size).build()];
+                device.cmd_copy_buffer(command_buffer, self.buffer, buffer, &buffer_copy);
+                device.end_command_buffer(command_buffer).unwrap();
+
+                let command_buffers = [command_buffer];
+
+                let submit_infos = [vk::SubmitInfo::builder()
+                    .command_buffers(&command_buffers)
+                    .build()];
+
+                device
+                    .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
+                    .expect("Failed to execute queue submit.");
+
+                device.queue_wait_idle(graphics_queue).unwrap();
+                device.free_command_buffers(command_pool, &[command_buffer]);
+            }
+
+            self.destroy(allocator, device);
+
+            Self {
+                usage,
+                buffer,
+                allocation,
+                size,
+            }
+        }
+    }
+
+    unsafe fn destroy(self, allocator: &mut Allocator, device: &ash::Device) {
+        device.destroy_buffer(self.buffer, None);
+        allocator.free(self.allocation).unwrap();
+    }
 }
 
 #[derive(Clone)]
@@ -2368,7 +2530,7 @@ struct SceneBuffers {
     mediums: BufferResource,
     buffers: Vec<BufferResource>,
     index_data: BufferResource,
-    vertices: BufferResource,
+    vertices: BufferResourceAlloc,
     indices: BufferResource,
     textures: BufferResource,
     lights: BufferResource,
@@ -2541,7 +2703,7 @@ impl SceneBuffers {
     fn triangle_blas(
         index_offset: u32,
         primitive_count: u32,
-        vertices: &BufferResource,
+        vertices: &BufferResourceAlloc,
         vertex_len: u32,
         indices: &BufferResource,
         device: &ash::Device,
@@ -2858,6 +3020,7 @@ impl SceneBuffers {
     }
 
     fn new(
+        allocator: &mut Allocator,
         scene: &Scene,
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
@@ -2953,6 +3116,19 @@ impl SceneBuffers {
             let buffer_size =
                 (global_vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
 
+            let mut vertex_buffer = BufferResourceAlloc::new(
+                allocator,
+                buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER
+                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                    | vk::BufferUsageFlags::TRANSFER_SRC
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                device,
+            );
+            vertex_buffer.store(&global_vertices);
+
+            vertex_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
+            /*
             let mut vertex_buffer = BufferResource::new(
                 buffer_size,
                 vk::BufferUsageFlags::STORAGE_BUFFER
@@ -2973,6 +3149,7 @@ impl SceneBuffers {
                 command_pool,
                 graphics_queue,
             )
+            */
         };
 
         let blases: Vec<_> = blas_args
@@ -3352,7 +3529,12 @@ impl SceneBuffers {
         }
     }
 
-    unsafe fn destroy(self, device: &ash::Device, acceleration_structure: &AccelerationStructure) {
+    unsafe fn destroy(
+        self,
+        allocator: &mut Allocator,
+        device: &ash::Device,
+        acceleration_structure: &AccelerationStructure,
+    ) {
         acceleration_structure.destroy_acceleration_structure(self.tlas, None);
         acceleration_structure.destroy_acceleration_structure(self.tlas_emit_object, None);
         acceleration_structure.destroy_acceleration_structure(self.default_blas, None);
@@ -3367,7 +3549,7 @@ impl SceneBuffers {
         }
         self.index_data.destroy(device);
         self.indices.destroy(device);
-        self.vertices.destroy(device);
+        self.vertices.destroy(allocator, device);
         self.textures.destroy(device);
         self.lights.destroy(device);
         self.area_lights.destroy(device);
