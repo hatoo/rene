@@ -31,6 +31,7 @@ enum TextureType {
     Solid,
     CheckerBoard,
     ImageMap,
+    Scale,
 }
 
 #[derive(Clone, Copy)]
@@ -52,8 +53,13 @@ struct CheckerBoard<'a> {
     data: &'a EnumTextureData,
 }
 
+struct Scale<'a> {
+    data: &'a EnumTextureData,
+}
+
 struct ColorOrTarget {
     color_or_uv: Packed4<u32>,
+    scale: Vec3A,
 }
 
 impl<'a> Solid<'a> {
@@ -83,6 +89,15 @@ impl<'a> ImageMap<'a> {
     }
 }
 
+impl<'a> Scale<'a> {
+    pub fn new_data(scale: Vec3A, tex: u32) -> EnumTextureData {
+        EnumTextureData {
+            u0: uvec4(tex, 0, 0, 0),
+            v0: scale.extend(0.0),
+        }
+    }
+}
+
 impl<'a> Texture for CheckerBoard<'a> {
     fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
         let w = self.data.v0.x;
@@ -97,10 +112,12 @@ impl<'a> Texture for CheckerBoard<'a> {
         if (f32_to_u32(x) % 2 == 0) == (f32_to_u32(y) % 2 == 0) {
             ColorOrTarget {
                 color_or_uv: Packed4::new(tex1, vec3a(fract(x), fract(y), 0.0)),
+                scale: vec3a(1.0, 1.0, 1.0),
             }
         } else {
             ColorOrTarget {
                 color_or_uv: Packed4::new(tex2, vec3a(fract(x), fract(y), 0.0)),
+                scale: vec3a(1.0, 1.0, 1.0),
             }
         }
     }
@@ -112,6 +129,7 @@ impl<'a> Texture for ImageMap<'a> {
         let color: Vec4 = unsafe { image.sample_by_lod(vec2(uv.x, 1.0 - uv.y), 0.0) };
         ColorOrTarget {
             color_or_uv: Packed4::new(u32::MAX, color.xyz().into()),
+            scale: vec3a(1.0, 1.0, 1.0),
         }
     }
 }
@@ -120,6 +138,16 @@ impl<'a> Texture for Solid<'a> {
     fn color(&self, _images: &RuntimeArray<InputImage>, _uv: Vec2) -> ColorOrTarget {
         ColorOrTarget {
             color_or_uv: Packed4::new(u32::MAX, self.data.v0.xyz().into()),
+            scale: vec3a(1.0, 1.0, 1.0),
+        }
+    }
+}
+
+impl<'a> Texture for Scale<'a> {
+    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
+        ColorOrTarget {
+            color_or_uv: Packed4::new(self.data.u0.x, uv.extend(0.0).into()),
+            scale: self.data.v0.xyz().into(),
         }
     }
 }
@@ -145,6 +173,13 @@ impl EnumTexture {
             data: ImageMap::new_data(image),
         }
     }
+
+    pub fn new_scale(scale: Vec3A, tex: u32) -> Self {
+        Self {
+            t: TextureType::Scale,
+            data: Scale::new_data(scale, tex),
+        }
+    }
 }
 
 impl EnumTexture {
@@ -158,8 +193,10 @@ impl EnumTexture {
             TextureType::Solid => Solid { data: &self.data }.color(images, uv),
             TextureType::CheckerBoard => CheckerBoard { data: &self.data }.color(images, uv),
             TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
+            TextureType::Scale => Scale { data: &self.data }.color(images, uv),
         };
 
+        let mut scale = color_or_target.scale;
         while color_or_target.color_or_uv.t != u32::MAX {
             let tex = unsafe { textures.index_unchecked(color_or_target.color_or_uv.t as usize) };
             color_or_target = match tex.t {
@@ -175,9 +212,14 @@ impl EnumTexture {
                     images,
                     vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
                 ),
+                TextureType::Scale => Scale { data: &tex.data }.color(
+                    images,
+                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
+                ),
             };
+            scale *= color_or_target.scale;
         }
 
-        color_or_target.color_or_uv.xyz()
+        scale * color_or_target.color_or_uv.xyz()
     }
 }

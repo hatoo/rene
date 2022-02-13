@@ -88,6 +88,7 @@ pub enum InnerTexture {
     Constant(Vec3A),
     CheckerBoard(CheckerBoard),
     ImageMap(Image),
+    Scale(Vec3A, String),
 }
 
 pub struct Texture {
@@ -259,6 +260,8 @@ pub enum Error {
     Ply,
     #[error("Exr Error")]
     Exr(#[from] exr::error::Error),
+    #[error("One of the scale texture argument must be constant")]
+    ScaleTexture,
 }
 
 trait GetValue {
@@ -774,6 +777,38 @@ impl IntermediateWorld {
                         name: texture.name.to_string(),
                         inner: InnerTexture::Constant(value),
                     }))
+                }
+                "scale" => {
+                    let tex1 = texture
+                        .obj
+                        .get_texture_or_color("tex1", base_dir)
+                        .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
+                    let tex2 = texture
+                        .obj
+                        .get_texture_or_color("tex2", base_dir)
+                        .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
+
+                    match (tex1, tex2) {
+                        (TextureOrColor::Color(c1), TextureOrColor::Color(c2)) => {
+                            Ok(Self::Texture(Texture {
+                                name: texture.name.to_string(),
+                                inner: InnerTexture::Constant(c1 * c2),
+                            }))
+                        }
+                        (TextureOrColor::Texture(tex), TextureOrColor::Color(scale)) => {
+                            Ok(Self::Texture(Texture {
+                                name: texture.name.to_string(),
+                                inner: InnerTexture::Scale(scale, tex),
+                            }))
+                        }
+                        (TextureOrColor::Color(scale), TextureOrColor::Texture(tex)) => {
+                            Ok(Self::Texture(Texture {
+                                name: texture.name.to_string(),
+                                inner: InnerTexture::Scale(scale, tex),
+                            }))
+                        }
+                        _ => Err(Error::ScaleTexture),
+                    }
                 }
                 "checkerboard" => {
                     let tex1 = texture
