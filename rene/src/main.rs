@@ -2541,7 +2541,7 @@ struct SceneBuffers {
     blases: Vec<vk::AccelerationStructureKHR>,
     uniform: BufferResource,
     materials: BufferResourceAlloc,
-    mediums: BufferResource,
+    mediums: BufferResourceAlloc,
     buffers_alloc: Vec<BufferResourceAlloc>,
     index_data: BufferResourceAlloc,
     vertices: BufferResourceAlloc,
@@ -3369,23 +3369,17 @@ impl SceneBuffers {
             let buffer_size =
                 (scene.mediums.len() * std::mem::size_of::<EnumMedium>()) as vk::DeviceSize;
 
-            let mut mediums_buffer = BufferResource::new(
+            let mut mediums_buffer = BufferResourceAlloc::new(
+                allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
-            mediums_buffer.store(&scene.mediums, device);
+            mediums_buffer.store(&scene.mediums);
 
-            mediums_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
+            mediums_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
         };
 
         let mut images: Vec<Image> = scene
@@ -3495,7 +3489,7 @@ impl SceneBuffers {
             acceleration_structure.destroy_acceleration_structure(blas, None);
         }
         self.materials.destroy(allocator, device);
-        self.mediums.destroy(device);
+        self.mediums.destroy(allocator, device);
         self.uniform.destroy(device);
         for buffer_alloc in self.buffers_alloc {
             buffer_alloc.destroy(allocator, device);
