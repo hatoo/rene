@@ -1076,17 +1076,6 @@ fn main() {
             None,
             &device,
         );
-        /*
-        let mut shader_binding_table_buffer = BufferResource::new(
-            table_size as u64,
-            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE
-                | vk::MemoryPropertyFlags::HOST_COHERENT
-                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
-            device_memory_properties,
-        );
-        */
 
         shader_binding_table_buffer.store(&table_data);
 
@@ -2553,6 +2542,7 @@ struct SceneBuffers {
     materials: BufferResource,
     mediums: BufferResource,
     buffers: Vec<BufferResource>,
+    buffers_alloc: Vec<BufferResourceAlloc>,
     index_data: BufferResource,
     vertices: BufferResourceAlloc,
     indices: BufferResource,
@@ -2565,12 +2555,16 @@ struct SceneBuffers {
 
 impl SceneBuffers {
     fn default_blas(
+        allocator: &mut Allocator,
         device: &ash::Device,
-        device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (vk::AccelerationStructureKHR, BufferResource, BufferResource) {
+    ) -> (
+        vk::AccelerationStructureKHR,
+        BufferResourceAlloc,
+        BufferResourceAlloc,
+    ) {
         let aabb = vk::AabbPositionsKHR::builder()
             .min_x(-1.0)
             .max_x(1.0)
@@ -2580,26 +2574,20 @@ impl SceneBuffers {
             .max_z(1.0)
             .build();
 
-        let mut aabb_buffer = BufferResource::new(
+        let mut aabb_buffer = BufferResourceAlloc::new(
+            allocator,
             std::mem::size_of::<vk::AabbPositionsKHR>() as u64,
+            MemoryLocation::CpuToGpu,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
                 | vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE
-                | vk::MemoryPropertyFlags::HOST_COHERENT
-                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
-        aabb_buffer.store(&[aabb], device);
+        aabb_buffer.store(&[aabb]);
 
-        let aabb_buffer = aabb_buffer.to_gpu_only(
-            device,
-            device_memory_properties,
-            command_pool,
-            graphics_queue,
-        );
+        let aabb_buffer = aabb_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue);
 
         let geometry = vk::AccelerationStructureGeometryKHR::builder()
             .geometry_type(vk::GeometryTypeKHR::AABBS)
@@ -2640,14 +2628,15 @@ impl SceneBuffers {
             )
         };
 
-        let bottom_as_buffer = BufferResource::new(
+        let bottom_as_buffer = BufferResourceAlloc::new(
+            allocator,
             size_info.acceleration_structure_size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
         let as_create_info = vk::AccelerationStructureCreateInfoKHR::builder()
@@ -2663,12 +2652,13 @@ impl SceneBuffers {
 
         build_info.dst_acceleration_structure = bottom_as;
 
-        let scratch_buffer = BufferResource::new(
+        let scratch_buffer = BufferResourceAlloc::new(
+            allocator,
             size_info.build_scratch_size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
         build_info.scratch_data = vk::DeviceOrHostAddressKHR {
@@ -2718,13 +2708,14 @@ impl SceneBuffers {
 
             device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
-            scratch_buffer.destroy(device);
+            scratch_buffer.destroy(allocator, device);
         }
         (bottom_as, bottom_as_buffer, aabb_buffer)
     }
 
     #[allow(clippy::too_many_arguments)]
     fn triangle_blas(
+        allocator: &mut Allocator,
         index_offset: u32,
         primitive_count: u32,
         vertices: &BufferResourceAlloc,
@@ -2735,7 +2726,7 @@ impl SceneBuffers {
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (vk::AccelerationStructureKHR, BufferResource) {
+    ) -> (vk::AccelerationStructureKHR, BufferResourceAlloc) {
         let vertex_stride = std::mem::size_of::<Vertex>();
         let index_stride = std::mem::size_of::<u32>();
 
@@ -2785,14 +2776,15 @@ impl SceneBuffers {
             )
         };
 
-        let bottom_as_buffer = BufferResource::new(
+        let bottom_as_buffer = BufferResourceAlloc::new(
+            allocator,
             size_info.acceleration_structure_size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
         let as_create_info = vk::AccelerationStructureCreateInfoKHR::builder()
@@ -2808,12 +2800,13 @@ impl SceneBuffers {
 
         build_info.dst_acceleration_structure = bottom_as;
 
-        let scratch_buffer = BufferResource::new(
+        let scratch_buffer = BufferResourceAlloc::new(
+            allocator,
             size_info.build_scratch_size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
         build_info.scratch_data = vk::DeviceOrHostAddressKHR {
@@ -2863,7 +2856,7 @@ impl SceneBuffers {
 
             device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
-            scratch_buffer.destroy(device);
+            scratch_buffer.destroy(allocator, device);
         }
         (bottom_as, bottom_as_buffer)
     }
@@ -3053,8 +3046,8 @@ impl SceneBuffers {
         graphics_queue: vk::Queue,
     ) -> Self {
         let (default_blas, default_blas_buffer, default_aabb_buffer) = Self::default_blas(
+            allocator,
             device,
-            device_memory_properties,
             acceleration_structure,
             command_pool,
             graphics_queue,
@@ -3074,6 +3067,7 @@ impl SceneBuffers {
         }
 
         let mut buffers = Vec::new();
+        let mut buffers_alloc = Vec::new();
         let mut global_vertices: Vec<Vertex> = Vec::new();
         let mut global_indices: Vec<u32> = Vec::new();
 
@@ -3160,6 +3154,7 @@ impl SceneBuffers {
             .iter()
             .map(|arg| {
                 let (blas, bottom_as_buffer) = Self::triangle_blas(
+                    allocator,
                     arg.index_offset,
                     arg.primitive_count,
                     &vertices,
@@ -3171,13 +3166,13 @@ impl SceneBuffers {
                     command_pool,
                     graphics_queue,
                 );
-                buffers.push(bottom_as_buffer);
+                buffers_alloc.push(bottom_as_buffer);
                 blas
             })
             .collect();
 
-        buffers.push(default_blas_buffer);
-        buffers.push(default_aabb_buffer);
+        buffers_alloc.push(default_blas_buffer);
+        buffers_alloc.push(default_aabb_buffer);
 
         let material_buffer = {
             let buffer_size =
@@ -3514,6 +3509,7 @@ impl SceneBuffers {
             materials: material_buffer,
             mediums,
             buffers,
+            buffers_alloc,
             index_data,
             indices,
             vertices,
@@ -3542,6 +3538,9 @@ impl SceneBuffers {
         self.uniform.destroy(device);
         for buffer in self.buffers {
             buffer.destroy(device);
+        }
+        for buffer_alloc in self.buffers_alloc {
+            buffer_alloc.destroy(allocator, device);
         }
         self.index_data.destroy(device);
         self.indices.destroy(device);
