@@ -65,6 +65,7 @@ pub enum Value<'a> {
     Normal(Vec<Vec3A>),
     String(Vec<&'a str>),
     Texture(Vec<&'a str>),
+    Spectrum(&'a str),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -175,6 +176,7 @@ enum ArgumentType {
     Normal,
     String,
     Texture,
+    Spectrum,
 }
 
 fn parse_argument_type<'a, E: ParseError<&'a str>>(
@@ -190,6 +192,7 @@ fn parse_argument_type<'a, E: ParseError<&'a str>>(
         value(ArgumentType::Texture, tag("texture")),
         value(ArgumentType::BlackBody, tag("blackbody")),
         value(ArgumentType::Rgb, alt((tag("rgb"), tag("color")))),
+        value(ArgumentType::Spectrum, tag("spectrum")),
     ))(input)
 }
 
@@ -281,6 +284,7 @@ impl ArgumentType {
             ArgumentType::BlackBody => {
                 bracket(&float, input).map(|(rest, v)| (rest, Value::BlackBody(v)))
             }
+            ArgumentType::Spectrum => map(parse_str, Value::Spectrum)(input),
         }
     }
 }
