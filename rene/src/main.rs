@@ -2539,7 +2539,7 @@ struct SceneBuffers {
     tlas_emit_object: vk::AccelerationStructureKHR,
     default_blas: vk::AccelerationStructureKHR,
     blases: Vec<vk::AccelerationStructureKHR>,
-    uniform: BufferResource,
+    uniform: BufferResourceAlloc,
     materials: BufferResourceAlloc,
     mediums: BufferResourceAlloc,
     buffers_alloc: Vec<BufferResourceAlloc>,
@@ -3410,23 +3410,17 @@ impl SceneBuffers {
 
             let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
 
-            let mut uniform_buffer = BufferResource::new(
+            let mut uniform_buffer = BufferResourceAlloc::new(
+                allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::UNIFORM_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
-            uniform_buffer.store(&[uniform], device);
+            uniform_buffer.store(&[uniform]);
 
-            uniform_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
+            uniform_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
         };
 
         if emit_objects.is_empty() {
@@ -3490,7 +3484,7 @@ impl SceneBuffers {
         }
         self.materials.destroy(allocator, device);
         self.mediums.destroy(allocator, device);
-        self.uniform.destroy(device);
+        self.uniform.destroy(allocator, device);
         for buffer_alloc in self.buffers_alloc {
             buffer_alloc.destroy(allocator, device);
         }
