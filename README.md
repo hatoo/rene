@@ -2,6 +2,8 @@
 
 WIP Vulkan Raytracing renderer entirely written in Rust.
 
+Currently Rene supports [pbrt file format](https://www.pbrt.org/fileformat-v3) for scene description.
+
 # Requirements
 
 - Vulkan Raytracing ready GPU and Driver
