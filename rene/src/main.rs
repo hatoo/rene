@@ -1067,7 +1067,7 @@ fn main() {
                 );
         }
 
-        let mut shader_binding_table_buffer = BufferResourceAlloc::new(
+        let mut shader_binding_table_buffer = BufferResource::new(
             &mut allocator,
             table_size as u64,
             MemoryLocation::CpuToGpu,
@@ -1947,14 +1947,14 @@ pub unsafe extern "system" fn default_vulkan_debug_utils_callback(
     vk::FALSE
 }
 
-struct BufferResourceAlloc {
+struct BufferResource {
     usage: vk::BufferUsageFlags,
     buffer: vk::Buffer,
     allocation: Allocation,
     size: vk::DeviceSize,
 }
 
-impl BufferResourceAlloc {
+impl BufferResource {
     fn new(
         allocator: &mut Allocator,
         size: vk::DeviceSize,
@@ -2109,7 +2109,7 @@ unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) ->
     device.get_buffer_device_address(&buffer_device_address_info)
 }
 struct Image {
-    buffer: BufferResourceAlloc,
+    buffer: BufferResource,
     image: vk::Image,
     image_view: vk::ImageView,
     sampler: vk::Sampler,
@@ -2150,7 +2150,7 @@ impl Image {
 
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
 
-        let buffer = BufferResourceAlloc::new(
+        let buffer = BufferResource::new(
             allocator,
             mem_reqs.size,
             MemoryLocation::GpuOnly,
@@ -2185,7 +2185,7 @@ impl Image {
             unsafe { device.create_image_view(&image_view_create_info, None) }.unwrap()
         };
 
-        let mut staging_buffer = BufferResourceAlloc::new(
+        let mut staging_buffer = BufferResource::new(
             allocator,
             (img.data.len() * 4 * std::mem::size_of::<f32>()) as u64,
             MemoryLocation::CpuToGpu,
@@ -2344,17 +2344,17 @@ struct SceneBuffers {
     tlas_emit_object: vk::AccelerationStructureKHR,
     default_blas: vk::AccelerationStructureKHR,
     blases: Vec<vk::AccelerationStructureKHR>,
-    uniform: BufferResourceAlloc,
-    materials: BufferResourceAlloc,
-    mediums: BufferResourceAlloc,
-    buffers_alloc: Vec<BufferResourceAlloc>,
-    index_data: BufferResourceAlloc,
-    vertices: BufferResourceAlloc,
-    indices: BufferResourceAlloc,
-    textures: BufferResourceAlloc,
-    lights: BufferResourceAlloc,
-    area_lights: BufferResourceAlloc,
-    emit_objects: BufferResourceAlloc,
+    uniform: BufferResource,
+    materials: BufferResource,
+    mediums: BufferResource,
+    buffers_alloc: Vec<BufferResource>,
+    index_data: BufferResource,
+    vertices: BufferResource,
+    indices: BufferResource,
+    textures: BufferResource,
+    lights: BufferResource,
+    area_lights: BufferResource,
+    emit_objects: BufferResource,
     images: Vec<Image>,
 }
 
@@ -2365,11 +2365,7 @@ impl SceneBuffers {
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (
-        vk::AccelerationStructureKHR,
-        BufferResourceAlloc,
-        BufferResourceAlloc,
-    ) {
+    ) -> (vk::AccelerationStructureKHR, BufferResource, BufferResource) {
         let aabb = vk::AabbPositionsKHR::builder()
             .min_x(-1.0)
             .max_x(1.0)
@@ -2379,7 +2375,7 @@ impl SceneBuffers {
             .max_z(1.0)
             .build();
 
-        let mut aabb_buffer = BufferResourceAlloc::new(
+        let mut aabb_buffer = BufferResource::new(
             allocator,
             std::mem::size_of::<vk::AabbPositionsKHR>() as u64,
             MemoryLocation::CpuToGpu,
@@ -2433,7 +2429,7 @@ impl SceneBuffers {
             )
         };
 
-        let bottom_as_buffer = BufferResourceAlloc::new(
+        let bottom_as_buffer = BufferResource::new(
             allocator,
             size_info.acceleration_structure_size,
             MemoryLocation::GpuOnly,
@@ -2457,7 +2453,7 @@ impl SceneBuffers {
 
         build_info.dst_acceleration_structure = bottom_as;
 
-        let scratch_buffer = BufferResourceAlloc::new(
+        let scratch_buffer = BufferResource::new(
             allocator,
             size_info.build_scratch_size,
             MemoryLocation::GpuOnly,
@@ -2523,14 +2519,14 @@ impl SceneBuffers {
         allocator: &mut Allocator,
         index_offset: u32,
         primitive_count: u32,
-        vertices: &BufferResourceAlloc,
+        vertices: &BufferResource,
         vertex_len: u32,
-        indices: &BufferResourceAlloc,
+        indices: &BufferResource,
         device: &ash::Device,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (vk::AccelerationStructureKHR, BufferResourceAlloc) {
+    ) -> (vk::AccelerationStructureKHR, BufferResource) {
         let vertex_stride = std::mem::size_of::<Vertex>();
         let index_stride = std::mem::size_of::<u32>();
 
@@ -2580,7 +2576,7 @@ impl SceneBuffers {
             )
         };
 
-        let bottom_as_buffer = BufferResourceAlloc::new(
+        let bottom_as_buffer = BufferResource::new(
             allocator,
             size_info.acceleration_structure_size,
             MemoryLocation::GpuOnly,
@@ -2604,7 +2600,7 @@ impl SceneBuffers {
 
         build_info.dst_acceleration_structure = bottom_as;
 
-        let scratch_buffer = BufferResourceAlloc::new(
+        let scratch_buffer = BufferResource::new(
             allocator,
             size_info.build_scratch_size,
             MemoryLocation::GpuOnly,
@@ -2672,18 +2668,14 @@ impl SceneBuffers {
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (
-        vk::AccelerationStructureKHR,
-        BufferResourceAlloc,
-        BufferResourceAlloc,
-    ) {
+    ) -> (vk::AccelerationStructureKHR, BufferResource, BufferResource) {
         let (instance_count, instance_buffer) = {
             let instances = tlas_instances;
 
             let instance_buffer_size =
                 std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * instances.len();
 
-            let mut instance_buffer = BufferResourceAlloc::new(
+            let mut instance_buffer = BufferResource::new(
                 allocator,
                 instance_buffer_size as vk::DeviceSize,
                 MemoryLocation::CpuToGpu,
@@ -2776,7 +2768,7 @@ impl SceneBuffers {
             )
         };
 
-        let top_as_buffer = BufferResourceAlloc::new(
+        let top_as_buffer = BufferResource::new(
             allocator,
             size_info.acceleration_structure_size,
             MemoryLocation::GpuOnly,
@@ -2800,7 +2792,7 @@ impl SceneBuffers {
 
         build_info.dst_acceleration_structure = top_as;
 
-        let scratch_buffer = BufferResourceAlloc::new(
+        let scratch_buffer = BufferResource::new(
             allocator,
             size_info.build_scratch_size,
             MemoryLocation::GpuOnly,
@@ -2910,7 +2902,7 @@ impl SceneBuffers {
         let indices = {
             let buffer_size = (global_indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
 
-            let mut index_buffer = BufferResourceAlloc::new(
+            let mut index_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -2930,7 +2922,7 @@ impl SceneBuffers {
             let buffer_size =
                 (global_vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
 
-            let mut vertex_buffer = BufferResourceAlloc::new(
+            let mut vertex_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -2973,7 +2965,7 @@ impl SceneBuffers {
             let buffer_size =
                 (scene.materials.len() * std::mem::size_of::<EnumMaterial>()) as vk::DeviceSize;
 
-            let mut material_buffer = BufferResourceAlloc::new(
+            let mut material_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3097,7 +3089,7 @@ impl SceneBuffers {
             let buffer_size =
                 (index_data.len() * std::mem::size_of::<IndexData>()) as vk::DeviceSize;
 
-            let mut index_data_buffer = BufferResourceAlloc::new(
+            let mut index_data_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3114,7 +3106,7 @@ impl SceneBuffers {
             let buffer_size =
                 (scene.textures.len() * std::mem::size_of::<EnumTexture>()) as vk::DeviceSize;
 
-            let mut textures_buffer = BufferResourceAlloc::new(
+            let mut textures_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3139,7 +3131,7 @@ impl SceneBuffers {
         let lights = {
             let buffer_size = (lights.len() * std::mem::size_of::<EnumLight>()) as vk::DeviceSize;
 
-            let mut lights_buffer = BufferResourceAlloc::new(
+            let mut lights_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3156,7 +3148,7 @@ impl SceneBuffers {
             let buffer_size =
                 (scene.area_lights.len() * std::mem::size_of::<EnumAreaLight>()) as vk::DeviceSize;
 
-            let mut area_lights_buffer = BufferResourceAlloc::new(
+            let mut area_lights_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3173,7 +3165,7 @@ impl SceneBuffers {
             let buffer_size =
                 (scene.mediums.len() * std::mem::size_of::<EnumMedium>()) as vk::DeviceSize;
 
-            let mut mediums_buffer = BufferResourceAlloc::new(
+            let mut mediums_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3214,7 +3206,7 @@ impl SceneBuffers {
 
             let buffer_size = std::mem::size_of::<Uniform>() as vk::DeviceSize;
 
-            let mut uniform_buffer = BufferResourceAlloc::new(
+            let mut uniform_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
@@ -3235,7 +3227,7 @@ impl SceneBuffers {
             let buffer_size =
                 (emit_objects.len() * std::mem::size_of::<EnumSurfaceSample>()) as vk::DeviceSize;
 
-            let mut emit_objects_buffer = BufferResourceAlloc::new(
+            let mut emit_objects_buffer = BufferResource::new(
                 allocator,
                 buffer_size,
                 MemoryLocation::CpuToGpu,
