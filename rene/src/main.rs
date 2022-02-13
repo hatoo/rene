@@ -2543,7 +2543,7 @@ struct SceneBuffers {
     materials: BufferResourceAlloc,
     mediums: BufferResource,
     buffers_alloc: Vec<BufferResourceAlloc>,
-    index_data: BufferResource,
+    index_data: BufferResourceAlloc,
     vertices: BufferResourceAlloc,
     indices: BufferResourceAlloc,
     textures: BufferResource,
@@ -3293,23 +3293,17 @@ impl SceneBuffers {
             let buffer_size =
                 (index_data.len() * std::mem::size_of::<IndexData>()) as vk::DeviceSize;
 
-            let mut index_data_buffer = BufferResource::new(
+            let mut index_data_buffer = BufferResourceAlloc::new(
+                allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
-            index_data_buffer.store(&index_data, device);
+            index_data_buffer.store(&index_data);
 
-            index_data_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
+            index_data_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
         };
 
         let textures = {
@@ -3524,7 +3518,7 @@ impl SceneBuffers {
         for buffer_alloc in self.buffers_alloc {
             buffer_alloc.destroy(allocator, device);
         }
-        self.index_data.destroy(device);
+        self.index_data.destroy(allocator, device);
         self.indices.destroy(allocator, device);
         self.vertices.destroy(allocator, device);
         self.textures.destroy(device);
