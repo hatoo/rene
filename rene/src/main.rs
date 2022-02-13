@@ -2547,7 +2547,7 @@ struct SceneBuffers {
     vertices: BufferResourceAlloc,
     indices: BufferResourceAlloc,
     textures: BufferResourceAlloc,
-    lights: BufferResource,
+    lights: BufferResourceAlloc,
     area_lights: BufferResource,
     emit_objects: BufferResource,
     images: Vec<Image>,
@@ -3335,23 +3335,17 @@ impl SceneBuffers {
         let lights = {
             let buffer_size = (lights.len() * std::mem::size_of::<EnumLight>()) as vk::DeviceSize;
 
-            let mut lights_buffer = BufferResource::new(
+            let mut lights_buffer = BufferResourceAlloc::new(
+                allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
-            lights_buffer.store(&lights, device);
+            lights_buffer.store(&lights);
 
-            lights_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
+            lights_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
         };
 
         let area_lights = {
@@ -3516,7 +3510,7 @@ impl SceneBuffers {
         self.indices.destroy(allocator, device);
         self.vertices.destroy(allocator, device);
         self.textures.destroy(allocator, device);
-        self.lights.destroy(device);
+        self.lights.destroy(allocator, device);
         self.area_lights.destroy(device);
         self.emit_objects.destroy(device);
 
