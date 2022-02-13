@@ -258,6 +258,9 @@ impl Scene {
     ) -> Result<(), CreateSceneError> {
         for w in worlds {
             match w {
+                IntermediateWorld::ReverseOrientation => {
+                    log::info!("ReverseOrientation is not yet implemented");
+                }
                 IntermediateWorld::Attribute(worlds) => {
                     let mut state = state.clone();
                     self.append_world(&mut state, worlds)?

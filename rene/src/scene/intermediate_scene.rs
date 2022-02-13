@@ -41,6 +41,7 @@ pub enum IntermediateWorld {
     NamedMaterial(String),
     CoordSysTransform(String),
     MediumInterface(String, String),
+    ReverseOrientation,
 }
 
 pub enum WorldObject {
@@ -754,6 +755,7 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
 impl IntermediateWorld {
     fn from_world<P: AsRef<Path>>(world: pbrt_parser::World, base_dir: &P) -> Result<Self, Error> {
         match world {
+            pbrt_parser::World::ReverseOrientation => Ok(Self::ReverseOrientation),
             pbrt_parser::World::Transform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
             pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface(

@@ -45,6 +45,7 @@ pub enum World<'a> {
     Texture(Texture<'a>),
     NamedMaterial(&'a str),
     MediumInterface(&'a str, &'a str),
+    ReverseOrientation,
 }
 
 #[derive(PartialEq, Debug)]
@@ -487,6 +488,7 @@ fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, W
         map(parse_medium_interface, |(interior, exterior)| {
             World::MediumInterface(interior, exterior)
         }),
+        map(tag("ReverseOrientation"), |_| World::ReverseOrientation),
     ))(input)
 }
 
