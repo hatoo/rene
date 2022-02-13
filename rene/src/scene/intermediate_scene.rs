@@ -226,8 +226,8 @@ impl Default for Integrator {
 pub enum ArgumentError {
     #[error("unmatched value length")]
     UnmatchedValueLength,
-    #[error("unmatched type")]
-    UnmatchedType,
+    #[error("unmatched type on {0}")]
+    UnmatchedType(String),
 }
 
 #[derive(Error, Debug)]
@@ -322,7 +322,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                     // TODO Error handling
                     Ok(load_spd(&path).unwrap())
                 }
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -360,7 +360,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                     Ok(TextureOrColor::Color(load_spd(&path).unwrap()))
                 }
                 pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s[0].to_string())),
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -375,7 +375,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
                 }
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -384,7 +384,7 @@ impl<'a, T> GetValue for Object<'a, T> {
         self.get_value(name)
             .map(|value| match value {
                 pbrt_parser::Value::Float(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -399,7 +399,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
                 }
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -408,7 +408,7 @@ impl<'a, T> GetValue for Object<'a, T> {
         self.get_value(name)
             .map(|value| match value {
                 pbrt_parser::Value::Integer(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -417,7 +417,7 @@ impl<'a, T> GetValue for Object<'a, T> {
         self.get_value(name)
             .map(|value| match value {
                 pbrt_parser::Value::Point(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -426,7 +426,7 @@ impl<'a, T> GetValue for Object<'a, T> {
         self.get_value(name)
             .map(|value| match value {
                 pbrt_parser::Value::Normal(v) => Ok(v.as_slice()),
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -441,7 +441,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
                 }
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -456,7 +456,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
                 }
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
@@ -620,7 +620,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Err(ArgumentError::UnmatchedValueLength)
                     }
                 }
-                _ => Err(ArgumentError::UnmatchedType),
+                _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
