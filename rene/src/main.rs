@@ -10,7 +10,12 @@ use std::{
     time::Instant,
 };
 
-use ash::{extensions::khr::AccelerationStructure, prelude::VkResult, util::Align, vk};
+use ash::{
+    extensions::khr::AccelerationStructure,
+    prelude::VkResult,
+    util::Align,
+    vk::{self},
+};
 
 use clap::{ArgEnum, Parser};
 use glam::{Vec2, Vec3A};
@@ -1063,6 +1068,15 @@ fn main() {
                 );
         }
 
+        let mut shader_binding_table_buffer = BufferResourceAlloc::new(
+            &mut allocator,
+            table_size as u64,
+            MemoryLocation::CpuToGpu,
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::TRANSFER_SRC,
+            None,
+            &device,
+        );
+        /*
         let mut shader_binding_table_buffer = BufferResource::new(
             table_size as u64,
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::TRANSFER_SRC,
@@ -1072,12 +1086,13 @@ fn main() {
             &device,
             device_memory_properties,
         );
+        */
 
-        shader_binding_table_buffer.store(&table_data, &device);
+        shader_binding_table_buffer.store(&table_data);
 
         shader_binding_table_buffer.to_gpu_only(
+            &mut allocator,
             &device,
-            device_memory_properties,
             command_pool,
             graphics_queue,
         )
@@ -1621,7 +1636,7 @@ fn main() {
 
     unsafe {
         device.destroy_descriptor_pool(descriptor_pool, None);
-        shader_binding_table_buffer.destroy(&device);
+        shader_binding_table_buffer.destroy(&mut allocator, &device);
         device.destroy_pipeline(graphics_pipeline, None);
         device.destroy_descriptor_set_layout(descriptor_set_layout, None);
     }
@@ -1957,6 +1972,7 @@ impl BufferResourceAlloc {
         size: vk::DeviceSize,
         location: MemoryLocation,
         usage: vk::BufferUsageFlags,
+        memory_req: Option<vk::MemoryRequirements>,
         device: &ash::Device,
     ) -> Self {
         unsafe {
@@ -1971,7 +1987,7 @@ impl BufferResourceAlloc {
 
             let allocation = allocator
                 .allocate(&AllocationCreateDesc {
-                    requirements,
+                    requirements: memory_req.unwrap_or(requirements),
                     location,
                     linear: true,
                     name: "Test allocation (Cpu to Gpu)",
@@ -2298,7 +2314,7 @@ unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) ->
     device.get_buffer_device_address(&buffer_device_address_info)
 }
 struct Image {
-    buffer: BufferResource,
+    buffer: BufferResourceAlloc,
     image: vk::Image,
     image_view: vk::ImageView,
     sampler: vk::Sampler,
@@ -2309,7 +2325,6 @@ impl Image {
         allocator: &mut Allocator,
         img: &crate::scene::image::Image,
         device: &ash::Device,
-        device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
     ) -> Self {
@@ -2340,15 +2355,23 @@ impl Image {
 
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
 
-        let buffer = BufferResource::new(
+        let buffer = BufferResourceAlloc::new(
+            allocator,
             mem_reqs.size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            Some(mem_reqs),
             device,
-            device_memory_properties,
         );
 
-        unsafe { device.bind_image_memory(image, buffer.memory, 0) }.unwrap();
+        unsafe {
+            device.bind_image_memory(
+                image,
+                buffer.allocation.memory(),
+                buffer.allocation.offset(),
+            )
+        }
+        .unwrap();
 
         let image_view = {
             let image_view_create_info = vk::ImageViewCreateInfo::builder()
@@ -2372,19 +2395,9 @@ impl Image {
             (img.data.len() * 4 * std::mem::size_of::<f32>()) as u64,
             MemoryLocation::CpuToGpu,
             vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
+            None,
             device,
         );
-        /*
-        let mut staging_buffer = BufferResource::new(
-            (img.data.len() * 4 * std::mem::size_of::<f32>()) as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE
-                | vk::MemoryPropertyFlags::HOST_COHERENT
-                | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            device,
-            device_memory_properties,
-        );
-        */
 
         staging_buffer.store(&img.data);
 
@@ -2523,8 +2536,8 @@ impl Image {
         }
     }
 
-    unsafe fn destroy(self, device: &ash::Device) {
-        self.buffer.destroy(device);
+    unsafe fn destroy(self, allocator: &mut Allocator, device: &ash::Device) {
+        self.buffer.destroy(allocator, device);
         device.destroy_image_view(self.image_view, None);
         device.destroy_image(self.image, None);
         device.destroy_sampler(self.sampler, None);
@@ -3135,33 +3148,12 @@ impl SceneBuffers {
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                     | vk::BufferUsageFlags::TRANSFER_SRC
                     | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+                None,
                 device,
             );
             vertex_buffer.store(&global_vertices);
 
             vertex_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
-            /*
-            let mut vertex_buffer = BufferResource::new(
-                buffer_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER
-                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
-                    | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                device,
-                device_memory_properties,
-            );
-            vertex_buffer.store(&global_vertices, device);
-
-            vertex_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
-            */
         };
 
         let blases: Vec<_> = blas_args
@@ -3442,16 +3434,7 @@ impl SceneBuffers {
         let mut images: Vec<Image> = scene
             .images
             .iter()
-            .map(|img| {
-                Image::load(
-                    allocator,
-                    img,
-                    device,
-                    device_memory_properties,
-                    command_pool,
-                    graphics_queue,
-                )
-            })
+            .map(|img| Image::load(allocator, img, device, command_pool, graphics_queue))
             .collect();
 
         if images.is_empty() {
@@ -3464,7 +3447,6 @@ impl SceneBuffers {
                 allocator,
                 &dummy_image,
                 device,
-                device_memory_properties,
                 command_pool,
                 graphics_queue,
             ))
@@ -3570,7 +3552,7 @@ impl SceneBuffers {
         self.emit_objects.destroy(device);
 
         for image in self.images {
-            image.destroy(device);
+            image.destroy(allocator, device);
         }
     }
 }
