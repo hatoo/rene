@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::scene::pfm_parser::parse_pfm_rgb;
 
-use super::{image::Image, subdivision::loop_subdivision};
+use super::{image::Image, spectrum::parse_spd, subdivision::loop_subdivision};
 
 #[derive(PartialEq, Debug)]
 pub struct LookAt {
@@ -252,6 +252,8 @@ pub enum Error {
     Image(#[from] image::error::ImageError),
     #[error("PFM decode error")]
     Pfm,
+    #[error("SPD decode error")]
+    Spd,
     #[error("Ply error")]
     Ply,
     #[error("Exr Error")]
@@ -268,16 +270,25 @@ trait GetValue {
     fn get_normals(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error>;
     fn get_str(&self, name: &str) -> Result<Result<&str, ArgumentError>, Error>;
     fn get_point(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error>;
-    fn get_rgb(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error>;
-    fn get_texture_or_color(
+    fn get_rgb<P: AsRef<Path>>(
         &self,
         name: &str,
+        base_path: &P,
+    ) -> Result<Result<Vec3A, ArgumentError>, Error>;
+    fn get_texture_or_color<P: AsRef<Path>>(
+        &self,
+        name: &str,
+        base_path: &P,
     ) -> Result<Result<TextureOrColor, ArgumentError>, Error>;
-    fn get_material(&self) -> Result<Material, Error>;
+    fn get_material<P: AsRef<Path>>(&self, base_path: &P) -> Result<Material, Error>;
 }
 
 impl<'a, T> GetValue for Object<'a, T> {
-    fn get_rgb(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error> {
+    fn get_rgb<P: AsRef<Path>>(
+        &self,
+        name: &str,
+        base_path: &P,
+    ) -> Result<Result<Vec3A, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
                 pbrt_parser::Value::Rgb(v) => {
@@ -299,14 +310,21 @@ impl<'a, T> GetValue for Object<'a, T> {
                         Ok(color)
                     }
                 }
+                pbrt_parser::Value::Spectrum(file) => {
+                    let mut path = base_path.as_ref().to_path_buf();
+                    path.push(file);
+                    // TODO Error handling
+                    Ok(load_spd(&path).unwrap())
+                }
                 _ => Err(ArgumentError::UnmatchedType),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
 
-    fn get_texture_or_color(
+    fn get_texture_or_color<P: AsRef<Path>>(
         &self,
         name: &str,
+        base_path: &P,
     ) -> Result<Result<TextureOrColor, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
@@ -328,6 +346,12 @@ impl<'a, T> GetValue for Object<'a, T> {
                         }
                         Ok(TextureOrColor::Color(color))
                     }
+                }
+                pbrt_parser::Value::Spectrum(file) => {
+                    let mut path = base_path.as_ref().to_path_buf();
+                    path.push(file);
+                    // TODO Error handling
+                    Ok(TextureOrColor::Color(load_spd(&path).unwrap()))
                 }
                 pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s[0].to_string())),
                 _ => Err(ArgumentError::UnmatchedType),
@@ -431,12 +455,12 @@ impl<'a, T> GetValue for Object<'a, T> {
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
     }
 
-    fn get_material(&self) -> Result<Material, Error> {
+    fn get_material<P: AsRef<Path>>(&self, base_path: &P) -> Result<Material, Error> {
         match self.t {
             "none" | "" => Ok(Material::None),
             "matte" => {
                 let albedo = self
-                    .get_texture_or_color("Kd")
+                    .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
                 Ok(Material::Matte(Matte { albedo }))
@@ -447,10 +471,10 @@ impl<'a, T> GetValue for Object<'a, T> {
             }
             "substrate" => {
                 let diffuse = self
-                    .get_texture_or_color("Kd")
+                    .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
                 let specular = self
-                    .get_texture_or_color("Ks")
+                    .get_texture_or_color("Ks", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
                 let rough_u = self.get_float("uroughness")??;
@@ -467,20 +491,24 @@ impl<'a, T> GetValue for Object<'a, T> {
                 }))
             }
             "metal" => {
-                let eta = self.get_texture_or_color("eta").unwrap_or_else(|_| {
-                    Ok(TextureOrColor::Color(vec3a(
-                        0.19999069,
-                        0.922_084_6,
-                        1.099_875_9,
-                    )))
-                })?;
-                let k = self.get_texture_or_color("k").unwrap_or_else(|_| {
-                    Ok(TextureOrColor::Color(vec3a(
-                        3.904_635_4,
-                        2.447_633_3,
-                        2.137_652_6,
-                    )))
-                })?;
+                let eta = self
+                    .get_texture_or_color("eta", base_path)
+                    .unwrap_or_else(|_| {
+                        Ok(TextureOrColor::Color(vec3a(
+                            0.19999069,
+                            0.922_084_6,
+                            1.099_875_9,
+                        )))
+                    })?;
+                let k = self
+                    .get_texture_or_color("k", base_path)
+                    .unwrap_or_else(|_| {
+                        Ok(TextureOrColor::Color(vec3a(
+                            3.904_635_4,
+                            2.447_633_3,
+                            2.137_652_6,
+                        )))
+                    })?;
 
                 let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
                     let r = roughness?;
@@ -505,23 +533,23 @@ impl<'a, T> GetValue for Object<'a, T> {
             }
             "mirror" => {
                 let r = self
-                    .get_texture_or_color("Kd")
+                    .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.9, 0.9, 0.9))))?;
 
                 Ok(Material::Mirror(Mirror { r }))
             }
             "uber" => {
                 let kd = self
-                    .get_texture_or_color("Kd")
+                    .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
                 let ks = self
-                    .get_texture_or_color("Ks")
+                    .get_texture_or_color("Ks", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
                 let kr = self
-                    .get_texture_or_color("Kr")
+                    .get_texture_or_color("Kr", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(Vec3A::ZERO)))?;
                 let kt = self
-                    .get_texture_or_color("Kt")
+                    .get_texture_or_color("Kt", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(Vec3A::ZERO)))?;
 
                 let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
@@ -538,7 +566,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                 let eta = self.get_float("eta").unwrap_or(Ok(1.5))?;
 
                 let opacity = self
-                    .get_texture_or_color("opacity")
+                    .get_texture_or_color("opacity", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
@@ -557,10 +585,10 @@ impl<'a, T> GetValue for Object<'a, T> {
             }
             "plastic" => {
                 let kd = self
-                    .get_texture_or_color("Kd")
+                    .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
                 let ks = self
-                    .get_texture_or_color("Ks")
+                    .get_texture_or_color("Ks", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
                 let rough = self.get_float("roughness").unwrap_or(Ok(0.1))?;
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
@@ -602,6 +630,13 @@ fn inverse_gamma_correct(value: f32) -> f32 {
     } else {
         ((value + 0.055) / 1.055).powf(2.4)
     }
+}
+
+fn load_spd<P: AsRef<Path>>(path: &P) -> Result<Vec3A, Error> {
+    let mut content = String::new();
+    File::open(path)?.read_to_string(&mut content)?;
+
+    Ok(parse_spd(&content).map_err(|_| Error::Spd)?.1)
 }
 
 fn load_image<P: AsRef<Path>>(path: P) -> Result<Image, Error> {
@@ -728,11 +763,11 @@ impl IntermediateWorld {
                 "checkerboard" => {
                     let tex1 = texture
                         .obj
-                        .get_texture_or_color("tex1")
+                        .get_texture_or_color("tex1", base_dir)
                         .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.0, 0.0, 0.0))))?;
                     let tex2 = texture
                         .obj
-                        .get_texture_or_color("tex2")
+                        .get_texture_or_color("tex2", base_dir)
                         .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
 
                     let uscale = texture.obj.get_float("uscale").unwrap_or(Ok(2.0))?;
@@ -764,7 +799,7 @@ impl IntermediateWorld {
                 pbrt_parser::WorldObjectType::LightSource => match obj.t {
                     "infinite" => {
                         let color = obj
-                            .get_rgb("L")
+                            .get_rgb("L", base_dir)
                             .unwrap_or_else(|_| Ok(vec3a(1.0, 1.0, 1.0)))?;
 
                         let image_map = if let Ok(filename) = obj.get_str("mapname") {
@@ -788,7 +823,7 @@ impl IntermediateWorld {
                             .get_point("to")
                             .unwrap_or_else(|_| Ok(vec3a(0.0, 0.0, 1.0)))?;
                         let color = obj
-                            .get_rgb("L")
+                            .get_rgb("L", base_dir)
                             .unwrap_or_else(|_| Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
                             LightSource::Distant(Distant { from, to, color }),
@@ -798,7 +833,7 @@ impl IntermediateWorld {
                 },
                 pbrt_parser::WorldObjectType::AreaLightSource => match obj.t {
                     "diffuse" | "area" => {
-                        let l = obj.get_rgb("L")??;
+                        let l = obj.get_rgb("L", base_dir)??;
                         Ok(Self::WorldObject(WorldObject::AreaLightSource(
                             AreaLightSource::Diffuse(l),
                         )))
@@ -806,7 +841,7 @@ impl IntermediateWorld {
                     t => Err(Error::InvalidAreaLightSource(t.to_string())),
                 },
                 pbrt_parser::WorldObjectType::Material => Ok(Self::WorldObject(
-                    WorldObject::Material(obj.get_material()?),
+                    WorldObject::Material(obj.get_material(base_dir)?),
                 )),
                 pbrt_parser::WorldObjectType::MakeNamedMaterial => {
                     let t = obj.get_str("type")??;
@@ -816,18 +851,18 @@ impl IntermediateWorld {
 
                     Ok(Self::WorldObject(WorldObject::MakeNamedMaterial(
                         name,
-                        obj.get_material()?,
+                        obj.get_material(base_dir)?,
                     )))
                 }
                 pbrt_parser::WorldObjectType::MakeNamedMedium => {
                     let name = obj.t.to_string();
 
                     let sigma_a = obj
-                        .get_rgb("sigma_a")
+                        .get_rgb("sigma_a", base_dir)
                         .unwrap_or(Ok(vec3a(0.0011, 0.0024, 0.014)))?;
 
                     let sigma_s = obj
-                        .get_rgb("sigma_s")
+                        .get_rgb("sigma_s", base_dir)
                         .unwrap_or(Ok(vec3a(2.55, 3.21, 3.77)))?;
 
                     let g = obj.get_float("g").unwrap_or(Ok(0.0))?;

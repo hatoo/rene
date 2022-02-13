@@ -1505,7 +1505,7 @@ fn from_sampled(spectrum: &mut [(f32, f32)]) -> Vec3A {
     )
 }
 
-pub fn parse_line(input: &str) -> IResult<&str, (f32, f32)> {
+fn parse_line(input: &str) -> IResult<&str, (f32, f32)> {
     let (rest, lambda) = float(input)?;
     let (rest, _) = tag(" ")(rest)?;
     let (rest, value) = float(rest)?;
