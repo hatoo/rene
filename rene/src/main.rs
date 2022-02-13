@@ -2722,7 +2722,6 @@ impl SceneBuffers {
         vertex_len: u32,
         indices: &BufferResource,
         device: &ash::Device,
-        device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
@@ -2862,41 +2861,40 @@ impl SceneBuffers {
     }
 
     fn build_tlas(
+        allocator: &mut Allocator,
         tlas_instances: &[vk::AccelerationStructureInstanceKHR],
         device: &ash::Device,
         device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-    ) -> (vk::AccelerationStructureKHR, BufferResource, BufferResource) {
+    ) -> (
+        vk::AccelerationStructureKHR,
+        BufferResourceAlloc,
+        BufferResourceAlloc,
+    ) {
         let (instance_count, instance_buffer) = {
             let instances = tlas_instances;
 
             let instance_buffer_size =
                 std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * instances.len();
 
-            let mut instance_buffer = BufferResource::new(
+            let mut instance_buffer = BufferResourceAlloc::new(
+                allocator,
                 instance_buffer_size as vk::DeviceSize,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                     | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
                     | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
 
-            instance_buffer.store(instances, device);
+            instance_buffer.store(instances);
 
             (
                 instances.len(),
-                instance_buffer.to_gpu_only(
-                    device,
-                    device_memory_properties,
-                    command_pool,
-                    graphics_queue,
-                ),
+                instance_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue),
             )
         };
 
@@ -2974,14 +2972,15 @@ impl SceneBuffers {
             )
         };
 
-        let top_as_buffer = BufferResource::new(
+        let top_as_buffer = BufferResourceAlloc::new(
+            allocator,
             size_info.acceleration_structure_size,
+            MemoryLocation::GpuOnly,
             vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            None,
             device,
-            device_memory_properties,
         );
 
         let as_create_info = vk::AccelerationStructureCreateInfoKHR::builder()
@@ -3161,7 +3160,6 @@ impl SceneBuffers {
                     global_vertices.len() as u32,
                     &indices,
                     device,
-                    device_memory_properties,
                     acceleration_structure,
                     command_pool,
                     graphics_queue,
@@ -3263,6 +3261,7 @@ impl SceneBuffers {
         }
 
         let (top_as, top_as_buffer, instance_buffer) = Self::build_tlas(
+            allocator,
             &tlas_instances,
             device,
             device_memory_properties,
@@ -3271,10 +3270,11 @@ impl SceneBuffers {
             graphics_queue,
         );
 
-        buffers.push(top_as_buffer);
-        buffers.push(instance_buffer);
+        buffers_alloc.push(top_as_buffer);
+        buffers_alloc.push(instance_buffer);
 
         let (top_as_emit, top_as_buffer, instance_buffer) = Self::build_tlas(
+            allocator,
             &tlas_instances_emit,
             device,
             device_memory_properties,
@@ -3300,8 +3300,8 @@ impl SceneBuffers {
             })
             .collect();
 
-        buffers.push(top_as_buffer);
-        buffers.push(instance_buffer);
+        buffers_alloc.push(top_as_buffer);
+        buffers_alloc.push(instance_buffer);
 
         let index_data = {
             let buffer_size =
