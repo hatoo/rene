@@ -273,6 +273,9 @@ impl Scene {
                 IntermediateWorld::Matrix(m) => {
                     state.current_matrix *= m;
                 }
+                IntermediateWorld::Transform(m) => {
+                    state.current_matrix = m;
+                }
                 IntermediateWorld::NamedMaterial(name) => {
                     state.current_material_index = Some(
                         *state

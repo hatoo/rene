@@ -38,6 +38,7 @@ pub enum World<'a> {
     Attribute(Vec<World<'a>>),
     TransformBeginEnd(Vec<World<'a>>),
     Transform(Mat4),
+    ConcatTransform(Mat4),
     Translate(Vec3A),
     CoordSysTransform(&'a str),
     Scale(Vec3A),
@@ -332,6 +333,18 @@ fn parse_transform<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     Ok((rest, Mat4::from_cols(x, y, z, w)))
 }
 
+fn parse_concat_transform<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Mat4, E> {
+    let (rest, _) = tag("ConcatTransform")(input)?;
+    let (rest, _) = preceded(sp, char('['))(rest)?;
+    let (rest, x) = parse_vec4(rest)?;
+    let (rest, y) = parse_vec4(rest)?;
+    let (rest, z) = parse_vec4(rest)?;
+    let (rest, w) = parse_vec4(rest)?;
+    let (rest, _) = preceded(sp, char(']'))(rest)?;
+
+    Ok((rest, Mat4::from_cols(x, y, z, w)))
+}
+
 fn parse_named_material<'a, E: ParseError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, &'a str, E> {
@@ -481,6 +494,7 @@ fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, W
         map(parse_attribute_statement, World::Attribute),
         map(parse_transform_statement, World::TransformBeginEnd),
         map(parse_transform, World::Transform),
+        map(parse_concat_transform, World::ConcatTransform),
         map(parse_transrate, World::Translate),
         map(parse_scale, World::Scale),
         map(parse_rotate, World::Rotate),

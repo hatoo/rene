@@ -37,6 +37,7 @@ pub enum IntermediateWorld {
     TransformBeginEnd(Vec<IntermediateWorld>),
     WorldObject(WorldObject),
     Matrix(Mat4),
+    Transform(Mat4),
     Texture(Texture),
     NamedMaterial(String),
     CoordSysTransform(String),
@@ -756,7 +757,8 @@ impl IntermediateWorld {
     fn from_world<P: AsRef<Path>>(world: pbrt_parser::World, base_dir: &P) -> Result<Self, Error> {
         match world {
             pbrt_parser::World::ReverseOrientation => Ok(Self::ReverseOrientation),
-            pbrt_parser::World::Transform(m) => Ok(Self::Matrix(m)),
+            pbrt_parser::World::Transform(m) => Ok(Self::Transform(m)),
+            pbrt_parser::World::ConcatTransform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
             pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface(
                 interior.to_string(),
