@@ -2015,7 +2015,8 @@ impl BufferResourceAlloc {
         graphics_queue: vk::Queue,
     ) -> Self {
         let size = self.size;
-        let usage = self.usage | vk::BufferUsageFlags::TRANSFER_DST;
+        let usage =
+            self.usage ^ vk::BufferUsageFlags::TRANSFER_SRC | vk::BufferUsageFlags::TRANSFER_DST;
         unsafe {
             let buffer_info = vk::BufferCreateInfo::builder()
                 .size(size)
@@ -2539,12 +2540,12 @@ struct SceneBuffers {
     default_blas: vk::AccelerationStructureKHR,
     blases: Vec<vk::AccelerationStructureKHR>,
     uniform: BufferResource,
-    materials: BufferResource,
+    materials: BufferResourceAlloc,
     mediums: BufferResource,
     buffers_alloc: Vec<BufferResourceAlloc>,
     index_data: BufferResource,
     vertices: BufferResourceAlloc,
-    indices: BufferResource,
+    indices: BufferResourceAlloc,
     textures: BufferResource,
     lights: BufferResource,
     area_lights: BufferResource,
@@ -2719,7 +2720,7 @@ impl SceneBuffers {
         primitive_count: u32,
         vertices: &BufferResourceAlloc,
         vertex_len: u32,
-        indices: &BufferResource,
+        indices: &BufferResourceAlloc,
         device: &ash::Device,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
@@ -2863,7 +2864,6 @@ impl SceneBuffers {
         allocator: &mut Allocator,
         tlas_instances: &[vk::AccelerationStructureInstanceKHR],
         device: &ash::Device,
-        device_memory_properties: vk::PhysicalDeviceMemoryProperties,
         acceleration_structure: &AccelerationStructure,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
@@ -3106,26 +3106,20 @@ impl SceneBuffers {
         let indices = {
             let buffer_size = (global_indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
 
-            let mut index_buffer = BufferResource::new(
+            let mut index_buffer = BufferResourceAlloc::new(
+                allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::STORAGE_BUFFER
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                     | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
                     | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
-            index_buffer.store(&global_indices, device);
+            index_buffer.store(&global_indices);
 
-            index_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
+            index_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
         };
 
         let vertices = {
@@ -3175,23 +3169,18 @@ impl SceneBuffers {
             let buffer_size =
                 (scene.materials.len() * std::mem::size_of::<EnumMaterial>()) as vk::DeviceSize;
 
-            let mut material_buffer = BufferResource::new(
+            let mut material_buffer = BufferResourceAlloc::new(
+                allocator,
                 buffer_size,
+                MemoryLocation::CpuToGpu,
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                None,
                 device,
-                device_memory_properties,
             );
-            material_buffer.store(&scene.materials, device);
 
-            material_buffer.to_gpu_only(
-                device,
-                device_memory_properties,
-                command_pool,
-                graphics_queue,
-            )
+            material_buffer.store(&scene.materials);
+
+            material_buffer.to_gpu_only(allocator, device, command_pool, graphics_queue)
         };
 
         let mut index_data: Vec<IndexData> = Vec::new();
@@ -3263,7 +3252,6 @@ impl SceneBuffers {
             allocator,
             &tlas_instances,
             device,
-            device_memory_properties,
             acceleration_structure,
             command_pool,
             graphics_queue,
@@ -3276,7 +3264,6 @@ impl SceneBuffers {
             allocator,
             &tlas_instances_emit,
             device,
-            device_memory_properties,
             acceleration_structure,
             command_pool,
             graphics_queue,
@@ -3531,14 +3518,14 @@ impl SceneBuffers {
         for blas in self.blases {
             acceleration_structure.destroy_acceleration_structure(blas, None);
         }
-        self.materials.destroy(device);
+        self.materials.destroy(allocator, device);
         self.mediums.destroy(device);
         self.uniform.destroy(device);
         for buffer_alloc in self.buffers_alloc {
             buffer_alloc.destroy(allocator, device);
         }
         self.index_data.destroy(device);
-        self.indices.destroy(device);
+        self.indices.destroy(allocator, device);
         self.vertices.destroy(allocator, device);
         self.textures.destroy(device);
         self.lights.destroy(device);
