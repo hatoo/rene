@@ -142,8 +142,8 @@ pub struct Uber {
     pub ks: TextureOrColor,
     pub kr: TextureOrColor,
     pub kt: TextureOrColor,
-    pub rough_u: f32,
-    pub rough_v: f32,
+    pub rough_u: TextureOrColor,
+    pub rough_v: TextureOrColor,
     pub eta: f32,
     pub opacity: TextureOrColor,
     pub remap_roughness: bool,
@@ -571,16 +571,21 @@ impl<'a, T> GetValue for Object<'a, T> {
                     .get_texture_or_color("Kt", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(Vec3A::ZERO)))?;
 
-                let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
-                    let r = roughness?;
-                    (r, r)
-                } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) =
-                    (self.get_float("uroughness"), self.get_float("vroughness"))
-                {
-                    (rough_u, rough_v)
-                } else {
-                    (0.1, 0.1)
-                };
+                let (rough_u, rough_v) =
+                    if let Ok(roughness) = self.get_texture_or_color("roughness", base_path) {
+                        let r = roughness?;
+                        (r.clone(), r)
+                    } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) = (
+                        self.get_texture_or_color("uroughness", base_path),
+                        self.get_texture_or_color("vroughness", base_path),
+                    ) {
+                        (rough_u, rough_v)
+                    } else {
+                        (
+                            TextureOrColor::Color(vec3a(0.1, 0.1, 0.1)),
+                            TextureOrColor::Color(vec3a(0.1, 0.1, 0.1)),
+                        )
+                    };
 
                 let eta = self.get_float("eta").unwrap_or(Ok(1.5))?;
 

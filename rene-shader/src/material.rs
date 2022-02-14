@@ -451,8 +451,8 @@ impl EnumMaterial {
         ks_index: u32,
         kr_index: u32,
         kt_index: u32,
-        rough_u: f32,
-        rough_v: f32,
+        rough_u_index: u32,
+        rough_v_index: u32,
         opacity_index: u32,
         eta: f32,
         remap_roughness: bool,
@@ -464,8 +464,8 @@ impl EnumMaterial {
                 ks_index,
                 kr_index,
                 kt_index,
-                rough_u,
-                rough_v,
+                rough_u_index,
+                rough_v_index,
                 opacity_index,
                 eta,
                 remap_roughness,
@@ -499,16 +499,21 @@ impl<'a> Uber<'a> {
         ks_index: u32,
         kr_index: u32,
         kt_index: u32,
-        rough_u: f32,
-        rough_v: f32,
+        rough_u_index: u32,
+        rough_v_index: u32,
         opacity_index: u32,
         eta: f32,
         remap_roughness: bool,
     ) -> EnumMaterialData {
         EnumMaterialData {
             u0: uvec4(kd_index, ks_index, kr_index, kt_index),
-            u1: uvec4(opacity_index, if remap_roughness { 1 } else { 0 }, 0, 0),
-            v0: vec4(rough_u, rough_v, eta, 0.0),
+            u1: uvec4(
+                opacity_index,
+                if remap_roughness { 1 } else { 0 },
+                rough_u_index,
+                rough_v_index,
+            ),
+            v0: vec4(eta, 0.0, 0.0, 0.0),
         }
     }
 
@@ -528,12 +533,26 @@ impl<'a> Uber<'a> {
         unsafe { textures.index_unchecked(self.data.u0.w as usize) }.color(textures, images, uv)
     }
 
-    fn rough_u(&self) -> f32 {
-        self.data.v0.x
+    fn rough_u(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> f32 {
+        unsafe { textures.index_unchecked(self.data.u1.z as usize) }
+            .color(textures, images, uv)
+            .x
     }
 
-    fn rough_v(&self) -> f32 {
-        self.data.v0.y
+    fn rough_v(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> f32 {
+        unsafe { textures.index_unchecked(self.data.u1.w as usize) }
+            .color(textures, images, uv)
+            .x
     }
 
     fn opacity(
@@ -546,7 +565,7 @@ impl<'a> Uber<'a> {
     }
 
     fn eta(&self) -> f32 {
-        self.data.v0.z
+        self.data.v0.x
     }
 
     fn remap_roughness(&self) -> bool {
@@ -582,11 +601,14 @@ impl<'a> Material for Uber<'a> {
             let fresnel = EnumFresnel::new_fresnel_dielectric(1.0, e);
             let (rough_u, rough_v) = if self.remap_roughness() {
                 (
-                    TrowbridgeReitz::roughness_to_alpha(self.rough_u()),
-                    TrowbridgeReitz::roughness_to_alpha(self.rough_v()),
+                    TrowbridgeReitz::roughness_to_alpha(self.rough_u(uv, textures, images)),
+                    TrowbridgeReitz::roughness_to_alpha(self.rough_v(uv, textures, images)),
                 )
             } else {
-                (self.rough_u(), self.rough_v())
+                (
+                    self.rough_u(uv, textures, images),
+                    self.rough_v(uv, textures, images),
+                )
             };
 
             let distrib = EnumMicrofacetDistribution::new_trowbridge_reitz(rough_u, rough_v);
