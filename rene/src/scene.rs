@@ -135,6 +135,9 @@ impl Scene {
                 IntermediateScene::Matrix(m) => {
                     wolrd_to_camera *= m;
                 }
+                IntermediateScene::Transform(m) => {
+                    wolrd_to_camera = m;
+                }
                 IntermediateScene::SceneObject(obj) => match obj {
                     SceneObject::Camera(camera) => match camera {
                         Camera::Perspective(p) => {

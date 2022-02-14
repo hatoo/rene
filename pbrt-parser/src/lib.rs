@@ -15,9 +15,11 @@ pub mod include;
 
 pub enum Scene<'a> {
     Transform(Mat4),
+    ConcatTransform(Mat4),
     LookAt(LookAt),
     Rotate(AxisAngle),
     Scale(Vec3A),
+    Translate(Vec3A),
     SceneObject(SceneObject<'a>),
     World(Vec<World<'a>>),
 }
@@ -545,6 +547,8 @@ fn parse_scene<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, S
         map(parse_look_at, Scene::LookAt),
         map(parse_rotate, Scene::Rotate),
         map(parse_scale, Scene::Scale),
+        map(parse_transrate, Scene::Translate),
+        map(parse_concat_transform, Scene::ConcatTransform),
         map(parse_transform, Scene::Transform),
         map(parse_scene_object, Scene::SceneObject),
         map(parse_world_statement, Scene::World),
