@@ -184,12 +184,14 @@ impl Scene {
             }) => {
                 let diffuse_index = self.texture(diffuse, state)?;
                 let specular_index = self.texture(specular, state)?;
+                let rough_u_index = self.texture(rough_u, state)?;
+                let rough_v_index = self.texture(rough_v, state)?;
 
                 Ok(EnumMaterial::new_substrate(
                     diffuse_index,
                     specular_index,
-                    rough_u,
-                    rough_v,
+                    rough_u_index,
+                    rough_v_index,
                     remap_roughness,
                 ))
             }

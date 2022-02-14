@@ -119,8 +119,8 @@ pub struct Glass {
 pub struct Substrate {
     pub diffuse: TextureOrColor,
     pub specular: TextureOrColor,
-    pub rough_u: f32,
-    pub rough_v: f32,
+    pub rough_u: TextureOrColor,
+    pub rough_v: TextureOrColor,
     pub remap_roughness: bool,
 }
 
@@ -334,6 +334,13 @@ impl<'a, T> GetValue for Object<'a, T> {
     ) -> Result<Result<TextureOrColor, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
+                pbrt_parser::Value::Float(v) => {
+                    if v.len() != 1 {
+                        Err(ArgumentError::UnmatchedValueLength)
+                    } else {
+                        Ok(TextureOrColor::Color(vec3a(v[0], v[0], v[0])))
+                    }
+                }
                 pbrt_parser::Value::Rgb(v) => {
                     if v.len() != 3 {
                         Err(ArgumentError::UnmatchedValueLength)
@@ -483,8 +490,8 @@ impl<'a, T> GetValue for Object<'a, T> {
                     .get_texture_or_color("Ks", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
-                let rough_u = self.get_float("uroughness")??;
-                let rough_v = self.get_float("vroughness")??;
+                let rough_u = self.get_texture_or_color("uroughness", base_path)??;
+                let rough_v = self.get_texture_or_color("vroughness", base_path)??;
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
