@@ -229,13 +229,13 @@ impl<'a> Metal<'a> {
     fn new_data(
         eta_index: u32,
         k_index: u32,
-        rough_u: f32,
-        rough_v: f32,
+        rough_u_index: u32,
+        rough_v_index: u32,
         remap_roghness: bool,
     ) -> EnumMaterialData {
         EnumMaterialData {
-            u0: uvec4(eta_index, k_index, if remap_roghness { 1 } else { 0 }, 0),
-            v0: vec4(rough_u, rough_v, 0.0, 0.0),
+            u0: uvec4(eta_index, k_index, rough_u_index, rough_v_index),
+            u1: uvec4(if remap_roghness { 1 } else { 0 }, 0, 0, 0),
             ..Default::default()
         }
     }
@@ -248,16 +248,30 @@ impl<'a> Metal<'a> {
         unsafe { textures.index_unchecked(self.data.u0.y as usize) }.color(textures, images, uv)
     }
 
-    fn rough_u(&self) -> f32 {
-        self.data.v0.x
+    fn rough_u(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> f32 {
+        unsafe { textures.index_unchecked(self.data.u0.z as usize) }
+            .color(textures, images, uv)
+            .x
     }
 
-    fn rough_v(&self) -> f32 {
-        self.data.v0.y
+    fn rough_v(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+    ) -> f32 {
+        unsafe { textures.index_unchecked(self.data.u0.w as usize) }
+            .color(textures, images, uv)
+            .x
     }
 
     fn remap_roughness(&self) -> bool {
-        self.data.u0.z != 0
+        self.data.u1.x != 0
     }
 }
 
@@ -271,11 +285,14 @@ impl<'a> Material for Metal<'a> {
     ) {
         let (rough_u, rough_v) = if self.remap_roughness() {
             (
-                TrowbridgeReitz::roughness_to_alpha(self.rough_u()),
-                TrowbridgeReitz::roughness_to_alpha(self.rough_v()),
+                TrowbridgeReitz::roughness_to_alpha(self.rough_u(uv, textures, images)),
+                TrowbridgeReitz::roughness_to_alpha(self.rough_v(uv, textures, images)),
             )
         } else {
-            (self.rough_u(), self.rough_v())
+            (
+                self.rough_u(uv, textures, images),
+                self.rough_v(uv, textures, images),
+            )
         };
 
         let fr_mf = EnumFresnel::new_fresnel_conductor(
@@ -399,13 +416,19 @@ impl EnumMaterial {
     pub fn new_metal(
         eta_index: u32,
         k_index: u32,
-        rough_u: f32,
-        rough_v: f32,
+        rough_u_index: u32,
+        rough_v_index: u32,
         remap_roghness: bool,
     ) -> Self {
         Self {
             t: MaterialType::Metal,
-            data: Metal::new_data(eta_index, k_index, rough_u, rough_v, remap_roghness),
+            data: Metal::new_data(
+                eta_index,
+                k_index,
+                rough_u_index,
+                rough_v_index,
+                remap_roghness,
+            ),
         }
     }
 

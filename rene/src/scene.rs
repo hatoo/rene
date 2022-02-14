@@ -208,8 +208,8 @@ impl Scene {
                 Ok(EnumMaterial::new_metal(
                     eta_index,
                     k_index,
-                    rough_u,
-                    rough_v,
+                    self.texture(rough_u, state)?,
+                    self.texture(rough_v, state)?,
                     remap_roughness,
                 ))
             }

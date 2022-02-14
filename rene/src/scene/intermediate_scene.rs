@@ -74,6 +74,7 @@ pub struct Distant {
     pub color: Vec3A,
 }
 
+#[derive(Clone)]
 pub enum TextureOrColor {
     Color(Vec3A),
     Texture(String),
@@ -127,8 +128,8 @@ pub struct Substrate {
 pub struct Metal {
     pub eta: TextureOrColor,
     pub k: TextureOrColor,
-    pub rough_u: f32,
-    pub rough_v: f32,
+    pub rough_u: TextureOrColor,
+    pub rough_v: TextureOrColor,
     pub remap_roughness: bool,
 }
 
@@ -523,16 +524,21 @@ impl<'a, T> GetValue for Object<'a, T> {
                         )))
                     })?;
 
-                let (rough_u, rough_v) = if let Ok(roughness) = self.get_float("roughness") {
-                    let r = roughness?;
-                    (r, r)
-                } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) =
-                    (self.get_float("uroughness"), self.get_float("vroughness"))
-                {
-                    (rough_u, rough_v)
-                } else {
-                    (0.01, 0.01)
-                };
+                let (rough_u, rough_v) =
+                    if let Ok(roughness) = self.get_texture_or_color("roughness", base_path) {
+                        let r = roughness?;
+                        (r.clone(), r)
+                    } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) = (
+                        self.get_texture_or_color("uroughness", base_path),
+                        self.get_texture_or_color("vroughness", base_path),
+                    ) {
+                        (rough_u, rough_v)
+                    } else {
+                        (
+                            TextureOrColor::Color(vec3a(0.01, 0.01, 0.01)),
+                            TextureOrColor::Color(vec3a(0.01, 0.01, 0.01)),
+                        )
+                    };
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
