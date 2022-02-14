@@ -24,7 +24,7 @@ mod subdivision;
 
 use crate::scene::image::Image;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub shader_offset: ShaderOffset,
     pub matrix: Affine3A,
@@ -64,6 +64,8 @@ pub enum CreateSceneError {
     NotFoundTexture(String),
     #[error("Not Found Coord system: {0}")]
     NotFoundCoordSystem(String),
+    #[error("Not Object: {0}")]
+    UnknownObject(String),
 }
 
 #[derive(Default, Clone)]
@@ -75,6 +77,7 @@ struct WorldState {
     textures: HashMap<String, u32>,
     materials: HashMap<String, u32>,
     mediums: HashMap<String, u32>,
+    objects: HashMap<String, Vec<TlasInstance>>,
     coord_system: HashMap<String, Mat4>,
 }
 
@@ -264,13 +267,35 @@ impl Scene {
                     log::info!("ReverseOrientation is not yet implemented");
                 }
                 IntermediateWorld::Attribute(worlds) => {
-                    let mut state = state.clone();
-                    self.append_world(&mut state, worlds)?
+                    let mut tmp_state = state.clone();
+                    self.append_world(&mut tmp_state, worlds)?;
+                    state.objects = tmp_state.objects;
                 }
                 IntermediateWorld::TransformBeginEnd(worlds) => {
                     let matrix = state.current_matrix;
                     self.append_world(state, worlds)?;
                     state.current_matrix = matrix;
+                }
+                IntermediateWorld::ObjectBeginEnd(name, worlds) => {
+                    let current_len = self.tlas.len();
+                    self.append_world(state, worlds)?;
+                    let worlds = self.tlas[current_len..self.tlas.len()].to_vec();
+                    for _ in 0..worlds.len() {
+                        self.tlas.pop();
+                    }
+                    state.objects.insert(name.to_string(), worlds);
+                }
+                IntermediateWorld::ObjectInstance(name) => {
+                    let objects = state
+                        .objects
+                        .get(&name)
+                        .ok_or(CreateSceneError::UnknownObject(name))?;
+
+                    for tlas in objects.iter() {
+                        let mut tlas = tlas.clone();
+                        tlas.matrix = tlas.matrix * Affine3A::from_mat4(state.current_matrix);
+                        self.tlas.push(tlas);
+                    }
                 }
                 IntermediateWorld::Matrix(m) => {
                     state.current_matrix *= m;

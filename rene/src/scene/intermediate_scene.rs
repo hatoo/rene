@@ -35,6 +35,8 @@ pub enum Camera {
 pub enum IntermediateWorld {
     Attribute(Vec<IntermediateWorld>),
     TransformBeginEnd(Vec<IntermediateWorld>),
+    ObjectBeginEnd(String, Vec<IntermediateWorld>),
+    ObjectInstance(String),
     WorldObject(WorldObject),
     Matrix(Mat4),
     Transform(Mat4),
@@ -491,8 +493,21 @@ impl<'a, T> GetValue for Object<'a, T> {
                     .get_texture_or_color("Ks", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
-                let rough_u = self.get_texture_or_color("uroughness", base_path)??;
-                let rough_v = self.get_texture_or_color("vroughness", base_path)??;
+                let (rough_u, rough_v) =
+                    if let Ok(roughness) = self.get_texture_or_color("roughness", base_path) {
+                        let r = roughness?;
+                        (r.clone(), r)
+                    } else if let (Ok(Ok(rough_u)), Ok(Ok(rough_v))) = (
+                        self.get_texture_or_color("uroughness", base_path),
+                        self.get_texture_or_color("vroughness", base_path),
+                    ) {
+                        (rough_u, rough_v)
+                    } else {
+                        (
+                            TextureOrColor::Color(vec3a(0.0, 0.0, 0.0)),
+                            TextureOrColor::Color(vec3a(0.0, 0.0, 0.0)),
+                        )
+                    };
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
@@ -792,6 +807,7 @@ impl IntermediateWorld {
     fn from_world<P: AsRef<Path>>(world: pbrt_parser::World, base_dir: &P) -> Result<Self, Error> {
         match world {
             pbrt_parser::World::ReverseOrientation => Ok(Self::ReverseOrientation),
+            pbrt_parser::World::ObjectInstance(name) => Ok(Self::ObjectInstance(name.to_string())),
             pbrt_parser::World::Transform(m) => Ok(Self::Transform(m)),
             pbrt_parser::World::ConcatTransform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
@@ -1079,6 +1095,11 @@ impl IntermediateWorld {
             pbrt_parser::World::Translate(translation) => {
                 Ok(Self::Matrix(Mat4::from_translation(translation.into())))
             }
+            pbrt_parser::World::ObjectBeginEnd(name, worlds) => worlds
+                .into_iter()
+                .map(|w| Self::from_world(w, base_dir))
+                .collect::<Result<Vec<Self>, Error>>()
+                .map(|worlds| IntermediateWorld::ObjectBeginEnd(name.to_string(), worlds)),
             pbrt_parser::World::Scale(scale) => Ok(Self::Matrix(Mat4::from_scale(scale.into()))),
             pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
                 axis_angle.axis.normalize().into(),

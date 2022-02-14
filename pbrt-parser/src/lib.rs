@@ -37,6 +37,8 @@ pub enum World<'a> {
     WorldObject(WorldObject<'a>),
     Attribute(Vec<World<'a>>),
     TransformBeginEnd(Vec<World<'a>>),
+    ObjectBeginEnd(&'a str, Vec<World<'a>>),
+    ObjectInstance(&'a str),
     Transform(Mat4),
     ConcatTransform(Mat4),
     Translate(Vec3A),
@@ -431,6 +433,24 @@ fn parse_transform_statement<'a, E: ParseError<&'a str>>(
     Ok((rest, worlds))
 }
 
+fn parse_object_statement<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, (&'a str, Vec<World>), E> {
+    let (rest, _) = tag("ObjectBegin")(input)?;
+    let (rest, name) = preceded(sp, parse_str)(rest)?;
+    let (rest, worlds) = many0(preceded(sp, parse_world))(rest)?;
+    let (rest, _) = preceded(sp, tag("ObjectEnd"))(rest)?;
+
+    Ok((rest, (name, worlds)))
+}
+
+fn parse_object_instance<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, &'a str, E> {
+    let (rest, _) = tag("ObjectInstance")(input)?;
+    preceded(sp, parse_str)(rest)
+}
+
 fn parse_transrate<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Vec3A, E> {
     let (rest, _) = tag("Translate")(input)?;
     preceded(sp, parse_vec3)(rest)
@@ -493,6 +513,10 @@ fn parse_world<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, W
         map(parse_world_object, World::WorldObject),
         map(parse_attribute_statement, World::Attribute),
         map(parse_transform_statement, World::TransformBeginEnd),
+        map(parse_object_statement, |(name, worlds)| {
+            World::ObjectBeginEnd(name, worlds)
+        }),
+        map(parse_object_instance, World::ObjectInstance),
         map(parse_transform, World::Transform),
         map(parse_concat_transform, World::ConcatTransform),
         map(parse_transrate, World::Translate),
