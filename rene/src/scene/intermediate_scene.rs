@@ -152,7 +152,7 @@ pub struct Uber {
 pub struct Plastic {
     pub kd: TextureOrColor,
     pub ks: TextureOrColor,
-    pub rough: f32,
+    pub rough: TextureOrColor,
     pub remap_roughness: bool,
 }
 
@@ -614,7 +614,9 @@ impl<'a, T> GetValue for Object<'a, T> {
                 let ks = self
                     .get_texture_or_color("Ks", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.25, 0.25, 0.25))))?;
-                let rough = self.get_float("roughness").unwrap_or(Ok(0.1))?;
+                let rough = self
+                    .get_texture_or_color("roughness", base_path)
+                    .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.1, 0.1, 0.1))))?;
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
                 Ok(Material::Plastic(Plastic {

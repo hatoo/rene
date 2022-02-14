@@ -246,7 +246,7 @@ impl Scene {
             }) => Ok(EnumMaterial::new_plastic(
                 self.texture(kd, state)?,
                 self.texture(ks, state)?,
-                rough,
+                self.texture(rough, state)?,
                 remap_roughness,
             )),
             Material::None => Ok(EnumMaterial::new_none()),

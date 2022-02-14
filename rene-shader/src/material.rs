@@ -476,12 +476,12 @@ impl EnumMaterial {
     pub fn new_plastic(
         kd_index: u32,
         ks_index: u32,
-        roughness: f32,
+        roughness_index: u32,
         remap_roughness: bool,
     ) -> Self {
         Self {
             t: MaterialType::Plastic,
-            data: Plastic::new_data(kd_index, ks_index, roughness, remap_roughness),
+            data: Plastic::new_data(kd_index, ks_index, roughness_index, remap_roughness),
         }
     }
 
@@ -641,12 +641,16 @@ impl<'a> Plastic<'a> {
     fn new_data(
         kd_index: u32,
         ks_index: u32,
-        roughness: f32,
+        roughness_index: u32,
         remap_roughness: bool,
     ) -> EnumMaterialData {
         EnumMaterialData {
-            u0: uvec4(kd_index, ks_index, if remap_roughness { 1 } else { 0 }, 0),
-            v0: vec4(roughness, 0.0, 0.0, 0.0),
+            u0: uvec4(
+                kd_index,
+                ks_index,
+                if remap_roughness { 1 } else { 0 },
+                roughness_index,
+            ),
             ..Default::default()
         }
     }
@@ -659,8 +663,10 @@ impl<'a> Plastic<'a> {
         unsafe { textures.index_unchecked(self.data.u0.y as usize) }.color(textures, images, uv)
     }
 
-    fn rough(&self) -> f32 {
-        self.data.v0.x
+    fn rough(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> f32 {
+        unsafe { textures.index_unchecked(self.data.u0.w as usize) }
+            .color(textures, images, uv)
+            .x
     }
 
     fn remap_roughness(&self) -> bool {
@@ -686,9 +692,9 @@ impl<'a> Material for Plastic<'a> {
 
         if ks != Vec3A::ZERO {
             let rough = if self.remap_roughness() {
-                TrowbridgeReitz::roughness_to_alpha(self.rough())
+                TrowbridgeReitz::roughness_to_alpha(self.rough(uv, textures, images))
             } else {
-                self.rough()
+                self.rough(uv, textures, images)
             };
 
             let fresnel = EnumFresnel::new_fresnel_dielectric(1.5, 1.0);
