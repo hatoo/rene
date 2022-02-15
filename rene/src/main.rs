@@ -1580,8 +1580,15 @@ fn main() {
 
     let rgb = to_rgb8(&data_image_linear);
 
+    let filename = if scene.film.filename.ends_with(".exr") {
+        log::info!(".exr output is not yet supported. Save as .png");
+        scene.film.filename + ".png"
+    } else {
+        scene.film.filename
+    };
+
     image::save_buffer(
-        scene.film.filename,
+        filename,
         &rgb,
         scene.film.xresolution,
         scene.film.yresolution,
