@@ -54,8 +54,6 @@ pub struct Scene {
 pub enum CreateSceneError {
     #[error("Failed to convert pbrt scene to intermediate type: {0}")]
     IntermediateError(#[from] intermediate_scene::Error),
-    #[error("No Material")]
-    NoMaterial,
     #[error("Unknown Material {0}")]
     UnknownMaterial(String),
     #[error("Unknown Medium {0}")]
@@ -70,7 +68,7 @@ pub enum CreateSceneError {
 
 #[derive(Default, Clone)]
 struct WorldState {
-    current_material_index: Option<usize>,
+    current_material_index: usize,
     current_medium_index: Option<(usize, usize)>,
     current_area_light_index: usize,
     current_matrix: Mat4,
@@ -110,6 +108,7 @@ impl Scene {
         // 90 degree
         let mut fov = 0.5 * PI;
 
+        scene.materials.push(EnumMaterial::new_none());
         scene.area_lights.push(EnumAreaLight::new_null());
         scene.mediums.push(EnumMedium::new_vaccum());
 
@@ -307,13 +306,11 @@ impl Scene {
                     state.current_matrix = m;
                 }
                 IntermediateWorld::NamedMaterial(name) => {
-                    state.current_material_index = Some(
-                        *state
-                            .materials
-                            .get(&name)
-                            .ok_or(CreateSceneError::UnknownMaterial(name))?
-                            as usize,
-                    );
+                    state.current_material_index = *state
+                        .materials
+                        .get(&name)
+                        .ok_or(CreateSceneError::UnknownMaterial(name))?
+                        as usize;
                 }
                 IntermediateWorld::CoordSysTransform(name) => {
                     if let Some(mat) = state.coord_system.get(&name) {
@@ -399,13 +396,13 @@ impl Scene {
                         }
                         WorldObject::Material(material) => {
                             let material = self.material(state, material)?;
-                            state.current_material_index = Some(self.materials.len());
+                            state.current_material_index = self.materials.len();
                             self.materials.push(material);
                         }
                         WorldObject::MakeNamedMaterial(name, material) => {
                             let material = self.material(state, material)?;
                             state.materials.insert(name, self.materials.len() as u32);
-                            state.current_material_index = Some(self.materials.len());
+                            state.current_material_index = self.materials.len();
                             self.materials.push(material);
                         }
                         WorldObject::MakeNamedMedium(
@@ -427,9 +424,7 @@ impl Scene {
                                     state.current_matrix
                                         * Mat4::from_scale(vec3(radius, radius, radius)),
                                 ),
-                                material_index: state
-                                    .current_material_index
-                                    .ok_or(CreateSceneError::NoMaterial)?,
+                                material_index: state.current_material_index,
                                 area_light_index: state.current_area_light_index,
                                 blas_index: None,
                                 interior_medium_index: state
@@ -447,9 +442,7 @@ impl Scene {
                                 self.tlas.push(TlasInstance {
                                     shader_offset: ShaderOffset::Triangle,
                                     matrix: Affine3A::from_mat4(state.current_matrix),
-                                    material_index: state
-                                        .current_material_index
-                                        .ok_or(CreateSceneError::NoMaterial)?,
+                                    material_index: state.current_material_index,
                                     area_light_index: state.current_area_light_index,
                                     interior_medium_index: state
                                         .current_medium_index
