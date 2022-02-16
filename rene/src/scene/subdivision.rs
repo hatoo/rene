@@ -1,5 +1,5 @@
 use glam::{vec3a, Vec2, Vec3A};
-use opensubdiv_petite::far;
+// use opensubdiv_petite::far;
 use rene_shader::Vertex;
 
 use super::intermediate_scene::TriangleMesh;
@@ -23,6 +23,7 @@ fn generate_normal(mesh: &mut TriangleMesh) {
 }
 
 pub fn loop_subdivision(mut mesh: TriangleMesh, level: usize) -> TriangleMesh {
+    /*
     let num_vertices = mesh.vertices.len();
     let verts_per_face = vec![3; mesh.indices.len() / 3];
 
@@ -71,6 +72,7 @@ pub fn loop_subdivision(mut mesh: TriangleMesh, level: usize) -> TriangleMesh {
 
     // TODO always generate normal?
     generate_normal(&mut mesh);
+    */
 
     mesh
 }

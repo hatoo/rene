@@ -24,7 +24,7 @@ exr = "1.4.1"
 float-ord = "0.3.2"
 gpu-allocator = "0.16.0"
 
-opensubdiv-petite = { git = "https://github.com/hatoo/opensubdiv-petite.git", branch = "windows2" }
+# opensubdiv-petite = { git = "https://github.com/hatoo/opensubdiv-petite.git", branch = "windows2" }
 
 oidn = { version = "1.4.1", optional = true }
 
