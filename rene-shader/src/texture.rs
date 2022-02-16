@@ -8,13 +8,8 @@ use spirv_std::{
 
 use crate::{
     asm::{f32_to_u32, fract},
-    reflection::Packed4,
     InputImage,
 };
-
-trait Texture {
-    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget;
-}
 
 #[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
@@ -57,9 +52,9 @@ struct Scale<'a> {
     data: &'a EnumTextureData,
 }
 
-struct ColorOrTarget {
-    color_or_uv: Packed4<u32>,
-    scale: Vec3A,
+struct IndexUV {
+    index: u32,
+    uv: Vec2,
 }
 
 impl<'a> Solid<'a> {
@@ -90,16 +85,16 @@ impl<'a> ImageMap<'a> {
 }
 
 impl<'a> Scale<'a> {
-    pub fn new_data(scale: Vec3A, tex: u32) -> EnumTextureData {
+    pub fn new_data(tex1: u32, tex2: u32) -> EnumTextureData {
         EnumTextureData {
-            u0: uvec4(tex, 0, 0, 0),
-            v0: scale.extend(0.0),
+            u0: uvec4(tex1, tex2, 0, 0),
+            ..Default::default()
         }
     }
 }
 
-impl<'a> Texture for CheckerBoard<'a> {
-    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
+impl<'a> CheckerBoard<'a> {
+    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> IndexUV {
         let w = self.data.v0.x;
         let h = self.data.v0.y;
 
@@ -110,45 +105,40 @@ impl<'a> Texture for CheckerBoard<'a> {
         let y = uv.y * h;
 
         if (f32_to_u32(x) % 2 == 0) == (f32_to_u32(y) % 2 == 0) {
-            ColorOrTarget {
-                color_or_uv: Packed4::new(tex1, vec3a(fract(x), fract(y), 0.0)),
-                scale: vec3a(1.0, 1.0, 1.0),
+            IndexUV {
+                index: tex1,
+                uv: vec2(fract(x), fract(y)),
             }
         } else {
-            ColorOrTarget {
-                color_or_uv: Packed4::new(tex2, vec3a(fract(x), fract(y), 0.0)),
-                scale: vec3a(1.0, 1.0, 1.0),
+            IndexUV {
+                index: tex2,
+                uv: vec2(fract(x), fract(y)),
             }
         }
     }
 }
 
-impl<'a> Texture for ImageMap<'a> {
-    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
+impl<'a> ImageMap<'a> {
+    fn color(&self, images: &RuntimeArray<InputImage>, uv: Vec2) -> Vec3A {
         let image = unsafe { images.index(self.data.u0.x as usize) };
         let color: Vec4 = unsafe { image.sample_by_lod(vec2(uv.x, 1.0 - uv.y), 0.0) };
-        ColorOrTarget {
-            color_or_uv: Packed4::new(u32::MAX, color.xyz().into()),
-            scale: vec3a(1.0, 1.0, 1.0),
-        }
+        color.xyz().into()
     }
 }
 
-impl<'a> Texture for Solid<'a> {
-    fn color(&self, _images: &RuntimeArray<InputImage>, _uv: Vec2) -> ColorOrTarget {
-        ColorOrTarget {
-            color_or_uv: Packed4::new(u32::MAX, self.data.v0.xyz().into()),
-            scale: vec3a(1.0, 1.0, 1.0),
-        }
+impl<'a> Solid<'a> {
+    fn color(&self, _images: &RuntimeArray<InputImage>, _uv: Vec2) -> Vec3A {
+        self.data.v0.xyz().into()
     }
 }
 
-impl<'a> Texture for Scale<'a> {
-    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> ColorOrTarget {
-        ColorOrTarget {
-            color_or_uv: Packed4::new(self.data.u0.x, uv.extend(0.0).into()),
-            scale: self.data.v0.xyz().into(),
-        }
+impl<'a> Scale<'a> {
+    fn tex1(&self) -> u32 {
+        self.data.u0.x
+    }
+
+    fn tex2(&self) -> u32 {
+        self.data.u0.y
     }
 }
 
@@ -174,52 +164,56 @@ impl EnumTexture {
         }
     }
 
-    pub fn new_scale(scale: Vec3A, tex: u32) -> Self {
+    pub fn new_scale(tex1: u32, tex2: u32) -> Self {
         Self {
             t: TextureType::Scale,
-            data: Scale::new_data(scale, tex),
+            data: Scale::new_data(tex1, tex2),
         }
     }
 }
 
 impl EnumTexture {
+    pub fn color_non_recursive(
+        &self,
+        index: u32,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+        uv: Vec2,
+    ) -> Vec3A {
+        let mut index_uv = IndexUV { index, uv };
+        loop {
+            let tex = unsafe { textures.index_unchecked(index_uv.index as usize) };
+            index_uv = match tex.t {
+                TextureType::Solid => return Solid { data: &self.data }.color(images, index_uv.uv),
+                TextureType::ImageMap => {
+                    return ImageMap { data: &self.data }.color(images, index_uv.uv)
+                }
+                TextureType::CheckerBoard => {
+                    CheckerBoard { data: &self.data }.color(images, index_uv.uv)
+                }
+                TextureType::Scale => return vec3a(1.0, 1.0, 1.0),
+            };
+        }
+    }
+
     pub fn color(
         &self,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
         uv: Vec2,
     ) -> Vec3A {
-        let mut color_or_target = match self.t {
+        match self.t {
             TextureType::Solid => Solid { data: &self.data }.color(images, uv),
-            TextureType::CheckerBoard => CheckerBoard { data: &self.data }.color(images, uv),
             TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
-            TextureType::Scale => Scale { data: &self.data }.color(images, uv),
-        };
-
-        let mut scale = color_or_target.scale;
-        while color_or_target.color_or_uv.t != u32::MAX {
-            let tex = unsafe { textures.index_unchecked(color_or_target.color_or_uv.t as usize) };
-            color_or_target = match tex.t {
-                TextureType::Solid => Solid { data: &tex.data }.color(
-                    images,
-                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
-                ),
-                TextureType::CheckerBoard => CheckerBoard { data: &tex.data }.color(
-                    images,
-                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
-                ),
-                TextureType::ImageMap => ImageMap { data: &tex.data }.color(
-                    images,
-                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
-                ),
-                TextureType::Scale => Scale { data: &tex.data }.color(
-                    images,
-                    vec2(color_or_target.color_or_uv.x, color_or_target.color_or_uv.y),
-                ),
-            };
-            scale *= color_or_target.scale;
+            TextureType::CheckerBoard => {
+                let index_uv = CheckerBoard { data: &self.data }.color(images, uv);
+                self.color_non_recursive(index_uv.index, textures, images, index_uv.uv)
+            }
+            TextureType::Scale => {
+                let scale = Scale { data: &self.data };
+                self.color_non_recursive(scale.tex1(), textures, images, uv)
+                    * self.color_non_recursive(scale.tex2(), textures, images, uv)
+            }
         }
-
-        scale * color_or_target.color_or_uv.xyz()
     }
 }

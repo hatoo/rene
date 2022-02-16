@@ -93,7 +93,7 @@ pub enum InnerTexture {
     Constant(Vec3A),
     CheckerBoard(CheckerBoard),
     ImageMap(Image),
-    Scale(Vec3A, String),
+    Scale(TextureOrColor, TextureOrColor),
 }
 
 pub struct Texture {
@@ -266,8 +266,6 @@ pub enum Error {
     Ply,
     #[error("Exr Error")]
     Exr(#[from] exr::error::Error),
-    #[error("One of the scale texture argument must be constant")]
-    ScaleTexture,
 }
 
 trait GetValue {
@@ -844,27 +842,10 @@ impl IntermediateWorld {
                         .get_texture_or_color("tex2", base_dir)
                         .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?;
 
-                    match (tex1, tex2) {
-                        (TextureOrColor::Color(c1), TextureOrColor::Color(c2)) => {
-                            Ok(Self::Texture(Texture {
-                                name: texture.name.to_string(),
-                                inner: InnerTexture::Constant(c1 * c2),
-                            }))
-                        }
-                        (TextureOrColor::Texture(tex), TextureOrColor::Color(scale)) => {
-                            Ok(Self::Texture(Texture {
-                                name: texture.name.to_string(),
-                                inner: InnerTexture::Scale(scale, tex),
-                            }))
-                        }
-                        (TextureOrColor::Color(scale), TextureOrColor::Texture(tex)) => {
-                            Ok(Self::Texture(Texture {
-                                name: texture.name.to_string(),
-                                inner: InnerTexture::Scale(scale, tex),
-                            }))
-                        }
-                        _ => Err(Error::ScaleTexture),
-                    }
+                    Ok(Self::Texture(Texture {
+                        name: texture.name.to_string(),
+                        inner: InnerTexture::Scale(tex1, tex2),
+                    }))
                 }
                 "checkerboard" => {
                     let tex1 = texture

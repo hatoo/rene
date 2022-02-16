@@ -344,10 +344,10 @@ impl Scene {
                 IntermediateWorld::Texture(texture) => {
                     let inner = match texture.inner {
                         InnerTexture::Constant(value) => EnumTexture::new_solid(value),
-                        InnerTexture::Scale(scale, tex) => {
-                            let tex = self.texture(TextureOrColor::Texture(tex), state)?;
-                            EnumTexture::new_scale(scale, tex)
-                        }
+                        InnerTexture::Scale(tex1, tex2) => EnumTexture::new_scale(
+                            self.texture(tex1, state)?,
+                            self.texture(tex2, state)?,
+                        ),
                         InnerTexture::CheckerBoard(checkerboard) => {
                             let tex1 = self.texture(checkerboard.tex1, state)?;
                             let tex2 = self.texture(checkerboard.tex2, state)?;
