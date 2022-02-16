@@ -173,6 +173,7 @@ impl EnumTexture {
 }
 
 impl EnumTexture {
+    #[inline(always)]
     pub fn color_non_recursive(
         &self,
         index: u32,
@@ -180,19 +181,12 @@ impl EnumTexture {
         images: &RuntimeArray<InputImage>,
         uv: Vec2,
     ) -> Vec3A {
-        let mut index_uv = IndexUV { index, uv };
-        loop {
-            let tex = unsafe { textures.index_unchecked(index_uv.index as usize) };
-            index_uv = match tex.t {
-                TextureType::Solid => return Solid { data: &self.data }.color(images, index_uv.uv),
-                TextureType::ImageMap => {
-                    return ImageMap { data: &self.data }.color(images, index_uv.uv)
-                }
-                TextureType::CheckerBoard => {
-                    CheckerBoard { data: &self.data }.color(images, index_uv.uv)
-                }
-                TextureType::Scale => return vec3a(1.0, 1.0, 1.0),
-            };
+        let tex = unsafe { textures.index_unchecked(index as usize) };
+        match tex.t {
+            TextureType::Solid => Solid { data: &self.data }.color(images, uv),
+            TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
+            TextureType::CheckerBoard => vec3a(1.0, 1.0, 1.0),
+            TextureType::Scale => vec3a(1.0, 1.0, 1.0),
         }
     }
 
