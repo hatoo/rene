@@ -13,3 +13,6 @@ opt-level = 3
 codegen-units = 16
 [profile.dev.build-override]
 opt-level = 3
+
+[profile.release.package."rene-shader"]
+opt-level = 0
