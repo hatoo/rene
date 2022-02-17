@@ -234,9 +234,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba2ae6de944143141f6155a473a6b02f66c7c3f9f47316f802f80204ebfe6e12"
+checksum = "4acbb09d9ee8e23699b9634375c72795d095bf268439da88562cf9b501f181fa"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -247,9 +247,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
+checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 dependencies = [
  "jobserver",
 ]
@@ -306,9 +306,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.14"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b63edc3f163b3c71ec8aa23f9bd6070f77edbf3d1d198b164afa90ff00e4ec62"
+checksum = "e5f1fea81f183005ced9e59cdb01737ef2423956dac5a6d731b06b2ecfaa3467"
 dependencies = [
  "atty",
  "bitflags",
@@ -323,9 +323,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.0.14"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a1132dc3944b31c20dd8b906b3a9f0a5d0243e092d59171414969657ac6aa85"
+checksum = "5fd1122e63869df2cb309f449da1ad54a7c6dfeb7c7e6ccd8e0825d9eb93bb72"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -422,7 +422,7 @@ dependencies = [
 [[package]]
 name = "cust"
 version = "0.3.2"
-source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#6bd2d84ddb35fbebbfd4426f8744b327ed63fd2d"
+source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#eaa620456c0287b022e78939c8cf95aa846be4a0"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -437,7 +437,7 @@ dependencies = [
 [[package]]
 name = "cust_core"
 version = "0.1.1"
-source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#6bd2d84ddb35fbebbfd4426f8744b327ed63fd2d"
+source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#eaa620456c0287b022e78939c8cf95aa846be4a0"
 dependencies = [
  "cust_derive",
  "glam",
@@ -448,7 +448,7 @@ dependencies = [
 [[package]]
 name = "cust_derive"
 version = "0.2.0"
-source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#6bd2d84ddb35fbebbfd4426f8744b327ed63fd2d"
+source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#eaa620456c0287b022e78939c8cf95aa846be4a0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -458,7 +458,7 @@ dependencies = [
 [[package]]
 name = "cust_raw"
 version = "0.11.3"
-source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#6bd2d84ddb35fbebbfd4426f8744b327ed63fd2d"
+source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#eaa620456c0287b022e78939c8cf95aa846be4a0"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -576,7 +576,7 @@ dependencies = [
 [[package]]
 name = "find_cuda_helper"
 version = "0.2.0"
-source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#6bd2d84ddb35fbebbfd4426f8744b327ed63fd2d"
+source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#eaa620456c0287b022e78939c8cf95aa846be4a0"
 dependencies = [
  "glob",
 ]
@@ -1043,7 +1043,7 @@ checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
 [[package]]
 name = "opensubdiv-petite"
 version = "0.1.0"
-source = "git+https://github.com/hatoo/opensubdiv-petite.git?branch=windows2#5e2cd8132d58398a634511cdec1ee68df35b4737"
+source = "git+https://github.com/hatoo/opensubdiv-petite.git?branch=windows2#72b0ea9e4bdbcecc41667efc91c101539c4d017b"
 dependencies = [
  "derive_more",
  "num_enum",
@@ -1053,7 +1053,7 @@ dependencies = [
 [[package]]
 name = "opensubdiv-petite-sys"
 version = "0.1.0"
-source = "git+https://github.com/hatoo/opensubdiv-petite.git?branch=windows2#5e2cd8132d58398a634511cdec1ee68df35b4737"
+source = "git+https://github.com/hatoo/opensubdiv-petite.git?branch=windows2#72b0ea9e4bdbcecc41667efc91c101539c4d017b"
 dependencies = [
  "bindgen 0.58.1",
  "bitfield",
@@ -1067,7 +1067,7 @@ dependencies = [
 [[package]]
 name = "optix"
 version = "0.1.0"
-source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#6bd2d84ddb35fbebbfd4426f8744b327ed63fd2d"
+source = "git+https://github.com/Rust-GPU/Rust-CUDA.git#eaa620456c0287b022e78939c8cf95aa846be4a0"
 dependencies = [
  "bindgen 0.59.2",
  "bitflags",
@@ -1348,7 +1348,7 @@ dependencies = [
  "ash",
  "blackbody",
  "bytemuck",
- "clap 3.0.14",
+ "clap 3.1.0",
  "cust",
  "exr",
  "float-ord",
@@ -1403,7 +1403,7 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 [[package]]
 name = "rustc_codegen_spirv"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu.git#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
 dependencies = [
  "ar",
  "bimap",
@@ -1569,7 +1569,7 @@ dependencies = [
 [[package]]
 name = "spirv-builder"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu.git#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
 dependencies = [
  "memchr",
  "raw-string",
@@ -1581,7 +1581,7 @@ dependencies = [
 [[package]]
 name = "spirv-std"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu.git#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
 dependencies = [
  "bitflags",
  "glam",
@@ -1593,7 +1593,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-macros"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu.git#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1622,7 +1622,7 @@ dependencies = [
 [[package]]
 name = "spirv-types"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu.git#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#4932a44658724d46be3d4c8ef81bf096ab1de9eb"
 
 [[package]]
 name = "static_assertions"
