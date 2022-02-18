@@ -11,9 +11,9 @@ use crate::ShaderOffset;
 
 use self::intermediate_scene::{
     AreaLightSource, Camera, Film, Glass, Homogeneous, Infinite, InnerTexture, Integrator,
-    IntermediateScene, IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror, Mix,
-    Plastic, SceneObject, Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber,
-    WorldObject,
+    IntermediateScene, IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror,
+    MixMaterial, MixTexture, Plastic, SceneObject, Shape, Sphere, Substrate, TextureOrColor,
+    TriangleMesh, Uber, WorldObject,
 };
 
 pub mod image;
@@ -254,6 +254,17 @@ impl Scene {
                 self.texture(rough, state)?,
                 remap_roughness,
             )),
+            Material::Mix(MixMaterial { mat1, mat2, amount }) => Ok(EnumMaterial::new_mix(
+                *state
+                    .materials
+                    .get(&mat1)
+                    .ok_or(CreateSceneError::UnknownMaterial(name))? as usize,
+                *state
+                    .materials
+                    .get(&mat2)
+                    .ok_or(CreateSceneError::UnknownMaterial(name))? as usize,
+                self.texture(amount, state)?,
+            )),
             Material::None => Ok(EnumMaterial::new_none()),
         }
     }
@@ -348,11 +359,13 @@ impl Scene {
                             self.texture(tex1, state)?,
                             self.texture(tex2, state)?,
                         ),
-                        InnerTexture::Mix(Mix { tex1, tex2, amount }) => EnumTexture::new_mix(
-                            self.texture(tex1, state)?,
-                            self.texture(tex2, state)?,
-                            self.texture(amount, state)?,
-                        ),
+                        InnerTexture::Mix(MixTexture { tex1, tex2, amount }) => {
+                            EnumTexture::new_mix(
+                                self.texture(tex1, state)?,
+                                self.texture(tex2, state)?,
+                                self.texture(amount, state)?,
+                            )
+                        }
                         InnerTexture::CheckerBoard(checkerboard) => {
                             let tex1 = self.texture(checkerboard.tex1, state)?;
                             let tex2 = self.texture(checkerboard.tex2, state)?;

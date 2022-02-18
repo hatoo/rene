@@ -10,7 +10,7 @@ use area_light::{AreaLight, EnumAreaLight};
 use camera::PerspectiveCamera;
 use core::f32::consts::{FRAC_1_PI, PI};
 use light::{EnumLight, Light};
-use material::{EnumMaterial, Material};
+use material::EnumMaterial;
 use math::sphere_uv;
 use medium::{EnumMedium, Medium};
 use reflection::{onb::Onb, Bsdf, BxdfKind};
@@ -220,7 +220,7 @@ pub fn main_ray_generation_path(
                 unsafe { area_lights.index_unchecked(index.area_light_index as usize) };
 
             bsdf.clear(normal, Onb::from_w(normal));
-            material.compute_bsdf(&mut bsdf, uv, textures, images);
+            material.compute_bsdf(&mut bsdf, uv, textures, images, materials);
 
             if !area_light.is_null() {
                 add_image(0, color * area_light.emit(wo, normal));
@@ -228,7 +228,7 @@ pub fn main_ray_generation_path(
 
             if i == 0 {
                 add_image(1, normal);
-                add_image(2, material.albedo(uv, textures, images));
+                add_image(2, material.albedo(uv, textures, images, materials));
             }
 
             let mut l = 0;
@@ -655,7 +655,7 @@ pub fn main_ray_generation_volpath(
                 ray.direction = medium.sample_p(wo, &mut rng);
             } else {
                 bsdf.clear(normal, Onb::from_w(normal));
-                material.compute_bsdf(&mut bsdf, uv, textures, images);
+                material.compute_bsdf(&mut bsdf, uv, textures, images, materials);
 
                 if !area_light.is_null() {
                     add_image(0, color * area_light.emit(wo, normal));
@@ -663,7 +663,7 @@ pub fn main_ray_generation_volpath(
 
                 if i == 0 {
                     add_image(1, normal);
-                    add_image(2, material.albedo(uv, textures, images));
+                    add_image(2, material.albedo(uv, textures, images, materials));
                 }
 
                 if !material.is_none() {

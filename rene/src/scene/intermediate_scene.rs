@@ -94,10 +94,10 @@ pub enum InnerTexture {
     CheckerBoard(CheckerBoard),
     ImageMap(Image),
     Scale(TextureOrColor, TextureOrColor),
-    Mix(Mix),
+    Mix(MixTexture),
 }
 
-pub struct Mix {
+pub struct MixTexture {
     pub tex1: TextureOrColor,
     pub tex2: TextureOrColor,
     pub amount: TextureOrColor,
@@ -116,6 +116,7 @@ pub enum Material {
     Mirror(Mirror),
     Uber(Uber),
     Plastic(Plastic),
+    Mix(MixMaterial),
 }
 
 pub struct Matte {
@@ -163,6 +164,12 @@ pub struct Plastic {
     pub ks: TextureOrColor,
     pub rough: TextureOrColor,
     pub remap_roughness: bool,
+}
+
+pub struct MixMaterial {
+    pub mat1: String,
+    pub mat2: String,
+    pub amount: TextureOrColor,
 }
 
 pub enum Medium {
@@ -647,6 +654,13 @@ impl<'a, T> GetValue for Object<'a, T> {
                     remap_roughness,
                 }))
             }
+            "mix" => Ok(Material::Mix(MixMaterial {
+                mat1: self.get_str("namenamedmaterial1")??.to_string(),
+                mat2: self.get_str("namenamedmaterial2")??.to_string(),
+                amount: self
+                    .get_texture_or_color("amount")
+                    .unwrap_or_else(|_| Ok(vec3a(0.5, 0.5, 0.5)))?,
+            })),
             t => Err(Error::InvalidMaterial(t.to_string())),
         }
     }
@@ -856,7 +870,7 @@ impl IntermediateWorld {
                 }
                 "mix" => Ok(Self::Texture(Texture {
                     name: texture.name.to_string(),
-                    inner: InnerTexture::Mix(Mix {
+                    inner: InnerTexture::Mix(MixTexture {
                         tex1: texture
                             .obj
                             .get_texture_or_color("tex1", base_dir)

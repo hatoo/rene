@@ -118,7 +118,7 @@ impl Default for BxdfType {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(transparent)]
 pub struct EnumBxdf {
@@ -225,13 +225,19 @@ impl EnumBxdf {
     }
 }
 
-const BXDF_LEN: usize = 5;
+const BXDF_LEN: usize = 8;
+
+#[derive(Clone, Copy, Default)]
+struct ScaledBxdf {
+    scale: f32,
+    bxdf: EnumBxdf,
+}
 
 pub struct Bsdf {
     ng: Vec3A,
     onb: Onb,
-    len: u32,
-    bxdfs: [EnumBxdf; BXDF_LEN],
+    pub len: u32,
+    bxdfs: [ScaledBxdf; BXDF_LEN],
 }
 
 impl Default for Bsdf {
@@ -240,9 +246,7 @@ impl Default for Bsdf {
             ng: Vec3A::Z,
             onb: Onb::from_w(Vec3A::Z),
             len: 0,
-            bxdfs: [EnumBxdf {
-                data: Default::default(),
-            }; BXDF_LEN],
+            bxdfs: Default::default(),
         }
     }
 }
@@ -255,14 +259,16 @@ impl Bsdf {
     }
 
     pub fn add(&mut self, bxdf: EnumBxdf) {
-        *unsafe { self.bxdfs.index_unchecked_mut(self.len as usize) } = bxdf;
+        *unsafe { self.bxdfs.index_unchecked_mut(self.len as usize) } =
+            ScaledBxdf { scale: 1.0, bxdf };
         self.len += 1;
     }
 
     pub fn add_mut(&mut self) -> &mut EnumBxdf {
         let bxdf = unsafe { self.bxdfs.index_unchecked_mut(self.len as usize) };
         self.len += 1;
-        bxdf
+        bxdf.scale = 1.0;
+        &mut bxdf.bxdf
     }
 
     pub fn contains(&self, kind: BxdfKind) -> bool {
@@ -270,6 +276,7 @@ impl Bsdf {
 
         while i < self.len {
             if unsafe { self.bxdfs.index_unchecked(i as usize) }
+                .bxdf
                 .kind()
                 .contains(kind)
             {
@@ -279,6 +286,14 @@ impl Bsdf {
         }
 
         false
+    }
+
+    pub fn set_scale_from(&mut self, start: u32, scale: f32) {
+        let mut i = start;
+        while i < self.len {
+            unsafe { self.bxdfs.index_unchecked_mut(i as usize) }.scale = scale;
+            i += 1;
+        }
     }
 }
 
@@ -297,11 +312,11 @@ impl Bsdf {
 
         let mut i = 0;
         while i < self.len {
-            let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
+            let ScaledBxdf { scale, bxdf } = unsafe { self.bxdfs.index_unchecked(i as usize) };
             if (reflect && bxdf.kind().contains(BxdfKind::REFLECTION))
                 || (!reflect && bxdf.kind().contains(BxdfKind::TRANSMISSION))
             {
-                f += bxdf.f(wo, wi);
+                f += *scale * bxdf.f(wo, wi);
             }
 
             i += 1;
@@ -315,12 +330,13 @@ impl Bsdf {
             SampledF::default()
         } else {
             let index = rng.next_u32() as usize % self.len as usize;
-            let bxdf = unsafe { self.bxdfs.index_unchecked(index) };
+            let ScaledBxdf { scale, bxdf } = unsafe { self.bxdfs.index_unchecked(index) };
             let wo = self.onb.world_to_local(wo_world);
             let mut sampled_f = bxdf.sample_f(wo, rng);
 
             sampled_f.pdf /= self.len as f32;
             sampled_f.wi = self.onb.local_to_world(sampled_f.wi);
+            sampled_f.f *= *scale;
             sampled_f
         }
     }
@@ -333,7 +349,7 @@ impl Bsdf {
 
         let mut i = 0;
         while i < self.len {
-            let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) };
+            let bxdf = unsafe { self.bxdfs.index_unchecked(i as usize) }.bxdf;
             pdf += bxdf.pdf(wo, wi);
             i += 1;
         }

@@ -60,6 +60,7 @@ enum MaterialType {
     Mirror,
     Uber,
     Plastic,
+    Mix,
 }
 
 #[derive(Clone, Copy)]
@@ -101,6 +102,11 @@ struct Uber<'a> {
 
 #[repr(transparent)]
 struct Plastic<'a> {
+    data: &'a EnumMaterialData,
+}
+
+#[repr(transparent)]
+struct Mix<'a> {
     data: &'a EnumMaterialData,
 }
 
@@ -491,6 +497,13 @@ impl EnumMaterial {
             data: Default::default(),
         }
     }
+
+    pub fn new_mix(mat1_index: u32, mat2_index: u32, amount_index: u32) -> Self {
+        Self {
+            t: MaterialType::Mix,
+            data: Mix::new_data(mat1_index, mat2_index, amount_index),
+        }
+    }
 }
 
 impl<'a> Uber<'a> {
@@ -714,8 +727,31 @@ impl<'a> Material for Plastic<'a> {
     }
 }
 
-impl Material for EnumMaterial {
-    fn albedo(
+impl<'a> Mix<'a> {
+    fn new_data(mat1_index: u32, mat2_index: u32, amount_index: u32) -> EnumMaterialData {
+        EnumMaterialData {
+            u0: uvec4(mat1_index, mat2_index, amount_index, 0),
+            ..Default::default()
+        }
+    }
+
+    fn mat1(&self) -> u32 {
+        self.data.u0.x
+    }
+
+    fn mat2(&self) -> u32 {
+        self.data.u0.y
+    }
+
+    fn amount(&self, uv: Vec2, textures: &[EnumTexture], images: &RuntimeArray<InputImage>) -> f32 {
+        unsafe { textures.index_unchecked(self.data.u0.z as usize) }
+            .color(textures, images, uv)
+            .x
+    }
+}
+
+impl EnumMaterial {
+    fn albedo_no_recursive(
         &self,
         uv: Vec2,
         textures: &[EnumTexture],
@@ -730,10 +766,40 @@ impl Material for EnumMaterial {
             MaterialType::Mirror => Mirror { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Uber => Uber { data: &self.data }.albedo(uv, textures, images),
             MaterialType::Plastic => Plastic { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Mix => vec3a(0.0, 0.0, 0.0),
         }
     }
 
-    fn compute_bsdf(
+    pub fn albedo(
+        &self,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+        materials: &[EnumMaterial],
+    ) -> Vec3A {
+        match self.t {
+            MaterialType::None => Vec3A::ZERO,
+            MaterialType::Matte => Matte { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Glass => Glass { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Substrate => Substrate { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Metal => Metal { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Mirror => Mirror { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Uber => Uber { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Plastic => Plastic { data: &self.data }.albedo(uv, textures, images),
+            MaterialType::Mix => {
+                let mix = Mix { data: &self.data };
+                let scale = mix.amount(uv, textures, images);
+                (1.0 - scale)
+                    * unsafe { materials.index_unchecked(mix.mat1() as usize) }
+                        .albedo_no_recursive(uv, textures, images)
+                    + scale
+                        * unsafe { materials.index_unchecked(mix.mat2() as usize) }
+                            .albedo_no_recursive(uv, textures, images)
+            }
+        }
+    }
+
+    pub fn compute_bsdf_no_recursive(
         &self,
         bsdf: &mut Bsdf,
         uv: Vec2,
@@ -762,6 +828,53 @@ impl Material for EnumMaterial {
             }
             MaterialType::Plastic => {
                 Plastic { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Mix => {}
+        }
+    }
+
+    pub fn compute_bsdf(
+        &self,
+        bsdf: &mut Bsdf,
+        uv: Vec2,
+        textures: &[EnumTexture],
+        images: &RuntimeArray<InputImage>,
+        materials: &[EnumMaterial],
+    ) {
+        match self.t {
+            MaterialType::None => {}
+            MaterialType::Matte => {
+                Matte { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Glass => {
+                Glass { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Substrate => {
+                Substrate { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Metal => {
+                Metal { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Mirror => {
+                Mirror { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Uber => {
+                Uber { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Plastic => {
+                Plastic { data: &self.data }.compute_bsdf(bsdf, uv, textures, images)
+            }
+            MaterialType::Mix => {
+                let mix = Mix { data: &self.data };
+                let amount = mix.amount(uv, textures, images);
+                let start = bsdf.len;
+                unsafe { materials.index_unchecked(mix.mat1() as usize) }
+                    .compute_bsdf_no_recursive(bsdf, uv, textures, images);
+                bsdf.set_scale_from(start, 1.0 - amount);
+                let start = bsdf.len;
+                unsafe { materials.index_unchecked(mix.mat2() as usize) }
+                    .compute_bsdf_no_recursive(bsdf, uv, textures, images);
+                bsdf.set_scale_from(start, 1.0 - amount);
             }
         }
     }
