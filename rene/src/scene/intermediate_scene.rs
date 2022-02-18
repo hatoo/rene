@@ -94,6 +94,13 @@ pub enum InnerTexture {
     CheckerBoard(CheckerBoard),
     ImageMap(Image),
     Scale(TextureOrColor, TextureOrColor),
+    Mix(Mix),
+}
+
+pub struct Mix {
+    pub tex1: TextureOrColor,
+    pub tex2: TextureOrColor,
+    pub amount: TextureOrColor,
 }
 
 pub struct Texture {
@@ -847,6 +854,23 @@ impl IntermediateWorld {
                         inner: InnerTexture::Scale(tex1, tex2),
                     }))
                 }
+                "mix" => Ok(Self::Texture(Texture {
+                    name: texture.name.to_string(),
+                    inner: InnerTexture::Mix(Mix {
+                        tex1: texture
+                            .obj
+                            .get_texture_or_color("tex1", base_dir)
+                            .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.0, 0.0, 0.0))))?,
+                        tex2: texture
+                            .obj
+                            .get_texture_or_color("tex2", base_dir)
+                            .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(1.0, 1.0, 1.0))))?,
+                        amount: texture
+                            .obj
+                            .get_texture_or_color("amount", base_dir)
+                            .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?,
+                    }),
+                })),
                 "checkerboard" => {
                     let tex1 = texture
                         .obj

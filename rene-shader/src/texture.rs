@@ -27,6 +27,7 @@ enum TextureType {
     CheckerBoard,
     ImageMap,
     Scale,
+    Mix,
 }
 
 #[derive(Clone, Copy)]
@@ -49,6 +50,10 @@ struct CheckerBoard<'a> {
 }
 
 struct Scale<'a> {
+    data: &'a EnumTextureData,
+}
+
+struct Mix<'a> {
     data: &'a EnumTextureData,
 }
 
@@ -93,8 +98,17 @@ impl<'a> Scale<'a> {
     }
 }
 
+impl<'a> Mix<'a> {
+    pub fn new_data(tex1: u32, tex2: u32, amount: u32) -> EnumTextureData {
+        EnumTextureData {
+            u0: uvec4(tex1, tex2, amount, 0),
+            ..Default::default()
+        }
+    }
+}
+
 impl<'a> CheckerBoard<'a> {
-    fn color(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> IndexUV {
+    fn index_uv(&self, _images: &RuntimeArray<InputImage>, uv: Vec2) -> IndexUV {
         let w = self.data.v0.x;
         let h = self.data.v0.y;
 
@@ -142,6 +156,20 @@ impl<'a> Scale<'a> {
     }
 }
 
+impl<'a> Mix<'a> {
+    fn tex1(&self) -> u32 {
+        self.data.u0.x
+    }
+
+    fn tex2(&self) -> u32 {
+        self.data.u0.y
+    }
+
+    fn amount(&self) -> u32 {
+        self.data.u0.z
+    }
+}
+
 impl EnumTexture {
     pub fn new_solid(color: Vec3A) -> Self {
         Self {
@@ -170,6 +198,13 @@ impl EnumTexture {
             data: Scale::new_data(tex1, tex2),
         }
     }
+
+    pub fn new_mix(tex1: u32, tex2: u32, amount: u32) -> Self {
+        Self {
+            t: TextureType::Mix,
+            data: Mix::new_data(tex1, tex2, amount),
+        }
+    }
 }
 
 impl EnumTexture {
@@ -187,6 +222,7 @@ impl EnumTexture {
             TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
             TextureType::CheckerBoard => vec3a(1.0, 1.0, 1.0),
             TextureType::Scale => vec3a(1.0, 1.0, 1.0),
+            TextureType::Mix => vec3a(1.0, 1.0, 1.0),
         }
     }
 
@@ -200,13 +236,22 @@ impl EnumTexture {
             TextureType::Solid => Solid { data: &self.data }.color(images, uv),
             TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
             TextureType::CheckerBoard => {
-                let index_uv = CheckerBoard { data: &self.data }.color(images, uv);
+                let index_uv = CheckerBoard { data: &self.data }.index_uv(images, uv);
                 self.color_non_recursive(index_uv.index, textures, images, index_uv.uv)
             }
             TextureType::Scale => {
                 let scale = Scale { data: &self.data };
                 self.color_non_recursive(scale.tex1(), textures, images, uv)
                     * self.color_non_recursive(scale.tex2(), textures, images, uv)
+            }
+
+            TextureType::Mix => {
+                let mix = Mix { data: &self.data };
+                let amount = self
+                    .color_non_recursive(mix.amount(), textures, images, uv)
+                    .x;
+                (1.0 - amount) * self.color_non_recursive(mix.tex1(), textures, images, uv)
+                    + amount * self.color_non_recursive(mix.tex2(), textures, images, uv)
             }
         }
     }
