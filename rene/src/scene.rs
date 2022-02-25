@@ -10,10 +10,8 @@ use thiserror::Error;
 use crate::ShaderOffset;
 
 use self::intermediate_scene::{
-    AreaLightSource, Camera, Film, Glass, Homogeneous, Infinite, InnerTexture, Integrator,
-    IntermediateScene, IntermediateWorld, LightSource, Material, Matte, Medium, Metal, Mirror,
-    Plastic, SceneObject, Shape, Sphere, Substrate, TextureOrColor, TriangleMesh, Uber,
-    WorldObject,
+    AreaLightSource, Camera, Film, InnerTexture, Integrator, IntermediateScene, IntermediateWorld,
+    LightSource, Material, Medium, SceneObject, Shape, TextureOrColor, TriangleMesh, WorldObject,
 };
 
 pub mod image;
@@ -139,8 +137,8 @@ impl Scene {
                 }
                 IntermediateScene::SceneObject(obj) => match obj {
                     SceneObject::Camera(camera) => match camera {
-                        Camera::Perspective(p) => {
-                            fov = p.fov;
+                        Camera::Perspective { fov: f } => {
+                            fov = f;
                         }
                     },
                 },
@@ -175,18 +173,18 @@ impl Scene {
         material: Material,
     ) -> Result<EnumMaterial, CreateSceneError> {
         match material {
-            Material::Matte(Matte { albedo }) => {
+            Material::Matte { albedo } => {
                 let texture_index = self.texture(albedo, state)?;
                 Ok(EnumMaterial::new_matte(texture_index))
             }
-            Material::Glass(Glass { index }) => Ok(EnumMaterial::new_glass(index)),
-            Material::Substrate(Substrate {
+            Material::Glass { index } => Ok(EnumMaterial::new_glass(index)),
+            Material::Substrate {
                 diffuse,
                 specular,
                 rough_u,
                 rough_v,
                 remap_roughness,
-            }) => {
+            } => {
                 let diffuse_index = self.texture(diffuse, state)?;
                 let specular_index = self.texture(specular, state)?;
                 let rough_u_index = self.texture(rough_u, state)?;
@@ -200,13 +198,13 @@ impl Scene {
                     remap_roughness,
                 ))
             }
-            Material::Metal(Metal {
+            Material::Metal {
                 eta,
                 k,
                 rough_u,
                 rough_v,
                 remap_roughness,
-            }) => {
+            } => {
                 let eta_index = self.texture(eta, state)?;
                 let k_index = self.texture(k, state)?;
 
@@ -218,11 +216,11 @@ impl Scene {
                     remap_roughness,
                 ))
             }
-            Material::Mirror(Mirror { r }) => {
+            Material::Mirror { r } => {
                 let texture_index = self.texture(r, state)?;
                 Ok(EnumMaterial::new_mirror(texture_index))
             }
-            Material::Uber(Uber {
+            Material::Uber {
                 kd,
                 ks,
                 kr,
@@ -232,7 +230,7 @@ impl Scene {
                 eta,
                 opacity,
                 remap_roughness,
-            }) => Ok(EnumMaterial::new_uber(
+            } => Ok(EnumMaterial::new_uber(
                 self.texture(kd, state)?,
                 self.texture(ks, state)?,
                 self.texture(kr, state)?,
@@ -243,12 +241,12 @@ impl Scene {
                 eta,
                 remap_roughness,
             )),
-            Material::Plastic(Plastic {
+            Material::Plastic {
                 kd,
                 ks,
                 rough,
                 remap_roughness,
-            }) => Ok(EnumMaterial::new_plastic(
+            } => Ok(EnumMaterial::new_plastic(
                 self.texture(kd, state)?,
                 self.texture(ks, state)?,
                 self.texture(rough, state)?,
@@ -319,7 +317,7 @@ impl Scene {
                         return Err(CreateSceneError::NotFoundCoordSystem(name));
                     }
                 }
-                IntermediateWorld::MediumInterface(interior, exterior) => {
+                IntermediateWorld::MediumInterface { interior, exterior } => {
                     state.current_medium_index = Some((
                         if interior == "" {
                             0
@@ -348,15 +346,15 @@ impl Scene {
                             self.texture(tex1, state)?,
                             self.texture(tex2, state)?,
                         ),
-                        InnerTexture::CheckerBoard(checkerboard) => {
-                            let tex1 = self.texture(checkerboard.tex1, state)?;
-                            let tex2 = self.texture(checkerboard.tex2, state)?;
-                            EnumTexture::new_checkerboard(
-                                tex1,
-                                tex2,
-                                checkerboard.uscale,
-                                checkerboard.vscale,
-                            )
+                        InnerTexture::CheckerBoard {
+                            tex1,
+                            tex2,
+                            uscale,
+                            vscale,
+                        } => {
+                            let tex1 = self.texture(tex1, state)?;
+                            let tex2 = self.texture(tex2, state)?;
+                            EnumTexture::new_checkerboard(tex1, tex2, uscale, vscale)
                         }
                         InnerTexture::ImageMap(image) => {
                             let image_index = self.images.len();
@@ -368,65 +366,81 @@ impl Scene {
                     self.textures.push(inner);
                     state.textures.insert(texture.name, texture_index as u32);
                 }
-                IntermediateWorld::WorldObject(obj) => {
-                    match obj {
-                        WorldObject::LightSource(lightsource) => match lightsource {
-                            LightSource::Infinite(Infinite { color, image_map }) => {
-                                self.uniform.background_color = color.extend(0.0);
+                IntermediateWorld::WorldObject(obj) => match obj {
+                    WorldObject::LightSource(lightsource) => match lightsource {
+                        LightSource::Infinite { color, image_map } => {
+                            self.uniform.background_color = color.extend(0.0);
 
-                                if let Some(image) = image_map {
-                                    let image_index = self.images.len();
-                                    self.images.push(image);
+                            if let Some(image) = image_map {
+                                let image_index = self.images.len();
+                                self.images.push(image);
 
-                                    let texture_index = self.textures.len();
-                                    self.textures
-                                        .push(EnumTexture::new_image_map(image_index as u32));
+                                let texture_index = self.textures.len();
+                                self.textures
+                                    .push(EnumTexture::new_image_map(image_index as u32));
 
-                                    self.uniform.background_matrix = state.current_matrix.inverse();
-                                    self.uniform.background_texture = texture_index as u32;
-                                }
+                                self.uniform.background_matrix = state.current_matrix.inverse();
+                                self.uniform.background_texture = texture_index as u32;
                             }
-                            LightSource::Distant(distant) => self.lights.push(
-                                EnumLight::new_distant(distant.from, distant.to, distant.color),
-                            ),
+                        }
+                        LightSource::Distant { from, to, color } => {
+                            self.lights.push(EnumLight::new_distant(from, to, color))
+                        }
+                    },
+                    WorldObject::AreaLightSource(AreaLightSource::Diffuse(l)) => {
+                        state.current_area_light_index = self.area_lights.len();
+                        self.area_lights.push(EnumAreaLight::new_diffuse(l));
+                    }
+                    WorldObject::Material(material) => {
+                        let material = self.material(state, material)?;
+                        state.current_material_index = self.materials.len();
+                        self.materials.push(material);
+                    }
+                    WorldObject::MakeNamedMaterial(name, material) => {
+                        let material = self.material(state, material)?;
+                        state.materials.insert(name, self.materials.len() as u32);
+                        state.current_material_index = self.materials.len();
+                        self.materials.push(material);
+                    }
+                    WorldObject::MakeNamedMedium(
+                        name,
+                        Medium::Homogeneous {
+                            sigma_a,
+                            sigma_s,
+                            g,
                         },
-                        WorldObject::AreaLightSource(AreaLightSource::Diffuse(l)) => {
-                            state.current_area_light_index = self.area_lights.len();
-                            self.area_lights.push(EnumAreaLight::new_diffuse(l));
-                        }
-                        WorldObject::Material(material) => {
-                            let material = self.material(state, material)?;
-                            state.current_material_index = self.materials.len();
-                            self.materials.push(material);
-                        }
-                        WorldObject::MakeNamedMaterial(name, material) => {
-                            let material = self.material(state, material)?;
-                            state.materials.insert(name, self.materials.len() as u32);
-                            state.current_material_index = self.materials.len();
-                            self.materials.push(material);
-                        }
-                        WorldObject::MakeNamedMedium(
-                            name,
-                            Medium::Homogeneous(Homogeneous {
-                                sigma_a,
-                                sigma_s,
-                                g,
-                            }),
-                        ) => {
-                            let medium = EnumMedium::new_homogeneous(sigma_a, sigma_s, g);
-                            state.mediums.insert(name, self.mediums.len() as u32);
-                            self.mediums.push(medium);
-                        }
-                        WorldObject::Shape(shape) => match shape {
-                            Shape::Sphere(Sphere { radius }) => self.tlas.push(TlasInstance {
-                                shader_offset: ShaderOffset::Sphere,
-                                matrix: Affine3A::from_mat4(
-                                    state.current_matrix
-                                        * Mat4::from_scale(vec3(radius, radius, radius)),
-                                ),
+                    ) => {
+                        let medium = EnumMedium::new_homogeneous(sigma_a, sigma_s, g);
+                        state.mediums.insert(name, self.mediums.len() as u32);
+                        self.mediums.push(medium);
+                    }
+                    WorldObject::Shape(shape) => match shape {
+                        Shape::Sphere { radius } => self.tlas.push(TlasInstance {
+                            shader_offset: ShaderOffset::Sphere,
+                            matrix: Affine3A::from_mat4(
+                                state.current_matrix
+                                    * Mat4::from_scale(vec3(radius, radius, radius)),
+                            ),
+                            material_index: state.current_material_index,
+                            area_light_index: state.current_area_light_index,
+                            blas_index: None,
+                            interior_medium_index: state
+                                .current_medium_index
+                                .map(|t| t.0)
+                                .unwrap_or(0),
+                            exterior_medium_index: state
+                                .current_medium_index
+                                .map(|t| t.1)
+                                .unwrap_or(0),
+                        }),
+                        Shape::TriangleMesh(trianglemesh) => {
+                            let blass_index = self.blases.len();
+                            self.blases.push(trianglemesh);
+                            self.tlas.push(TlasInstance {
+                                shader_offset: ShaderOffset::Triangle,
+                                matrix: Affine3A::from_mat4(state.current_matrix),
                                 material_index: state.current_material_index,
                                 area_light_index: state.current_area_light_index,
-                                blas_index: None,
                                 interior_medium_index: state
                                     .current_medium_index
                                     .map(|t| t.0)
@@ -435,29 +449,11 @@ impl Scene {
                                     .current_medium_index
                                     .map(|t| t.1)
                                     .unwrap_or(0),
-                            }),
-                            Shape::TriangleMesh(trianglemesh) => {
-                                let blass_index = self.blases.len();
-                                self.blases.push(trianglemesh);
-                                self.tlas.push(TlasInstance {
-                                    shader_offset: ShaderOffset::Triangle,
-                                    matrix: Affine3A::from_mat4(state.current_matrix),
-                                    material_index: state.current_material_index,
-                                    area_light_index: state.current_area_light_index,
-                                    interior_medium_index: state
-                                        .current_medium_index
-                                        .map(|t| t.0)
-                                        .unwrap_or(0),
-                                    exterior_medium_index: state
-                                        .current_medium_index
-                                        .map(|t| t.1)
-                                        .unwrap_or(0),
-                                    blas_index: Some(blass_index),
-                                })
-                            }
-                        },
-                    }
-                }
+                                blas_index: Some(blass_index),
+                            })
+                        }
+                    },
+                },
             }
         }
         Ok(())

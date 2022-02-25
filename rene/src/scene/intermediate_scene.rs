@@ -24,12 +24,8 @@ pub enum SceneObject {
     Camera(Camera),
 }
 
-pub struct Perspective {
-    pub fov: f32,
-}
-
 pub enum Camera {
-    Perspective(Perspective),
+    Perspective { fov: f32 },
 }
 
 pub enum IntermediateWorld {
@@ -43,7 +39,7 @@ pub enum IntermediateWorld {
     Texture(Texture),
     NamedMaterial(String),
     CoordSysTransform(String),
-    MediumInterface(String, String),
+    MediumInterface { interior: String, exterior: String },
     ReverseOrientation,
 }
 
@@ -61,19 +57,15 @@ pub enum AreaLightSource {
 }
 
 pub enum LightSource {
-    Infinite(Infinite),
-    Distant(Distant),
-}
-
-pub struct Infinite {
-    pub color: Vec3A,
-    pub image_map: Option<Image>,
-}
-
-pub struct Distant {
-    pub from: Vec3A,
-    pub to: Vec3A,
-    pub color: Vec3A,
+    Infinite {
+        color: Vec3A,
+        image_map: Option<Image>,
+    },
+    Distant {
+        from: Vec3A,
+        to: Vec3A,
+        color: Vec3A,
+    },
 }
 
 #[derive(Clone)]
@@ -82,16 +74,14 @@ pub enum TextureOrColor {
     Texture(String),
 }
 
-pub struct CheckerBoard {
-    pub tex1: TextureOrColor,
-    pub tex2: TextureOrColor,
-    pub uscale: f32,
-    pub vscale: f32,
-}
-
 pub enum InnerTexture {
     Constant(Vec3A),
-    CheckerBoard(CheckerBoard),
+    CheckerBoard {
+        tex1: TextureOrColor,
+        tex2: TextureOrColor,
+        uscale: f32,
+        vscale: f32,
+    },
     ImageMap(Image),
     Scale(TextureOrColor, TextureOrColor),
 }
@@ -102,79 +92,59 @@ pub struct Texture {
 }
 pub enum Material {
     None,
-    Matte(Matte),
-    Glass(Glass),
-    Substrate(Substrate),
-    Metal(Metal),
-    Mirror(Mirror),
-    Uber(Uber),
-    Plastic(Plastic),
-}
-
-pub struct Matte {
-    pub albedo: TextureOrColor,
-}
-
-pub struct Glass {
-    pub index: f32,
-}
-
-pub struct Substrate {
-    pub diffuse: TextureOrColor,
-    pub specular: TextureOrColor,
-    pub rough_u: TextureOrColor,
-    pub rough_v: TextureOrColor,
-    pub remap_roughness: bool,
-}
-
-pub struct Metal {
-    pub eta: TextureOrColor,
-    pub k: TextureOrColor,
-    pub rough_u: TextureOrColor,
-    pub rough_v: TextureOrColor,
-    pub remap_roughness: bool,
-}
-
-pub struct Mirror {
-    pub r: TextureOrColor,
-}
-
-pub struct Uber {
-    pub kd: TextureOrColor,
-    pub ks: TextureOrColor,
-    pub kr: TextureOrColor,
-    pub kt: TextureOrColor,
-    pub rough_u: TextureOrColor,
-    pub rough_v: TextureOrColor,
-    pub eta: f32,
-    pub opacity: TextureOrColor,
-    pub remap_roughness: bool,
-}
-
-pub struct Plastic {
-    pub kd: TextureOrColor,
-    pub ks: TextureOrColor,
-    pub rough: TextureOrColor,
-    pub remap_roughness: bool,
+    Matte {
+        albedo: TextureOrColor,
+    },
+    Glass {
+        index: f32,
+    },
+    Substrate {
+        diffuse: TextureOrColor,
+        specular: TextureOrColor,
+        rough_u: TextureOrColor,
+        rough_v: TextureOrColor,
+        remap_roughness: bool,
+    },
+    Metal {
+        eta: TextureOrColor,
+        k: TextureOrColor,
+        rough_u: TextureOrColor,
+        rough_v: TextureOrColor,
+        remap_roughness: bool,
+    },
+    Mirror {
+        r: TextureOrColor,
+    },
+    Uber {
+        kd: TextureOrColor,
+        ks: TextureOrColor,
+        kr: TextureOrColor,
+        kt: TextureOrColor,
+        rough_u: TextureOrColor,
+        rough_v: TextureOrColor,
+        eta: f32,
+        opacity: TextureOrColor,
+        remap_roughness: bool,
+    },
+    Plastic {
+        kd: TextureOrColor,
+        ks: TextureOrColor,
+        rough: TextureOrColor,
+        remap_roughness: bool,
+    },
 }
 
 pub enum Medium {
-    Homogeneous(Homogeneous),
-}
-
-pub struct Homogeneous {
-    pub sigma_s: Vec3A,
-    pub sigma_a: Vec3A,
-    pub g: f32,
+    Homogeneous {
+        sigma_s: Vec3A,
+        sigma_a: Vec3A,
+        g: f32,
+    },
 }
 
 pub enum Shape {
-    Sphere(Sphere),
+    Sphere { radius: f32 },
     TriangleMesh(TriangleMesh),
-}
-
-pub struct Sphere {
-    pub radius: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -478,11 +448,11 @@ impl<'a, T> GetValue for Object<'a, T> {
                     .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.5, 0.5, 0.5))))?;
 
-                Ok(Material::Matte(Matte { albedo }))
+                Ok(Material::Matte { albedo })
             }
             "glass" => {
                 let index = self.get_float("index").unwrap_or(Ok(1.5))?;
-                Ok(Material::Glass(Glass { index }))
+                Ok(Material::Glass { index })
             }
             "substrate" => {
                 let diffuse = self
@@ -510,13 +480,13 @@ impl<'a, T> GetValue for Object<'a, T> {
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
-                Ok(Material::Substrate(Substrate {
+                Ok(Material::Substrate {
                     diffuse,
                     specular,
                     rough_u,
                     rough_v,
                     remap_roughness,
-                }))
+                })
             }
             "metal" => {
                 let eta = self
@@ -556,20 +526,20 @@ impl<'a, T> GetValue for Object<'a, T> {
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
-                Ok(Material::Metal(Metal {
+                Ok(Material::Metal {
                     eta,
                     k,
                     rough_u,
                     rough_v,
                     remap_roughness,
-                }))
+                })
             }
             "mirror" => {
                 let r = self
                     .get_texture_or_color("Kd", base_path)
                     .unwrap_or_else(|_| Ok(TextureOrColor::Color(vec3a(0.9, 0.9, 0.9))))?;
 
-                Ok(Material::Mirror(Mirror { r }))
+                Ok(Material::Mirror { r })
             }
             "uber" => {
                 let kd = self
@@ -609,7 +579,7 @@ impl<'a, T> GetValue for Object<'a, T> {
 
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
-                Ok(Material::Uber(Uber {
+                Ok(Material::Uber {
                     kd,
                     ks,
                     kr,
@@ -619,7 +589,7 @@ impl<'a, T> GetValue for Object<'a, T> {
                     eta,
                     opacity,
                     remap_roughness,
-                }))
+                })
             }
             "plastic" => {
                 let kd = self
@@ -633,12 +603,12 @@ impl<'a, T> GetValue for Object<'a, T> {
                     .unwrap_or(Ok(TextureOrColor::Color(vec3a(0.1, 0.1, 0.1))))?;
                 let remap_roughness = self.get_bool("remaproughness").unwrap_or(Ok(true))?;
 
-                Ok(Material::Plastic(Plastic {
+                Ok(Material::Plastic {
                     kd,
                     ks,
                     rough,
                     remap_roughness,
-                }))
+                })
             }
             t => Err(Error::InvalidMaterial(t.to_string())),
         }
@@ -810,10 +780,10 @@ impl IntermediateWorld {
             pbrt_parser::World::Transform(m) => Ok(Self::Transform(m)),
             pbrt_parser::World::ConcatTransform(m) => Ok(Self::Matrix(m)),
             pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
-            pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface(
-                interior.to_string(),
-                exterior.to_string(),
-            )),
+            pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface {
+                interior: interior.to_string(),
+                exterior: exterior.to_string(),
+            }),
             pbrt_parser::World::CoordSysTransform(name) => {
                 Ok(Self::CoordSysTransform(name.to_string()))
             }
@@ -862,12 +832,12 @@ impl IntermediateWorld {
 
                     Ok(Self::Texture(Texture {
                         name: texture.name.to_string(),
-                        inner: InnerTexture::CheckerBoard(CheckerBoard {
+                        inner: InnerTexture::CheckerBoard {
                             tex1,
                             tex2,
                             uscale,
                             vscale,
-                        }),
+                        },
                     }))
                 }
                 "imagemap" => {
@@ -899,7 +869,7 @@ impl IntermediateWorld {
                         };
 
                         Ok(Self::WorldObject(WorldObject::LightSource(
-                            LightSource::Infinite(Infinite { color, image_map }),
+                            LightSource::Infinite { color, image_map },
                         )))
                     }
                     "distant" => {
@@ -913,7 +883,7 @@ impl IntermediateWorld {
                             .get_rgb("L", base_dir)
                             .unwrap_or_else(|_| Ok(vec3a(1.0, 1.0, 1.0)))?;
                         Ok(Self::WorldObject(WorldObject::LightSource(
-                            LightSource::Distant(Distant { from, to, color }),
+                            LightSource::Distant { from, to, color },
                         )))
                     }
                     t => Err(Error::InvalidLightSource(t.to_string())),
@@ -956,19 +926,19 @@ impl IntermediateWorld {
 
                     Ok(Self::WorldObject(WorldObject::MakeNamedMedium(
                         name,
-                        Medium::Homogeneous(Homogeneous {
+                        Medium::Homogeneous {
                             sigma_a,
                             sigma_s,
                             g,
-                        }),
+                        },
                     )))
                 }
                 pbrt_parser::WorldObjectType::Shape => match obj.t {
                     "sphere" => {
                         let radius = obj.get_float("radius").unwrap_or(Ok(1.0))?;
-                        Ok(Self::WorldObject(WorldObject::Shape(Shape::Sphere(
-                            Sphere { radius },
-                        ))))
+                        Ok(Self::WorldObject(WorldObject::Shape(Shape::Sphere {
+                            radius,
+                        })))
                     }
                     "trianglemesh" | "loopsubdiv" => {
                         let indices = obj.get_integers("indices")??;
@@ -1126,11 +1096,11 @@ impl IntermediateScene {
                 pbrt_parser::SceneObjectType::Camera => match obj.t {
                     "perspective" => {
                         let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;
-                        Ok(Self::SceneObject(SceneObject::Camera(Camera::Perspective(
-                            Perspective {
+                        Ok(Self::SceneObject(SceneObject::Camera(
+                            Camera::Perspective {
                                 fov: deg_to_radian(fov),
                             },
-                        ))))
+                        )))
                     }
                     t => Err(Error::InvalidCamera(t.to_string())),
                 },
