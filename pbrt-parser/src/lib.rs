@@ -12,6 +12,7 @@ use nom::{
 };
 
 pub mod include;
+pub mod v2;
 
 pub enum Scene<'a> {
     Transform(Mat4),
