@@ -124,6 +124,7 @@ fn main() {
         use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
         use chumsky::Parser;
         let (scenes, errs) = pbrt_parser::parse_pbrt().parse_recovery(pbrt_file.as_str());
+        let path = pbrt_path.to_string_lossy();
 
         errs.into_iter().for_each(|e| {
             let msg = format!(
@@ -151,11 +152,11 @@ fn main() {
                 },
             );
 
-            let report = Report::build(ReportKind::Error, (), e.span().start)
+            let report = Report::build(ReportKind::Error, &path, e.span().start)
                 .with_code(3)
                 .with_message(msg)
                 .with_label(
-                    Label::new(e.span())
+                    Label::new((&path, e.span()))
                         .with_message(format!(
                             "Unexpected {}",
                             e.found()
@@ -167,7 +168,7 @@ fn main() {
 
             let report = match e.reason() {
                 chumsky::error::SimpleReason::Unclosed { span, delimiter } => report.with_label(
-                    Label::new(span.clone())
+                    Label::new((&path, span.clone()))
                         .with_message(format!(
                             "Unclosed delimiter {}",
                             delimiter.fg(Color::Yellow)
@@ -176,13 +177,16 @@ fn main() {
                 ),
                 chumsky::error::SimpleReason::Unexpected => report,
                 chumsky::error::SimpleReason::Custom(msg) => report.with_label(
-                    Label::new(e.span())
+                    Label::new((&path, e.span()))
                         .with_message(format!("{}", msg.fg(Color::Yellow)))
                         .with_color(Color::Yellow),
                 ),
             };
 
-            report.finish().print(Source::from(&pbrt_file)).unwrap();
+            report
+                .finish()
+                .print((&path, Source::from(&pbrt_file)))
+                .unwrap();
         });
 
         if let Some(scenes) = scenes {
