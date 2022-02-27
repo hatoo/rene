@@ -177,9 +177,9 @@ fn string() -> impl Parser<char, String, Error = Simple<char>> {
 }
 
 fn bool() -> impl Parser<char, bool, Error = Simple<char>> {
-    just("true")
+    just("\"true\"")
         .to(true)
-        .or(just("false").to(false))
+        .or(just("\"false\"").to(false))
         .labelled("bool")
 }
 
