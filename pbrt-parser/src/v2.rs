@@ -207,9 +207,9 @@ fn parse_transform() -> impl Parser<char, Mat4, Error = Simple<char>> {
             parse_vec4()
                 .then(parse_vec4())
                 .then(parse_vec4())
-                .then(parse_vec4()),
+                .then(parse_vec4())
+                .delimited_by(just('[').then_ignore(sp()), just(']')),
         )
-        .delimited_by(just('[').then_ignore(sp()), just(']'))
         .map(|(((x, y), z), w)| Mat4::from_cols(x, y, z, w))
         .labelled("Transform")
 }
