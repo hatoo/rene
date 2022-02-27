@@ -1,6 +1,7 @@
 use chumsky::prelude::*;
 use glam::{vec3a, vec4, Mat4, Vec3A, Vec4};
 
+#[derive(Debug)]
 pub enum Scene {
     Transform(Mat4),
     ConcatTransform(Mat4),
@@ -12,20 +13,20 @@ pub enum Scene {
     World(Vec<World>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AxisAngle {
     pub axis: Vec3A,
     pub angle: f32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Texture {
     pub name: String,
     pub value_type: String,
     pub obj: Object<()>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum World {
     WorldObject(WorldObject),
     Attribute(Vec<World>),
@@ -201,6 +202,7 @@ fn parse_vec4() -> impl Parser<char, Vec4, Error = Simple<char>> {
 
 fn parse_transform() -> impl Parser<char, Mat4, Error = Simple<char>> {
     just("Transform")
+        .then_ignore(sp())
         .ignore_then(
             parse_vec4()
                 .then(parse_vec4())
@@ -214,6 +216,7 @@ fn parse_transform() -> impl Parser<char, Mat4, Error = Simple<char>> {
 
 fn parse_concat_transform() -> impl Parser<char, Mat4, Error = Simple<char>> {
     just("ConcatTransform")
+        .then_ignore(sp())
         .ignore_then(
             parse_vec4()
                 .then(parse_vec4())
@@ -227,6 +230,7 @@ fn parse_concat_transform() -> impl Parser<char, Mat4, Error = Simple<char>> {
 
 fn parse_look_at() -> impl Parser<char, LookAt, Error = Simple<char>> {
     just("LookAt")
+        .then_ignore(sp())
         .ignore_then(parse_vec3().then_ignore(sp()))
         .then(parse_vec3().then_ignore(sp()))
         .then(parse_vec3().then_ignore(sp()))
@@ -236,6 +240,7 @@ fn parse_look_at() -> impl Parser<char, LookAt, Error = Simple<char>> {
 
 fn parse_rotate() -> impl Parser<char, AxisAngle, Error = Simple<char>> {
     just("Rotate")
+        .then_ignore(sp())
         .ignore_then(float().then_ignore(sp()))
         .then(parse_vec3())
         .map(|(angle, axis)| AxisAngle { angle, axis })
@@ -243,11 +248,15 @@ fn parse_rotate() -> impl Parser<char, AxisAngle, Error = Simple<char>> {
 }
 
 fn parse_scale() -> impl Parser<char, Vec3A, Error = Simple<char>> {
-    just("Scale").ignore_then(parse_vec3()).labelled("Scale")
+    just("Scale")
+        .then_ignore(sp())
+        .ignore_then(parse_vec3())
+        .labelled("Scale")
 }
 
 fn parse_translate() -> impl Parser<char, Vec3A, Error = Simple<char>> {
     just("Translate")
+        .then_ignore(sp())
         .ignore_then(parse_vec3())
         .labelled("Translate")
 }
@@ -421,7 +430,11 @@ fn parse_scene() -> impl Parser<char, Scene, Error = Simple<char>> {
 }
 
 pub fn parse_pbrt() -> impl Parser<char, Vec<Scene>, Error = Simple<char>> {
-    parse_scene().then_ignore(sp()).repeated().padded_by(sp())
+    parse_scene()
+        .then_ignore(sp())
+        .repeated()
+        .padded_by(sp())
+        .then_ignore(end())
 }
 
 // World stuff
