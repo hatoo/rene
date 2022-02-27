@@ -175,7 +175,6 @@ impl EnumTexture {
 impl EnumTexture {
     #[inline(always)]
     pub fn color_non_recursive(
-        &self,
         index: u32,
         textures: &[EnumTexture],
         images: &RuntimeArray<InputImage>,
@@ -183,8 +182,8 @@ impl EnumTexture {
     ) -> Vec3A {
         let tex = unsafe { textures.index_unchecked(index as usize) };
         match tex.t {
-            TextureType::Solid => Solid { data: &self.data }.color(images, uv),
-            TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
+            TextureType::Solid => Solid { data: &tex.data }.color(images, uv),
+            TextureType::ImageMap => ImageMap { data: &tex.data }.color(images, uv),
             TextureType::CheckerBoard => vec3a(1.0, 1.0, 1.0),
             TextureType::Scale => vec3a(1.0, 1.0, 1.0),
         }
@@ -201,12 +200,12 @@ impl EnumTexture {
             TextureType::ImageMap => ImageMap { data: &self.data }.color(images, uv),
             TextureType::CheckerBoard => {
                 let index_uv = CheckerBoard { data: &self.data }.color(images, uv);
-                self.color_non_recursive(index_uv.index, textures, images, index_uv.uv)
+                Self::color_non_recursive(index_uv.index, textures, images, index_uv.uv)
             }
             TextureType::Scale => {
                 let scale = Scale { data: &self.data };
-                self.color_non_recursive(scale.tex1(), textures, images, uv)
-                    * self.color_non_recursive(scale.tex2(), textures, images, uv)
+                Self::color_non_recursive(scale.tex1(), textures, images, uv)
+                    * Self::color_non_recursive(scale.tex2(), textures, images, uv)
             }
         }
     }
