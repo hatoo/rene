@@ -540,9 +540,11 @@ fn parse_worlds() -> impl Parser<char, Vec<World>, Error = Simple<char>> {
                     just("TransformEnd"),
                 )
                 .map(World::Attribute),
-            just("OnjectBegin")
+            string()
                 .then_ignore(sp())
-                .ignore_then(string().then_ignore(sp()).then(bf))
+                .then(bf)
+                .then_ignore(sp())
+                .delimited_by(just("ObjectBegin").then_ignore(sp()), just("ObjectEnd"))
                 .map(|(name, worlds)| World::ObjectBeginEnd(name, worlds)),
         ))
         .then_ignore(sp())
