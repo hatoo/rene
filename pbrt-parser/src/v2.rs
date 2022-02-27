@@ -135,8 +135,7 @@ fn float() -> impl Parser<char, f32, Error = Simple<char>> + Clone {
 
     just('-')
         .or_not()
-        .chain(text::int(10))
-        .chain(frac.or_not().flatten())
+        .chain(text::int(10).chain(frac.or_not().flatten()).or(frac))
         .chain::<char, _, _>(exp.or_not().flatten())
         .collect::<String>()
         .from_str()
@@ -404,10 +403,7 @@ fn parse_scene_object() -> impl Parser<char, SceneObject, Error = Simple<char>> 
 }
 
 fn parse_world_statement() -> impl Parser<char, Vec<World>, Error = Simple<char>> {
-    parse_world()
-        .then_ignore(sp())
-        .repeated()
-        .delimited_by(just("WorldBegin").then_ignore(sp()), just("WorldEnd"))
+    parse_worlds().delimited_by(just("WorldBegin").then_ignore(sp()), just("WorldEnd"))
 }
 
 fn parse_scene() -> impl Parser<char, Scene, Error = Simple<char>> {
@@ -502,62 +498,41 @@ fn parse_medium_interface() -> impl Parser<char, (String, String), Error = Simpl
         .labelled("MediumInterface")
 }
 
-fn parse_attribute_statement() -> impl Parser<char, Vec<World>, Error = Simple<char>> {
-    parse_world()
-        .then_ignore(sp())
-        .repeated()
-        .delimited_by(
-            just("AttributeBegin").then_ignore(sp()),
-            just("AttributeEnd"),
-        )
-        .labelled("Attribute Begin/End")
-}
-
-fn parse_transform_statement() -> impl Parser<char, Vec<World>, Error = Simple<char>> {
-    parse_world()
-        .then_ignore(sp())
-        .repeated()
-        .delimited_by(
-            just("TransformBegin").then_ignore(sp()),
-            just("TransformEnd"),
-        )
-        .labelled("Transform Begin/End")
-}
-
-fn parse_object_statement() -> impl Parser<char, (String, Vec<World>), Error = Simple<char>> {
-    just("ObjectBegin")
-        .then_ignore(sp())
-        .ignore_then(
-            string()
+fn parse_worlds() -> impl Parser<char, Vec<World>, Error = Simple<char>> {
+    recursive(|bf| {
+        choice((
+            parse_texture().map(World::Texture),
+            parse_named_material().map(World::NamedMaterial),
+            parse_world_object().map(World::WorldObject),
+            parse_object_instance().map(World::ObjectInstance),
+            parse_transform().map(World::Transform),
+            parse_concat_transform().map(World::ConcatTransform),
+            parse_translate().map(World::Translate),
+            parse_scale().map(World::Scale),
+            parse_rotate().map(World::Rotate),
+            parse_coord_sys_transform().map(World::CoordSysTransform),
+            parse_medium_interface().map(|(i, e)| World::MediumInterface(i, e)),
+            just("ReverseOrientation").to(World::ReverseOrientation),
+            bf.clone()
+                .delimited_by(
+                    just("AttributeBegin").then_ignore(sp()),
+                    just("AttributeEnd"),
+                )
+                .map(World::Attribute),
+            bf.clone()
+                .delimited_by(
+                    just("TransformBegin").then_ignore(sp()),
+                    just("TransformEnd"),
+                )
+                .map(World::Attribute),
+            just("OnjectBegin")
                 .then_ignore(sp())
-                .then(parse_world().then_ignore(sp()).repeated()),
-        )
-        .labelled("Object Begin/End")
-}
-
-fn parse_world() -> impl Parser<char, World, Error = Simple<char>> {
-    choice((
-        parse_texture().map(World::Texture),
-        parse_named_material().map(World::NamedMaterial),
-        parse_world_object().map(World::WorldObject),
-        parse_object_instance().map(World::ObjectInstance),
-        parse_transform().map(World::Transform),
-        parse_concat_transform().map(World::ConcatTransform),
-        parse_translate().map(World::Translate),
-        parse_scale().map(World::Scale),
-        parse_rotate().map(World::Rotate),
-        parse_coord_sys_transform().map(World::CoordSysTransform),
-        parse_medium_interface().map(|(i, e)| World::MediumInterface(i, e)),
-        just("ReverseOrientation").to(World::ReverseOrientation),
-        parse_attribute_statement().map(World::Attribute).boxed(),
-        parse_transform_statement()
-            .map(World::TransformBeginEnd)
-            .boxed(),
-        parse_object_statement()
-            .map(|(name, worlds)| World::ObjectBeginEnd(name, worlds))
-            .boxed(),
-    ))
-    .labelled("world")
+                .ignore_then(string().then_ignore(sp()).then(bf))
+                .map(|(name, worlds)| World::ObjectBeginEnd(name, worlds)),
+        ))
+        .then_ignore(sp())
+        .repeated()
+    })
 }
 
 #[cfg(test)]
@@ -588,6 +563,7 @@ mod test {
         assert_eq!(float().parse("2.25").unwrap(), 2.25);
         assert_eq!(float().parse("1e5").unwrap(), 1e5);
         assert_eq!(float().parse("1e-5").unwrap(), 1e-5);
+        assert_eq!(float().parse(".9").unwrap(), 0.9);
     }
 
     #[test]
@@ -634,5 +610,61 @@ mod test {
                 value: Value::Float(vec![1.0, 2.0, 3.0])
             }
         );
+
+        assert_eq!(
+            parse_argument().parse(r#""rgb Kd" [ .7 .2 .2 ]"#).unwrap(),
+            Argument {
+                name: "Kd".to_string(),
+                value: Value::Rgb(vec![0.7, 0.2, 0.2])
+            }
+        );
+    }
+
+    #[test]
+    fn test_world() {
+        let src = r#"LightSource "infinite" "rgb L" [.4 .45 .5]"#;
+
+        parse_worlds().parse(src).unwrap();
+    }
+
+    #[test]
+    fn test_world_statement() {
+        let src = r#"WorldBegin
+# uniform blue-ish illumination from all directions
+LightSource "infinite" "rgb L" [.4 .45 .5]
+
+AttributeBegin
+  Material "matte" "rgb Kd" [ .7 .2 .2 ]
+  Shape "sphere" "float radius" 1
+AttributeEnd
+
+WorldEnd
+        "#;
+
+        parse_world_statement().parse(src).unwrap();
+    }
+
+    #[test]
+    fn test_sphere() {
+        let src = r#"
+LookAt 3 4 1.5  # eye
+       .0 .0 0  # look at point
+       0 0 1    # up vector
+Camera "perspective" "float fov" 45
+
+WorldBegin
+
+# uniform blue-ish illumination from all directions
+LightSource "infinite" "rgb L" [.4 .45 .5]
+
+AttributeBegin
+  Material "matte" "rgb Kd" [ .7 .2 .2 ]
+  Shape "sphere" "float radius" 1
+AttributeEnd
+
+WorldEnd
+        "#;
+
+        parse_pbrt().parse(src).unwrap();
     }
 }
