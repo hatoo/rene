@@ -23,7 +23,6 @@ use gpu_allocator::{
     vulkan::{Allocation, AllocationCreateDesc, Allocator, AllocatorCreateDesc},
     MemoryLocation,
 };
-use nom::error::convert_error;
 use pbrt_parser::include::expand_include;
 use rand::prelude::*;
 use rene_shader::{
@@ -121,13 +120,78 @@ fn main() {
         Cow::Owned(s) => pbrt_file = s,
     }
 
-    let parsed_scene = match pbrt_parser::parse_pbrt(&pbrt_file) {
-        Ok(scene) => scene,
-        Err(e) => {
-            println!("{}", convert_error(pbrt_file.as_str(), e));
+    let parsed_scene = {
+        use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
+        use chumsky::Parser;
+        let (scenes, errs) = pbrt_parser::v2::parse_pbrt().parse_recovery(pbrt_file.as_str());
+
+        errs.into_iter().for_each(|e| {
+            let msg = format!(
+                "{}{}, expected {}",
+                if e.found().is_some() {
+                    "Unexpected token"
+                } else {
+                    "Unexpected end of input"
+                },
+                if let Some(label) = e.label() {
+                    format!(" while parsing {}", label)
+                } else {
+                    String::new()
+                },
+                if e.expected().len() == 0 {
+                    "something else".to_string()
+                } else {
+                    e.expected()
+                        .map(|expected| match expected {
+                            Some(expected) => expected.to_string(),
+                            None => "end of input".to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                },
+            );
+
+            let report = Report::build(ReportKind::Error, (), e.span().start)
+                .with_code(3)
+                .with_message(msg)
+                .with_label(
+                    Label::new(e.span())
+                        .with_message(format!(
+                            "Unexpected {}",
+                            e.found()
+                                .map(|c| format!("token {}", c.fg(Color::Red)))
+                                .unwrap_or_else(|| "end of input".to_string())
+                        ))
+                        .with_color(Color::Red),
+                );
+
+            let report = match e.reason() {
+                chumsky::error::SimpleReason::Unclosed { span, delimiter } => report.with_label(
+                    Label::new(span.clone())
+                        .with_message(format!(
+                            "Unclosed delimiter {}",
+                            delimiter.fg(Color::Yellow)
+                        ))
+                        .with_color(Color::Yellow),
+                ),
+                chumsky::error::SimpleReason::Unexpected => report,
+                chumsky::error::SimpleReason::Custom(msg) => report.with_label(
+                    Label::new(e.span())
+                        .with_message(format!("{}", msg.fg(Color::Yellow)))
+                        .with_color(Color::Yellow),
+                ),
+            };
+
+            report.finish().print(Source::from(&pbrt_file)).unwrap();
+        });
+
+        if let Some(scenes) = scenes {
+            scenes
+        } else {
             return;
         }
     };
+
     let scene = match scene::Scene::create(parsed_scene, &pbrt_path) {
         Ok(scene) => scene,
         Err(e) => {
