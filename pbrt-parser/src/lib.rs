@@ -1,5 +1,5 @@
 use chumsky::prelude::*;
-use glam::{vec3a, vec4, Mat4, Vec3A, Vec4};
+use glam::{vec2, vec3a, vec4, Mat4, Vec2, Vec3A, Vec4};
 
 pub mod include;
 
@@ -60,7 +60,7 @@ pub enum Value {
     Bool(Vec<bool>),
     Integer(Vec<i32>),
     Rgb(Vec<f32>),
-    BlackBody(Vec<f32>),
+    BlackBody(Vec<Vec2>),
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
     String(Vec<String>),
@@ -303,7 +303,19 @@ impl ArgumentType {
                 .boxed(),
             Self::Rgb => bracket(float()).map(Value::Rgb).labelled("rgb").boxed(),
             Self::BlackBody => bracket(float())
-                .map(Value::BlackBody)
+                .validate(|v, span, emit| {
+                    if v.len() % 2 != 0 {
+                        emit(Simple::custom(
+                            span,
+                            format!(
+                                "length of balckbody value must be multiple of 2. It was {}",
+                                v.len(),
+                            ),
+                        ))
+                    }
+                    v
+                })
+                .map(|v| Value::BlackBody(v.chunks(2).map(|v| vec2(v[0], v[1])).collect()))
                 .labelled("blackbody")
                 .boxed(),
             Self::Integer => integer()

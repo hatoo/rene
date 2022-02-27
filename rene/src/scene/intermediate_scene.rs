@@ -276,16 +276,12 @@ impl<T> GetValue for pbrt_parser::Object<T> {
                     }
                 }
                 pbrt_parser::Value::BlackBody(v) => {
-                    if v.len() % 2 != 0 {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    } else {
-                        let mut color = Vec3A::ZERO;
+                    let mut color = Vec3A::ZERO;
 
-                        for v in v.chunks(2) {
-                            color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
-                        }
-                        Ok(color)
+                    for v in v {
+                        color += v.y * Vec3A::from(temperature_to_rgb(v.x));
                     }
+                    Ok(color)
                 }
                 pbrt_parser::Value::Spectrum(file) => {
                     let mut path = base_path.as_ref().to_path_buf();
@@ -320,16 +316,12 @@ impl<T> GetValue for pbrt_parser::Object<T> {
                     }
                 }
                 pbrt_parser::Value::BlackBody(v) => {
-                    if v.len() % 2 != 0 {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    } else {
-                        let mut color = Vec3A::ZERO;
+                    let mut color = Vec3A::ZERO;
 
-                        for v in v.chunks(2) {
-                            color += v[1] * Vec3A::from(temperature_to_rgb(v[0]));
-                        }
-                        Ok(TextureOrColor::Color(color))
+                    for v in v {
+                        color += v.y * Vec3A::from(temperature_to_rgb(v.x));
                     }
+                    Ok(TextureOrColor::Color(color))
                 }
                 pbrt_parser::Value::Spectrum(file) => {
                     let mut path = base_path.as_ref().to_path_buf();
