@@ -260,7 +260,7 @@ trait GetValue {
     fn get_material<P: AsRef<Path>>(&self, base_path: &P) -> Result<Material, Error>;
 }
 
-impl<T> GetValue for pbrt_parser::v2::Object<T> {
+impl<T> GetValue for pbrt_parser::Object<T> {
     fn get_rgb<P: AsRef<Path>>(
         &self,
         name: &str,
@@ -268,14 +268,14 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     ) -> Result<Result<Vec3A, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Rgb(v) => {
+                pbrt_parser::Value::Rgb(v) => {
                     if v.len() != 3 {
                         Err(ArgumentError::UnmatchedValueLength)
                     } else {
                         Ok(vec3a(v[0], v[1], v[2]))
                     }
                 }
-                pbrt_parser::v2::Value::BlackBody(v) => {
+                pbrt_parser::Value::BlackBody(v) => {
                     if v.len() % 2 != 0 {
                         Err(ArgumentError::UnmatchedValueLength)
                     } else {
@@ -287,7 +287,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
                         Ok(color)
                     }
                 }
-                pbrt_parser::v2::Value::Spectrum(file) => {
+                pbrt_parser::Value::Spectrum(file) => {
                     let mut path = base_path.as_ref().to_path_buf();
                     path.push(file);
                     // TODO Error handling
@@ -305,21 +305,21 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     ) -> Result<Result<TextureOrColor, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Float(v) => {
+                pbrt_parser::Value::Float(v) => {
                     if v.len() != 1 {
                         Err(ArgumentError::UnmatchedValueLength)
                     } else {
                         Ok(TextureOrColor::Color(vec3a(v[0], v[0], v[0])))
                     }
                 }
-                pbrt_parser::v2::Value::Rgb(v) => {
+                pbrt_parser::Value::Rgb(v) => {
                     if v.len() != 3 {
                         Err(ArgumentError::UnmatchedValueLength)
                     } else {
                         Ok(TextureOrColor::Color(vec3a(v[0], v[1], v[2])))
                     }
                 }
-                pbrt_parser::v2::Value::BlackBody(v) => {
+                pbrt_parser::Value::BlackBody(v) => {
                     if v.len() % 2 != 0 {
                         Err(ArgumentError::UnmatchedValueLength)
                     } else {
@@ -331,13 +331,13 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
                         Ok(TextureOrColor::Color(color))
                     }
                 }
-                pbrt_parser::v2::Value::Spectrum(file) => {
+                pbrt_parser::Value::Spectrum(file) => {
                     let mut path = base_path.as_ref().to_path_buf();
                     path.push(file);
                     // TODO Error handling
                     Ok(TextureOrColor::Color(load_spd(&path).unwrap()))
                 }
-                pbrt_parser::v2::Value::Texture(s) => Ok(TextureOrColor::Texture(s[0].to_string())),
+                pbrt_parser::Value::Texture(s) => Ok(TextureOrColor::Texture(s[0].to_string())),
                 _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
@@ -346,7 +346,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_float(&self, name: &str) -> Result<Result<f32, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Float(v) => {
+                pbrt_parser::Value::Float(v) => {
                     if v.len() == 1 {
                         Ok(v[0])
                     } else {
@@ -361,7 +361,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_floats(&self, name: &str) -> Result<Result<&[f32], ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Float(v) => Ok(v.as_slice()),
+                pbrt_parser::Value::Float(v) => Ok(v.as_slice()),
                 _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
@@ -370,7 +370,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_integer(&self, name: &str) -> Result<Result<i32, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Integer(v) => {
+                pbrt_parser::Value::Integer(v) => {
                     if v.len() == 1 {
                         Ok(v[0])
                     } else {
@@ -385,7 +385,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_integers(&self, name: &str) -> Result<Result<&[i32], ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Integer(v) => Ok(v.as_slice()),
+                pbrt_parser::Value::Integer(v) => Ok(v.as_slice()),
                 _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
@@ -394,7 +394,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_points(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Point(v) => Ok(v.as_slice()),
+                pbrt_parser::Value::Point(v) => Ok(v.as_slice()),
                 _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
@@ -403,7 +403,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_normals(&self, name: &str) -> Result<Result<&[Vec3A], ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Normal(v) => Ok(v.as_slice()),
+                pbrt_parser::Value::Normal(v) => Ok(v.as_slice()),
                 _ => Err(ArgumentError::UnmatchedType(name.to_string())),
             })
             .ok_or_else(|| Error::ArgumentNotFound(name.to_string()))
@@ -412,7 +412,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_str(&self, name: &str) -> Result<Result<&str, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::String(s) => {
+                pbrt_parser::Value::String(s) => {
                     if s.len() == 1 {
                         Ok(s[0].as_str())
                     } else {
@@ -427,7 +427,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_point(&self, name: &str) -> Result<Result<Vec3A, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Point(v) => {
+                pbrt_parser::Value::Point(v) => {
                     if v.len() == 1 {
                         Ok(v[0])
                     } else {
@@ -616,7 +616,7 @@ impl<T> GetValue for pbrt_parser::v2::Object<T> {
     fn get_bool(&self, name: &str) -> Result<Result<bool, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::v2::Value::Bool(v) => {
+                pbrt_parser::Value::Bool(v) => {
                     if v.len() == 1 {
                         Ok(v[0])
                     } else {
@@ -772,30 +772,21 @@ fn load_ply<E: PropertyAccess>(ply: &Ply<E>) -> Result<TriangleMesh, Error> {
 }
 
 impl IntermediateWorld {
-    fn from_world<P: AsRef<Path>>(
-        world: pbrt_parser::v2::World,
-        base_dir: &P,
-    ) -> Result<Self, Error> {
+    fn from_world<P: AsRef<Path>>(world: pbrt_parser::World, base_dir: &P) -> Result<Self, Error> {
         match world {
-            pbrt_parser::v2::World::ReverseOrientation => Ok(Self::ReverseOrientation),
-            pbrt_parser::v2::World::ObjectInstance(name) => {
-                Ok(Self::ObjectInstance(name.to_string()))
-            }
-            pbrt_parser::v2::World::Transform(m) => Ok(Self::Transform(m)),
-            pbrt_parser::v2::World::ConcatTransform(m) => Ok(Self::Matrix(m)),
-            pbrt_parser::v2::World::NamedMaterial(name) => {
-                Ok(Self::NamedMaterial(name.to_string()))
-            }
-            pbrt_parser::v2::World::MediumInterface(interior, exterior) => {
-                Ok(Self::MediumInterface {
-                    interior: interior.to_string(),
-                    exterior: exterior.to_string(),
-                })
-            }
-            pbrt_parser::v2::World::CoordSysTransform(name) => {
+            pbrt_parser::World::ReverseOrientation => Ok(Self::ReverseOrientation),
+            pbrt_parser::World::ObjectInstance(name) => Ok(Self::ObjectInstance(name.to_string())),
+            pbrt_parser::World::Transform(m) => Ok(Self::Transform(m)),
+            pbrt_parser::World::ConcatTransform(m) => Ok(Self::Matrix(m)),
+            pbrt_parser::World::NamedMaterial(name) => Ok(Self::NamedMaterial(name.to_string())),
+            pbrt_parser::World::MediumInterface(interior, exterior) => Ok(Self::MediumInterface {
+                interior: interior.to_string(),
+                exterior: exterior.to_string(),
+            }),
+            pbrt_parser::World::CoordSysTransform(name) => {
                 Ok(Self::CoordSysTransform(name.to_string()))
             }
-            pbrt_parser::v2::World::Texture(texture) => match texture.obj.t.as_str() {
+            pbrt_parser::World::Texture(texture) => match texture.obj.t.as_str() {
                 "constant" => {
                     let value = if let Ok(Ok(v)) = texture.obj.get_float("value") {
                         vec3a(v, v, v)
@@ -860,8 +851,8 @@ impl IntermediateWorld {
                 }
                 t => Err(Error::InvalidTexture(t.to_string())),
             },
-            pbrt_parser::v2::World::WorldObject(obj) => match obj.object_type {
-                pbrt_parser::v2::WorldObjectType::LightSource => match obj.t.as_str() {
+            pbrt_parser::World::WorldObject(obj) => match obj.object_type {
+                pbrt_parser::WorldObjectType::LightSource => match obj.t.as_str() {
                     "infinite" => {
                         let color = obj
                             .get_rgb("L", base_dir)
@@ -896,7 +887,7 @@ impl IntermediateWorld {
                     }
                     t => Err(Error::InvalidLightSource(t.to_string())),
                 },
-                pbrt_parser::v2::WorldObjectType::AreaLightSource => match obj.t.as_str() {
+                pbrt_parser::WorldObjectType::AreaLightSource => match obj.t.as_str() {
                     "diffuse" | "area" => {
                         let l = obj.get_rgb("L", base_dir)??;
                         Ok(Self::WorldObject(WorldObject::AreaLightSource(
@@ -905,10 +896,10 @@ impl IntermediateWorld {
                     }
                     t => Err(Error::InvalidAreaLightSource(t.to_string())),
                 },
-                pbrt_parser::v2::WorldObjectType::Material => Ok(Self::WorldObject(
+                pbrt_parser::WorldObjectType::Material => Ok(Self::WorldObject(
                     WorldObject::Material(obj.get_material(base_dir)?),
                 )),
-                pbrt_parser::v2::WorldObjectType::MakeNamedMaterial => {
+                pbrt_parser::WorldObjectType::MakeNamedMaterial => {
                     let t = obj.get_str("type")??;
                     let name = obj.t.to_string();
                     let mut obj = obj.clone();
@@ -919,7 +910,7 @@ impl IntermediateWorld {
                         obj.get_material(base_dir)?,
                     )))
                 }
-                pbrt_parser::v2::WorldObjectType::MakeNamedMedium => {
+                pbrt_parser::WorldObjectType::MakeNamedMedium => {
                     let name = obj.t.to_string();
 
                     let sigma_a = obj
@@ -941,7 +932,7 @@ impl IntermediateWorld {
                         },
                     )))
                 }
-                pbrt_parser::v2::WorldObjectType::Shape => match obj.t.as_str() {
+                pbrt_parser::WorldObjectType::Shape => match obj.t.as_str() {
                     "sphere" => {
                         let radius = obj.get_float("radius").unwrap_or(Ok(1.0))?;
                         Ok(Self::WorldObject(WorldObject::Shape(Shape::Sphere {
@@ -1042,28 +1033,26 @@ impl IntermediateWorld {
                     t => Err(Error::InvalidShape(t.to_string())),
                 },
             },
-            pbrt_parser::v2::World::Attribute(worlds) => worlds
+            pbrt_parser::World::Attribute(worlds) => worlds
                 .into_iter()
                 .map(|w| Self::from_world(w, base_dir))
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(IntermediateWorld::Attribute),
-            pbrt_parser::v2::World::TransformBeginEnd(worlds) => worlds
+            pbrt_parser::World::TransformBeginEnd(worlds) => worlds
                 .into_iter()
                 .map(|w| Self::from_world(w, base_dir))
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(IntermediateWorld::TransformBeginEnd),
-            pbrt_parser::v2::World::Translate(translation) => {
+            pbrt_parser::World::Translate(translation) => {
                 Ok(Self::Matrix(Mat4::from_translation(translation.into())))
             }
-            pbrt_parser::v2::World::ObjectBeginEnd(name, worlds) => worlds
+            pbrt_parser::World::ObjectBeginEnd(name, worlds) => worlds
                 .into_iter()
                 .map(|w| Self::from_world(w, base_dir))
                 .collect::<Result<Vec<Self>, Error>>()
                 .map(|worlds| IntermediateWorld::ObjectBeginEnd(name.to_string(), worlds)),
-            pbrt_parser::v2::World::Scale(scale) => {
-                Ok(Self::Matrix(Mat4::from_scale(scale.into())))
-            }
-            pbrt_parser::v2::World::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
+            pbrt_parser::World::Scale(scale) => Ok(Self::Matrix(Mat4::from_scale(scale.into()))),
+            pbrt_parser::World::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
                 axis_angle.axis.normalize().into(),
                 deg_to_radian(axis_angle.angle),
             ))),
@@ -1073,30 +1062,28 @@ impl IntermediateWorld {
 
 impl IntermediateScene {
     pub fn from_scene<P: AsRef<Path>>(
-        scene: pbrt_parser::v2::Scene,
+        scene: pbrt_parser::Scene,
         base_dir: &P,
     ) -> Result<Self, Error> {
         match scene {
-            pbrt_parser::v2::Scene::LookAt(look_at) => Ok(Self::Matrix(Mat4::look_at_lh(
+            pbrt_parser::Scene::LookAt(look_at) => Ok(Self::Matrix(Mat4::look_at_lh(
                 look_at.eye.into(),
                 look_at.look_at.into(),
                 look_at.up.into(),
             ))),
-            pbrt_parser::v2::Scene::Translate(translation) => {
+            pbrt_parser::Scene::Translate(translation) => {
                 Ok(Self::Matrix(Mat4::from_translation(translation.into())))
             }
-            pbrt_parser::v2::Scene::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
+            pbrt_parser::Scene::Rotate(axis_angle) => Ok(Self::Matrix(Mat4::from_axis_angle(
                 axis_angle.axis.normalize().into(),
                 deg_to_radian(axis_angle.angle),
             ))),
-            pbrt_parser::v2::Scene::Scale(scale) => {
-                Ok(Self::Matrix(Mat4::from_scale(scale.into())))
-            }
-            pbrt_parser::v2::Scene::ConcatTransform(m) => Ok(Self::Matrix(m)),
-            pbrt_parser::v2::Scene::Transform(m) => Ok(Self::Transform(m)),
-            pbrt_parser::v2::Scene::SceneObject(obj) => match obj.object_type {
-                pbrt_parser::v2::SceneObjectType::Sampler => Ok(Self::Sampler),
-                pbrt_parser::v2::SceneObjectType::Integrator => match obj.t.as_str() {
+            pbrt_parser::Scene::Scale(scale) => Ok(Self::Matrix(Mat4::from_scale(scale.into()))),
+            pbrt_parser::Scene::ConcatTransform(m) => Ok(Self::Matrix(m)),
+            pbrt_parser::Scene::Transform(m) => Ok(Self::Transform(m)),
+            pbrt_parser::Scene::SceneObject(obj) => match obj.object_type {
+                pbrt_parser::SceneObjectType::Sampler => Ok(Self::Sampler),
+                pbrt_parser::SceneObjectType::Integrator => match obj.t.as_str() {
                     "volpath" => Ok(Self::Integrator(Integrator::VolPath)),
                     "path" => Ok(Self::Integrator(Integrator::Path)),
                     i => {
@@ -1104,8 +1091,8 @@ impl IntermediateScene {
                         Ok(Self::Integrator(Integrator::VolPath))
                     }
                 },
-                pbrt_parser::v2::SceneObjectType::PixelFilter => Ok(Self::PixelFilter),
-                pbrt_parser::v2::SceneObjectType::Camera => match obj.t.as_str() {
+                pbrt_parser::SceneObjectType::PixelFilter => Ok(Self::PixelFilter),
+                pbrt_parser::SceneObjectType::Camera => match obj.t.as_str() {
                     "perspective" => {
                         let fov = obj.get_float("fov").unwrap_or(Ok(90.0))?;
                         Ok(Self::SceneObject(SceneObject::Camera(
@@ -1116,7 +1103,7 @@ impl IntermediateScene {
                     }
                     t => Err(Error::InvalidCamera(t.to_string())),
                 },
-                pbrt_parser::v2::SceneObjectType::Film => match obj.t.as_str() {
+                pbrt_parser::SceneObjectType::Film => match obj.t.as_str() {
                     "image" => {
                         let filename = obj.get_str("filename").unwrap_or(Ok("out.png"))?;
                         let xresolution = obj.get_integer("xresolution").unwrap_or(Ok(640))? as u32;
@@ -1130,7 +1117,7 @@ impl IntermediateScene {
                     t => Err(Error::InvalidFilm(t.to_string())),
                 },
             },
-            pbrt_parser::v2::Scene::World(worlds) => worlds
+            pbrt_parser::Scene::World(worlds) => worlds
                 .into_iter()
                 .map(|w| IntermediateWorld::from_world(w, base_dir))
                 .collect::<Result<Vec<IntermediateWorld>, _>>()

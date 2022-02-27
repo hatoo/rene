@@ -123,7 +123,7 @@ fn main() {
     let parsed_scene = {
         use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
         use chumsky::Parser;
-        let (scenes, errs) = pbrt_parser::v2::parse_pbrt().parse_recovery(pbrt_file.as_str());
+        let (scenes, errs) = pbrt_parser::parse_pbrt().parse_recovery(pbrt_file.as_str());
 
         errs.into_iter().for_each(|e| {
             let msg = format!(

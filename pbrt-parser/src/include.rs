@@ -1,8 +1,37 @@
 use std::{borrow::Cow, fs::File, io::Read, path::Path};
 
-use nom::{bytes::complete::tag, error::Error, sequence::preceded};
+use nom::{
+    branch::alt,
+    bytes::complete::{escaped, tag, take_while, take_while1},
+    character::complete::{char, none_of, one_of},
+    combinator::{cut, value},
+    error::{Error, ParseError},
+    multi::many0,
+    sequence::{preceded, terminated},
+    IResult,
+};
 
-use crate::{parse_str, sp};
+fn comment<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    let (rest, _) = char('#')(input)?;
+    take_while(|c| c != '\n')(rest)
+}
+
+fn space<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    let chars = " \t\r\n";
+
+    take_while1(move |c| chars.contains(c))(input)
+}
+
+fn sp<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
+    value((), many0(alt((space, comment))))(input)
+}
+
+pub fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+    fn parse<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+        alt((escaped(none_of("\""), '\\', one_of("\"n\\")), tag("")))(i)
+    }
+    preceded(char('\"'), cut(terminated(parse, char('\"'))))(i)
+}
 
 pub fn expand_include<P: AsRef<Path>>(
     input: &str,

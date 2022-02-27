@@ -98,7 +98,7 @@ impl Scene {
     }
 
     pub fn create<P: AsRef<Path>>(
-        scene_description: Vec<pbrt_parser::v2::Scene>,
+        scene_description: Vec<pbrt_parser::Scene>,
         base_dir: &P,
     ) -> Result<Self, CreateSceneError> {
         let mut scene = Self::default();
