@@ -59,7 +59,7 @@ pub enum Value {
     Float(Vec<f32>),
     Bool(Vec<bool>),
     Integer(Vec<i32>),
-    Rgb(Vec<f32>),
+    Rgb(Vec3A),
     BlackBody(Vec<Vec2>),
     Point(Vec<Vec3A>),
     Normal(Vec<Vec3A>),
@@ -301,7 +301,19 @@ impl ArgumentType {
                 .map(Value::Bool)
                 .labelled("bool")
                 .boxed(),
-            Self::Rgb => bracket(float()).map(Value::Rgb).labelled("rgb").boxed(),
+            Self::Rgb => bracket(float())
+                .validate(|v, span, emit| {
+                    if v.len() != 3 {
+                        emit(Simple::custom(
+                            span,
+                            format!("length of rgb must be 3. It was {}", v.len()),
+                        ))
+                    }
+                    v
+                })
+                .map(|v| Value::Rgb(vec3a(v[0], v[1], v[2])))
+                .labelled("rgb")
+                .boxed(),
             Self::BlackBody => bracket(float())
                 .validate(|v, span, emit| {
                     if v.len() % 2 != 0 {
@@ -644,7 +656,7 @@ mod test {
             parse_argument().parse(r#""rgb Kd" [ .7 .2 .2 ]"#).unwrap(),
             Argument {
                 name: "Kd".to_string(),
-                value: Value::Rgb(vec![0.7, 0.2, 0.2])
+                value: Value::Rgb(vec3a(0.7, 0.2, 0.2))
             }
         );
     }

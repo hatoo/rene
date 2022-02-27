@@ -268,13 +268,7 @@ impl<T> GetValue for pbrt_parser::Object<T> {
     ) -> Result<Result<Vec3A, ArgumentError>, Error> {
         self.get_value(name)
             .map(|value| match value {
-                pbrt_parser::Value::Rgb(v) => {
-                    if v.len() != 3 {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    } else {
-                        Ok(vec3a(v[0], v[1], v[2]))
-                    }
-                }
+                pbrt_parser::Value::Rgb(v) => Ok(*v),
                 pbrt_parser::Value::BlackBody(v) => {
                     let mut color = Vec3A::ZERO;
 
@@ -308,13 +302,7 @@ impl<T> GetValue for pbrt_parser::Object<T> {
                         Ok(TextureOrColor::Color(vec3a(v[0], v[0], v[0])))
                     }
                 }
-                pbrt_parser::Value::Rgb(v) => {
-                    if v.len() != 3 {
-                        Err(ArgumentError::UnmatchedValueLength)
-                    } else {
-                        Ok(TextureOrColor::Color(vec3a(v[0], v[1], v[2])))
-                    }
-                }
+                pbrt_parser::Value::Rgb(v) => Ok(TextureOrColor::Color(*v)),
                 pbrt_parser::Value::BlackBody(v) => {
                     let mut color = Vec3A::ZERO;
 
