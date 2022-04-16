@@ -1,41 +1,41 @@
 [package]
+edition = "2021"
 name = "rene"
 version = "0.1.0"
-edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ariadne = "0.1.5"
 ash = "0.36.0"
-image = "0.24.1"
-bytemuck = "1.7.2"
-rand = "0.8.4"
-glam = "0.20"
-rene-shader = { path = "../rene-shader" }
-pbrt-parser = { path = "../pbrt-parser" }
-clap = { version = "3.0.0", features = ["derive"] }
-thiserror = "1.0.30"
-nom = "7.1.0"
-log = "0.4.14"
-simple_logger = "2.1.0"
 blackbody = "0.0.0"
-ply-rs = "0.1.3"
+bytemuck = "1.7.2"
+chumsky = "0.8.0"
+clap = {version = "3.0.0", features = ["derive"]}
 exr = "1.4.1"
 float-ord = "0.3.2"
+glam = "0.20"
 gpu-allocator = "0.17.0"
-chumsky = "0.8.0"
-ariadne = "0.1.5"
+image = "0.24.1"
+log = "0.4.14"
+nom = "7.1.0"
+pbrt-parser = {path = "../pbrt-parser"}
+ply-rs = "0.1.3"
+rand = "0.8.4"
+rene-shader = {path = "../rene-shader"}
+simple_logger = "2.1.0"
+thiserror = "1.0.30"
 
-opensubdiv-petite = { git = "https://github.com/hatoo/opensubdiv-petite.git", branch = "windows2" }
+opensubdiv-petite = {git = "https://github.com/hatoo/opensubdiv-petite.git", branch = "windows2"}
 
-oidn = { version = "1.4.1", optional = true }
+oidn = {version = "1.4.1", optional = true}
 
-optix = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", optional = true }
-cust = { git = "https://github.com/Rust-GPU/Rust-CUDA.git", optional = true }
+cust = {git = "https://github.com/Rust-GPU/Rust-CUDA.git", optional = true}
+optix = {git = "https://github.com/Rust-GPU/Rust-CUDA.git", optional = true}
 
 [features]
-optix-denoiser = ["optix", "cust"]
 oidn-denoiser = ["oidn"]
+optix-denoiser = ["optix", "cust"]
 
 [build-dependencies]
-spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu" }
+spirv-builder = {git = "https://github.com/EmbarkStudios/rust-gpu"}
