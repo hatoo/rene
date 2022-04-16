@@ -446,6 +446,7 @@ impl EnumMaterial {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_uber(
         kd_index: u32,
         ks_index: u32,
@@ -494,6 +495,7 @@ impl EnumMaterial {
 }
 
 impl<'a> Uber<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_data(
         kd_index: u32,
         ks_index: u32,

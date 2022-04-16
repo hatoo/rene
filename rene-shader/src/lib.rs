@@ -409,6 +409,7 @@ fn tr(
 }
 
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 fn tr_emit<'a>(
     tlas_main: &AccelerationStructure,
     mut ray: Ray,
